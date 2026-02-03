@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>하위문항 생성</title>
+    <!-- MathJax for LaTeX rendering -->
+    <!-- Polyfill은 선택사항이므로 주석 처리 (필요시 활성화) -->
+    <!-- <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script> -->
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+          displayMath: [
+            ["$$", "$$"],
+            ["\\[", "\\]"],
+          ],
+          processEscapes: true,
+          processEnvironments: true,
+        },
+      };
+    </script>
+    <!-- CSS 파일들 -->
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/buttons.css" />
+    <link rel="stylesheet" href="css/forms.css" />
+    <link rel="stylesheet" href="css/sidebar.css" />
+    <link rel="stylesheet" href="css/modal.css" />
+    <link rel="stylesheet" href="css/workflow-tabs.css" />
+    <link rel="stylesheet" href="css/responsive.css" />
+  </head>
+  <body>
+    <div class="header">
+      <button class="hamburger-menu-btn" id="hamburgerMenuBtn">☰</button>
+      <h3 style="margin: 0; flex: 1; text-align: center;">AI 기반 수학 사고 과정 진단</h3>
+      <button id="newProblemBtn" style="background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; font-weight: 500; white-space: nowrap; cursor: pointer; transition: all 0.2s;">문제 입력하기</button>
+    </div>
+
+    <div class="container">
+
+      <!-- 워크플로우 탭 네비게이션 -->
+      <div class="workflow-tabs" id="workflowTabs">
+        <button class="workflow-tab active" data-step="1" id="workflowTab1">
+          <span class="tab-number">1</span>
+          <span class="tab-label">문제 입력</span>
+          <span class="tab-check" style="display: none;">✓</span>
+        </button>
+        <button class="workflow-tab" data-step="2" id="workflowTab2">
+          <span class="tab-number">2</span>
+          <span class="tab-label">8단계 풀이과정</span>
+          <span class="tab-check" style="display: none;">✓</span>
+        </button>
+        <button class="workflow-tab disabled" data-step="3" id="workflowTab3">
+          <span class="tab-number">3</span>
+          <span class="tab-label">하위문항 생성</span>
+          <span class="tab-check" style="display: none;">✓</span>
+        </button>
+        <button class="workflow-tab disabled" data-step="4" id="workflowTab4">
+          <span class="tab-number">4</span>
+          <span class="tab-label">루브릭 생성</span>
+          <span class="tab-check" style="display: none;">✓</span>
+        </button>
+      </div>
+
+      <!-- 사이드바 오버레이 -->
+      <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+      <!-- 사이드바 -->
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <h2>메뉴</h2>
+          <button class="sidebar-close-btn" id="sidebarCloseBtn">×</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px">
+          <div style="border-bottom: 1px solid var(--color-border); padding-bottom: 15px">
+            <h3 style="font-size: 0.875rem; color: var(--color-text); margin-bottom: 10px; font-weight: 600">작업</h3>
+            <button class="btn" id="submitBtnFromSidebar" style="padding: 10px 20px; font-size: 0.875rem; width: 100%">문제 입력하기</button>
+            <button class="btn" id="saveCurrentResultBtn" style="margin-top: 10px; padding: 10px 20px; font-size: 0.875rem; width: 100%;">현재 결과 저장하기</button>
+            <button class="btn" id="exportWordBtn" style="display: none; padding: 10px 20px; font-size: 0.875rem; width: 100%; margin-top: 10px">학습지 다운로드</button>
+          </div>
+          <div style="border-bottom: 1px solid var(--color-border); padding-bottom: 15px">
+            <h3 style="font-size: 0.875rem; color: var(--color-text); margin-bottom: 10px; font-weight: 600">저장된 결과</h3>
+            <div id="savedResultsList" style="border: 1px solid var(--color-border); border-radius: 6px; padding: 10px; background: var(--color-bg); margin-bottom: 10px; max-height: calc(100vh - 400px); overflow-y: auto">
+              <div style="color: var(--color-text-muted); font-size: 0.875rem; text-align: center; padding: 20px">저장된 결과가 없습니다.</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px">
+              <button class="btn" id="exportSavedResultsCsvBtn" style="padding: 10px 20px; font-size: 0.875rem; width: 100%">CSV 다운로드</button>
+              <button class="btn" id="clearAllResultsBtn" style="background: var(--color-error); padding: 10px 20px; font-size: 0.875rem; width: 100%">모든 결과 초기화</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 워크플로우 콘텐츠 영역 -->
+      <div class="workflow-content">
+        <!-- 1단계: 문제 입력 -->
+        <div class="workflow-panel active" data-step="1" id="workflowPanel1">
+          <button class="toggle-form-btn" id="toggleFormBtn" style="display: none">입력 영역 보기/숨기기</button>
+          <div class="form-section" id="formSection">
+        <form id="cotForm">
+          <div class="form-group">
+            <label for="problemSelect">id</label>
+            <select id="problemSelect" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.875rem">
+              <option value="">직접 입력하기</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="problem">문제</label>
+            <textarea id="problem" name="main_problem" required placeholder="수학 문제를 입력하세요"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="answer">정답</label>
+            <input type="text" id="answer" name="main_answer" placeholder="정답을 입력하세요 " value="" />
+          </div>
+
+          <div class="form-group">
+            <label for="solution">모범답안</label>
+            <textarea id="solution" name="main_solution" placeholder="모범답안을 입력하세요 "></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="imageUpload">문제 이미지 업로드</label>
+            <input type="file" id="imageUpload" name="image_upload" accept="image/*" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px dashed var(--color-border); border-radius: 6px; background: var(--color-bg-secondary); cursor: pointer; transition: all 0.2s;" />
+            <div id="imagePreviewContainer" style="display: none; margin-top: 10px;">
+              <img id="imagePreview" src="" alt="이미지 미리보기" style="max-width: 100%; max-height: 400px; height: auto; border: 1px solid var(--color-border); border-radius: 6px; display: block;" />
+              <button type="button" id="removeImageBtn" style="margin-top: 10px; padding: 6px 12px; background: var(--color-error); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; transition: background-color 0.2s;">이미지 제거</button>
+            </div>
+          </div>
+
+          <div class="form-group" id="imageGroup" style="display: none">
+            <label for="problemImage" id="imageLabel">
+              문제 이미지
+              <span id="inputCheckIcon" style="display: none; margin-left: 8px; color: var(--color-success); font-size: 18px">✓</span>
+            </label>
+            <img id="problemImage" src="" alt="문제 이미지" style="max-width: 100%; height: auto; border: 1px solid var(--color-border); border-radius: 6px; margin-top: 10px" />
+          </div>
+
+          <div class="form-group" id="imgDescriptionGroup" style="display: none">
+            <label for="imgDescription">이미지 설명</label>
+            <textarea id="imgDescription" name="img_description" placeholder="이미지 설명을 입력하세요" rows="3"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="grade">학년</label>
+            <select id="grade" name="grade" required>
+              <option value="3">3학년</option>
+              <option value="4">4학년</option>
+              <option value="5">5학년</option>
+              <option value="6">6학년</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn" id="submitBtn">문제 풀기</button>
+        </form>
+
+        <div class="loading" id="loading">
+          <div class="spinner"></div>
+          <p>문제를 풀고 있습니다...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+          </div>
+        </div>
+
+        <!-- 2단계: AI 풀이과정 -->
+        <div class="workflow-panel" data-step="2" id="workflowPanel2" style="display: none;">
+          <div class="result-section" id="resultSection" style="margin-top: 24px;">
+            <div class="problem-info" id="problemInfo"></div>
+            <div id="comparisonView" style="display: none">
+              <div class="comparison-container" id="comparisonContainer">
+                <div class="comparison-section solution-panel">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border)">
+                    <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--color-text)">1단계: CoT 풀이 과정</h3>
+                  </div>
+                  <div class="steps-container" id="cotStepsContainer"></div>
+                </div>
+                <div class="comparison-section">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <button
+                        class="split-view-toggle"
+                        id="toggleComparisonSolutionBtn"
+                        title="풀이 과정 패널 숨기기/보이기"
+                      >
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M9 6L15 12L9 18"/>
+                        </svg>
+                      </button>
+                      <h3 style="margin: 0">2단계: 하위 문항</h3>
+                    </div>
+                    <button
+                      class="btn-regenerate-guideline"
+                      id="regenerateGuidelineBtn"
+                      style="display: none; padding: 8px 16px; font-size: 0.875rem;"
+                    >
+                      전체 단계 재생성
+                    </button>
+                  </div>
+                  <div id="subQuestionsContainer"></div>
+                </div>
+              </div>
+            </div>
+            <div id="singleView">
+              <div class="steps-container" id="stepsContainer"></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; width: 100%; flex-wrap: wrap; margin-top: 20px;">
+              <button
+                class="btn-generate-guideline"
+                id="generateGuidelineBtn"
+                style="display: none; flex: 1 1 0; min-width: 0; margin: 0; max-width: none; width: auto; padding: 12px 30px; font-size: 16px"
+              >
+               하위 문항 생성하기
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3단계: 하위문항 생성 -->
+        <div class="workflow-panel" data-step="3" id="workflowPanel3" style="display: none;">
+          <div class="result-section" id="resultSectionStep3" style="margin-top: 24px;">
+            <div class="problem-info" id="problemInfoStep3"></div>
+            <div id="guidelineProgressContainer" style="display: none; margin-bottom: 16px; padding: 16px; background: var(--color-bg-secondary); border-radius: 8px; border: 1px solid var(--color-border)">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+                <div style="font-weight: 500; color: var(--color-text); font-size: 0.875rem">하위 문항 생성 진행  상황</div>
+                <div id="guidelineProgressText" style="color: var(--color-primary); font-weight: 600; font-size: 0.875rem">0/8 완료</div>
+              </div>
+              <div id="guidelineProgressSteps" style="display: flex; gap: 8px; flex-wrap: wrap"></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; width: 100%; flex-wrap: wrap">
+              <button
+                class="btn-generate-guideline"
+                id="generateGuidelineBtn"
+                style="display: none; flex: 1 1 0; min-width: 0; margin: 0; max-width: none; width: auto; padding: 12px 30px; font-size: 16px"
+              >
+               하위 문항 생성하기
+              </button>
+            </div>
+            <div id="guidelineView" style="display: none">
+              <div class="comparison-container" id="guidelineContainer">
+                <div class="comparison-section solution-panel">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border)">
+                    <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--color-text)">8단계 풀이 과정</h3>
+                  </div>
+                  <div class="steps-container" id="guidelineCotStepsContainer"></div>
+                </div>
+                <div class="comparison-section guideline-section">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <button
+                        class="split-view-toggle"
+                        id="toggleGuidelineSolutionBtn"
+                        title="풀이 과정 패널 숨기기/보이기"
+                      >
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M9 6L15 12L9 18"/>
+                        </svg>
+                      </button>
+                      <h3 style="margin: 0">하위 문항</h3>
+                    </div>
+                    <button
+                      class="btn-regenerate-guideline"
+                      id="regenerateGuidelineBtn"
+                      style="display: none; padding: 8px 16px; font-size: 0.875rem;"
+                    >
+                      전체 단계 재생성
+                    </button>
+                  </div>
+                  <div id="guidelineSubQuestionsContainer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4단계: 루브릭 생성 -->
+        <div class="workflow-panel" data-step="4" id="workflowPanel4" style="display: none;">
+          <div class="result-section" style="margin-top: 24px; padding: 32px;">
+            <div style="text-align: center; color: var(--color-text-muted); padding: 60px 20px;">
+              <p style="font-size: 1.125rem; margin-bottom: 8px;">루브릭 생성 기능은 준비 중입니다.</p>
+              <p style="font-size: 0.875rem;">곧 제공될 예정입니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 고려사항 모달 -->
+    <div id="considerationsModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle">고려사항</h2>
+          <span class="close" id="closeModal">&times;</span>
+        </div>
+        <ul class="considerations-list" id="considerationsList"></ul>
+      </div>
+    </div>
+
+    <!-- JavaScript 파일들 -->
+    <script src="js/config.js"></script>
+    <script src="js/dom.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/components/workflow-tabs.js"></script>
+    <script src="js/components/sidebar.js"></script>
+    <script src="js/components/toggle.js"></script>
+    <script src="js/components/form.js"></script>
+    <script src="js/components/guideline.js"></script>
+    <script src="js/components/events.js"></script>
+    <script src="js/components/export.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
