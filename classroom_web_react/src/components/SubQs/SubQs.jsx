@@ -22,6 +22,139 @@ export const SubQs = () => {
   const [verificationStates, setVerificationStates] = useState({});
   const containerRef = useMathJax([currentGuidelineData?.guide_sub_questions]);
 
+  // 각 단계의 verifier + 재생성은 백그라운드에서 처리
+  const runBackgroundVerify = async ({
+    cotStep,
+    subQuestion,
+    matchedSubjectArea,
+    considerations,
+    previousSubQuestions,
+  }) => {
+    try {
+      const verifyResponse = await api.verifyAndRegenerate({
+        main_problem: currentCotData.problem,
+        main_answer: currentCotData.answer,
+        main_solution: currentCotData.main_solution || null,
+        grade: currentCotData.grade,
+        cot_step: {
+          step_id: cotStep.step_id,
+          sub_skill_id: cotStep.sub_skill_id,
+          step_name: cotStep.step_name,
+          step_name_en: cotStep.step_name_en || '',
+          sub_skill_name: cotStep.sub_skill_name,
+          step_content: cotStep.step_content,
+          prompt_used: cotStep.prompt_used || null,
+        },
+        subject_area: matchedSubjectArea,
+        considerations: considerations,
+        sub_question: subQuestion,
+        previous_sub_questions: previousSubQuestions,
+        skip_regeneration: false,
+      });
+
+      let enrichedSubQuestion = { ...subQuestion };
+
+      if (verifyResponse.was_regenerated) {
+        const verificationResults = verifyResponse.verification_results || {};
+        const verifierNames = {
+          stage_elicitation: 'Stage Elicitation',
+          context_alignment: 'Context Alignment',
+          answer_validity: 'Answer Validity',
+          prompt_validity: 'Prompt Validity',
+        };
+
+        const allFeedbacks = [];
+        for (const [key, result] of Object.entries(verificationResults)) {
+          const verifierName = verifierNames[key] || key;
+          const scoreStr = result.score !== null ? result.score : 'N/A';
+          const evalSummary = result.evaluation_summary || '';
+          const improveSuggestions = result.improvement_suggestions || '';
+          if (evalSummary || improveSuggestions) {
+            allFeedbacks.push(
+              `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`
+            );
+          } else {
+            allFeedbacks.push(
+              `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`
+            );
+          }
+        }
+
+        enrichedSubQuestion = {
+          ...enrichedSubQuestion,
+          re_sub_question: verifyResponse.sub_question.re_sub_question,
+          re_sub_answer: verifyResponse.sub_question.re_sub_answer,
+          re_verification_result: allFeedbacks.join('\n'),
+          verification_result: formatVerificationResult(
+            Object.entries(verificationResults)
+              .map(([key, result]) => {
+                const verifierName = verifierNames[key] || key;
+                const scoreStr = result.score !== null ? result.score : 'N/A';
+                const evalSummary = result.evaluation_summary || '';
+                const improveSuggestions = result.improvement_suggestions || '';
+                if (evalSummary || improveSuggestions) {
+                  return `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`;
+                }
+                return `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`;
+              })
+              .join('\n')
+          ),
+        };
+      } else {
+        // 재생성되지 않은 경우에도 검증 결과 저장
+        const verificationResults = verifyResponse.verification_results || {};
+        const verifierNames = {
+          stage_elicitation: 'Stage Elicitation',
+          context_alignment: 'Context Alignment',
+          answer_validity: 'Answer Validity',
+          prompt_validity: 'Prompt Validity',
+        };
+
+        const allFeedbacks = [];
+        for (const [key, result] of Object.entries(verificationResults)) {
+          const verifierName = verifierNames[key] || key;
+          const scoreStr = result.score !== null ? result.score : 'N/A';
+          const evalSummary = result.evaluation_summary || '';
+          const improveSuggestions = result.improvement_suggestions || '';
+          if (evalSummary || improveSuggestions) {
+            allFeedbacks.push(
+              `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`
+            );
+          } else {
+            allFeedbacks.push(
+              `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`
+            );
+          }
+        }
+        enrichedSubQuestion.verification_result = allFeedbacks.join('\n');
+      }
+
+      // 해당 sub_question만 상태에 merge
+      setCurrentGuidelineData((prev) => {
+        if (!prev || !prev.guide_sub_questions) return prev;
+        const subQuestions = prev.guide_sub_questions;
+        const idx = subQuestions.findIndex(
+          (q) => q.sub_question_id === enrichedSubQuestion.sub_question_id
+        );
+        if (idx === -1) return prev;
+
+        const updatedSubQuestions = [...subQuestions];
+        updatedSubQuestions[idx] = {
+          ...updatedSubQuestions[idx],
+          ...enrichedSubQuestion,
+        };
+
+        return {
+          ...prev,
+          guide_sub_questions: updatedSubQuestions,
+        };
+      });
+    } catch (err) {
+      // 백그라운드 오류는 콘솔에만 남기고 UI는 유지
+      console.error('하위문항 검증/재생성 중 오류:', err);
+    }
+  };
+
   const generateGuideline = async () => {
     if (!currentCotData || !currentCotData.steps) {
       setError('CoT 데이터가 없습니다.');
@@ -59,7 +192,7 @@ export const SubQs = () => {
           currentStep: `${stepId} 단계 처리 중...` 
         });
 
-        // 하위 문항 생성
+        // 1단계: 하위 문항(원본)만 생성
         const guidelineResponse = await api.generateSingleSubQuestion({
           main_problem: currentCotData.problem,
           main_answer: currentCotData.answer,
@@ -79,97 +212,10 @@ export const SubQs = () => {
           previous_sub_questions: guideSubQuestions.slice(),
         });
 
-        let subQuestion = guidelineResponse.sub_question;
+        const subQuestion = guidelineResponse.sub_question;
+        const previousSubQuestions = guideSubQuestions.slice();
 
-        // 검증 및 재생성
-        const verifyResponse = await api.verifyAndRegenerate({
-          main_problem: currentCotData.problem,
-          main_answer: currentCotData.answer,
-          main_solution: currentCotData.main_solution || null,
-          grade: currentCotData.grade,
-          cot_step: {
-            step_id: cotStep.step_id,
-            sub_skill_id: cotStep.sub_skill_id,
-            step_name: cotStep.step_name,
-            step_name_en: cotStep.step_name_en || '',
-            sub_skill_name: cotStep.sub_skill_name,
-            step_content: cotStep.step_content,
-            prompt_used: cotStep.prompt_used || null,
-          },
-          subject_area: matchedSubjectArea,
-          considerations: considerations,
-          sub_question: subQuestion,
-          previous_sub_questions: guideSubQuestions.slice(),
-          skip_regeneration: false,
-        });
-
-        if (verifyResponse.was_regenerated) {
-          const verificationResults = verifyResponse.verification_results || {};
-          const verifierNames = {
-            stage_elicitation: 'Stage Elicitation',
-            context_alignment: 'Context Alignment',
-            answer_validity: 'Answer Validity',
-            prompt_validity: 'Prompt Validity',
-          };
-
-          const allFeedbacks = [];
-          for (const [key, result] of Object.entries(verificationResults)) {
-            const verifierName = verifierNames[key] || key;
-            const scoreStr = result.score !== null ? result.score : 'N/A';
-            const evalSummary = result.evaluation_summary || '';
-            const improveSuggestions = result.improvement_suggestions || '';
-            if (evalSummary || improveSuggestions) {
-              allFeedbacks.push(`[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`);
-            } else {
-              allFeedbacks.push(`[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`);
-            }
-          }
-
-          subQuestion = {
-            ...subQuestion,
-            re_sub_question: verifyResponse.sub_question.re_sub_question,
-            re_sub_answer: verifyResponse.sub_question.re_sub_answer,
-            re_verification_result: allFeedbacks.join('\n'),
-            verification_result: formatVerificationResult(
-              Object.entries(verificationResults)
-                .map(([key, result]) => {
-                  const verifierName = verifierNames[key] || key;
-                  const scoreStr = result.score !== null ? result.score : 'N/A';
-                  const evalSummary = result.evaluation_summary || '';
-                  const improveSuggestions = result.improvement_suggestions || '';
-                  if (evalSummary || improveSuggestions) {
-                    return `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`;
-                  }
-                  return `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`;
-                })
-                .join('\n')
-            ),
-          };
-        } else {
-          // 재생성되지 않은 경우에도 검증 결과 저장
-          const verificationResults = verifyResponse.verification_results || {};
-          const verifierNames = {
-            stage_elicitation: 'Stage Elicitation',
-            context_alignment: 'Context Alignment',
-            answer_validity: 'Answer Validity',
-            prompt_validity: 'Prompt Validity',
-          };
-
-          const allFeedbacks = [];
-          for (const [key, result] of Object.entries(verificationResults)) {
-            const verifierName = verifierNames[key] || key;
-            const scoreStr = result.score !== null ? result.score : 'N/A';
-            const evalSummary = result.evaluation_summary || '';
-            const improveSuggestions = result.improvement_suggestions || '';
-            if (evalSummary || improveSuggestions) {
-              allFeedbacks.push(`[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`);
-            } else {
-              allFeedbacks.push(`[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`);
-            }
-          }
-          subQuestion.verification_result = allFeedbacks.join('\n');
-        }
-
+        // 원본 문항은 즉시 누적해서 화면에 표시
         guideSubQuestions.push(subQuestion);
 
         // 각 단계가 끝날 때마다 즉시 화면에 반영
@@ -183,6 +229,15 @@ export const SubQs = () => {
         };
 
         setCurrentGuidelineData(guidelineData);
+
+        // 검증 + 재생성은 백그라운드에서 병렬로 처리
+        runBackgroundVerify({
+          cotStep,
+          subQuestion,
+          matchedSubjectArea,
+          considerations,
+          previousSubQuestions,
+        });
       }
 
       setProgress({ current: 8, total: 8, currentStep: '완료' });
