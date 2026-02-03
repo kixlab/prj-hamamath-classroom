@@ -6,9 +6,9 @@ import { formatQuestion, formatAnswer, formatVerificationResult } from '../../ut
 import styles from './SubQs.module.css';
 
 export const SubQs = () => {
-  const { 
-    currentCotData, 
-    currentGuidelineData, 
+  const {
+    currentCotData,
+    currentGuidelineData,
     setCurrentGuidelineData,
     setLoading,
     setError,
@@ -16,11 +16,75 @@ export const SubQs = () => {
     error
   } = useApp();
   
-  const [progress, setProgress] = useState({ current: 0, total: 0, currentStep: '' });
-  const [editingStates, setEditingStates] = useState({});
+  const [progress, setProgress] = useState({
+    current: 0,
+    total: 0,
+    currentStep: '',
+  });
+  // 원본 문항 / 재생성 문항 각각에 대한 편집 상태
+  const [editingOriginalStates, setEditingOriginalStates] = useState({});
+  const [editingRegeneratedStates, setEditingRegeneratedStates] = useState({});
   const [feedbackStates, setFeedbackStates] = useState({});
   const [verificationStates, setVerificationStates] = useState({});
   const containerRef = useMathJax([currentGuidelineData?.guide_sub_questions]);
+
+  // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
+  const getFinalQA = (subQ) => {
+    const originalQ = (subQ.guide_sub_question || '').trim();
+    const originalA = (subQ.guide_sub_answer || '').trim();
+    const reQ = (subQ.re_sub_question || '').trim();
+    const reA = (subQ.re_sub_answer || '').trim();
+
+    // 1. 원본/재생성 둘 다 있으면 재생성 우선
+    // 2. 피드백/재생성/편집 결과는 이미 re_* 또는 guide_* 에 반영되어 있다고 가정
+    const finalQuestion = reQ || originalQ;
+    const finalAnswer = reQ ? reA || originalA : originalA;
+
+    return {
+      finalQuestion,
+      finalAnswer,
+    };
+  };
+
+  // 전체 문제에 대한 최종 문항/정답을 한 번에 JSON으로 다운로드
+  const handleFinalizeAll = () => {
+    if (!currentGuidelineData || !currentGuidelineData.guide_sub_questions) {
+      return;
+    }
+
+    const finalized = currentGuidelineData.guide_sub_questions.map((subQ) => {
+      const { finalQuestion, finalAnswer } = getFinalQA(subQ);
+      return {
+        sub_question_id: subQ.sub_question_id,
+        step_id: subQ.step_id,
+        sub_skill_id: subQ.sub_skill_id,
+        step_name: subQ.step_name,
+        sub_skill_name: subQ.sub_skill_name,
+        final_question: finalQuestion,
+        final_answer: finalAnswer,
+      };
+    });
+
+    const data = {
+      main_problem: currentCotData?.problem ?? null,
+      main_answer: currentCotData?.answer ?? null,
+      main_solution: currentCotData?.main_solution ?? null,
+      grade: currentCotData?.grade ?? null,
+      finalized_sub_questions: finalized,
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `finalized_sub_questions.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // 각 단계의 verifier + 재생성은 백그라운드에서 처리
   const runBackgroundVerify = async ({
@@ -248,8 +312,85 @@ export const SubQs = () => {
     }
   };
 
-  const toggleEdit = (subqId) => {
-    setEditingStates(prev => ({
+  // 원본 편집 저장: guide_sub_question / guide_sub_answer 업데이트
+  const handleSaveOriginalEdit = (subqId) => {
+    const questionEl = document.querySelector(
+      `textarea[data-subq-id="${subqId}"][data-type="original-question"]`
+    );
+    const answerEl = document.querySelector(
+      `input[data-subq-id="${subqId}"][data-type="original-answer"]`
+    );
+
+    const newQuestion = (questionEl?.value ?? '').trim();
+    const newAnswer = (answerEl?.value ?? '').trim();
+
+    setCurrentGuidelineData((prev) => {
+      if (!prev || !prev.guide_sub_questions) return prev;
+      const updated = prev.guide_sub_questions.map((q) =>
+        q.sub_question_id === subqId
+          ? {
+              ...q,
+              guide_sub_question: newQuestion,
+              guide_sub_answer: newAnswer,
+            }
+          : q
+      );
+      return {
+        ...prev,
+        guide_sub_questions: updated,
+      };
+    });
+
+    setEditingOriginalStates((prev) => ({
+      ...prev,
+      [subqId]: false,
+    }));
+  };
+
+  // 재생성 편집 저장: re_sub_question / re_sub_answer 업데이트
+  const handleSaveRegeneratedEdit = (subqId) => {
+    const questionEl = document.querySelector(
+      `textarea[data-subq-id="${subqId}"][data-type="regenerated-question"]`
+    );
+    const answerEl = document.querySelector(
+      `input[data-subq-id="${subqId}"][data-type="regenerated-answer"]`
+    );
+
+    const newQuestion = (questionEl?.value ?? '').trim();
+    const newAnswer = (answerEl?.value ?? '').trim();
+
+    setCurrentGuidelineData((prev) => {
+      if (!prev || !prev.guide_sub_questions) return prev;
+      const updated = prev.guide_sub_questions.map((q) =>
+        q.sub_question_id === subqId
+          ? {
+              ...q,
+              re_sub_question: newQuestion,
+              re_sub_answer: newAnswer,
+            }
+          : q
+      );
+      return {
+        ...prev,
+        guide_sub_questions: updated,
+      };
+    });
+
+    setEditingRegeneratedStates((prev) => ({
+      ...prev,
+      [subqId]: false,
+    }));
+  };
+
+  const toggleOriginalEdit = (subqId) => {
+    setEditingOriginalStates(prev => ({
+      ...prev,
+      [subqId]: !prev[subqId]
+    }));
+  };
+
+  const toggleRegeneratedEdit = (subqId) => {
+    setEditingRegeneratedStates(prev => ({
       ...prev,
       [subqId]: !prev[subqId]
     }));
@@ -447,7 +588,8 @@ export const SubQs = () => {
       <div className={styles.guidelineSubQuestions}>
         {currentGuidelineData.guide_sub_questions.map((subQ) => {
           const hasRegenerated = !!(subQ.re_sub_question && subQ.re_sub_question.trim().length > 0);
-          const isEditing = editingStates[subQ.sub_question_id];
+          const isOriginalEditing = editingOriginalStates[subQ.sub_question_id];
+          const isRegeneratedEditing = editingRegeneratedStates[subQ.sub_question_id];
           const isFeedbackOpen = feedbackStates[subQ.sub_question_id];
           const isVerificationOpen = verificationStates[subQ.sub_question_id];
           
@@ -471,33 +613,43 @@ export const SubQs = () => {
                     <div className={styles.originalQuestionBox}>
                       <div className={styles.questionLabelRow}>
                         <div className={styles.questionLabel}>원본 문항</div>
-                        {!isEditing && (
+                        {!isOriginalEditing && (
                           <button 
                             className={styles.editToggleBtn}
-                            onClick={() => toggleEdit(subQ.sub_question_id)}
+                            onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
                           >
                             편집
                           </button>
                         )}
                       </div>
-                      {isEditing ? (
+                      {isOriginalEditing ? (
                         <div className={styles.editMode}>
                           <textarea
                             className={styles.editTextarea}
                             defaultValue={originalQuestion}
                             rows={3}
+                            data-subq-id={subQ.sub_question_id}
+                            data-type="original-question"
                           />
                           <input
                             type="text"
                             className={styles.editInput}
                             defaultValue={originalAnswer}
                             placeholder="정답을 입력하세요"
+                            data-subq-id={subQ.sub_question_id}
+                            data-type="original-answer"
                           />
                           <div className={styles.editActions}>
-                            <button className={styles.cancelBtn} onClick={() => toggleEdit(subQ.sub_question_id)}>
+                            <button
+                              className={styles.cancelBtn}
+                              onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                            >
                               취소
                             </button>
-                            <button className={styles.saveBtn}>
+                            <button
+                              className={styles.saveBtn}
+                              onClick={() => handleSaveOriginalEdit(subQ.sub_question_id)}
+                            >
                               저장
                             </button>
                           </div>
@@ -518,33 +670,43 @@ export const SubQs = () => {
                     <div className={styles.regeneratedQuestionBox}>
                       <div className={styles.questionLabelRow}>
                         <div className={styles.questionLabel}>재생성 문항</div>
-                        {!isEditing && (
+                        {!isRegeneratedEditing && (
                           <button 
                             className={styles.editToggleBtn}
-                            onClick={() => toggleEdit(subQ.sub_question_id)}
+                            onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
                           >
                             편집
                           </button>
                         )}
                       </div>
-                      {isEditing ? (
+                      {isRegeneratedEditing ? (
                         <div className={styles.editMode}>
                           <textarea
                             className={styles.editTextarea}
                             defaultValue={regeneratedQuestion}
                             rows={3}
+                            data-subq-id={subQ.sub_question_id}
+                            data-type="regenerated-question"
                           />
                           <input
                             type="text"
                             className={styles.editInput}
                             defaultValue={regeneratedAnswer}
                             placeholder="정답을 입력하세요"
+                            data-subq-id={subQ.sub_question_id}
+                            data-type="regenerated-answer"
                           />
                           <div className={styles.editActions}>
-                            <button className={styles.cancelBtn} onClick={() => toggleEdit(subQ.sub_question_id)}>
+                            <button
+                              className={styles.cancelBtn}
+                              onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
+                            >
                               취소
                             </button>
-                            <button className={styles.saveBtn}>
+                            <button
+                              className={styles.saveBtn}
+                              onClick={() => handleSaveRegeneratedEdit(subQ.sub_question_id)}
+                            >
                               저장
                             </button>
                           </div>
@@ -567,33 +729,43 @@ export const SubQs = () => {
                   <div className={styles.originalQuestionBox}>
                     <div className={styles.questionLabelRow}>
                       <div className={styles.questionLabel}>원본 문항</div>
-                      {!isEditing && (
+                      {!isOriginalEditing && (
                         <button 
                           className={styles.editToggleBtn}
-                          onClick={() => toggleEdit(subQ.sub_question_id)}
+                          onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
                         >
                           편집
                         </button>
                       )}
                     </div>
-                    {isEditing ? (
+                    {isOriginalEditing ? (
                       <div className={styles.editMode}>
                         <textarea
                           className={styles.editTextarea}
                           defaultValue={originalQuestion}
                           rows={3}
+                          data-subq-id={subQ.sub_question_id}
+                          data-type="original-question"
                         />
                         <input
                           type="text"
                           className={styles.editInput}
                           defaultValue={originalAnswer}
                           placeholder="정답을 입력하세요"
+                          data-subq-id={subQ.sub_question_id}
+                          data-type="original-answer"
                         />
                         <div className={styles.editActions}>
-                          <button className={styles.cancelBtn} onClick={() => toggleEdit(subQ.sub_question_id)}>
+                          <button
+                            className={styles.cancelBtn}
+                            onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                          >
                             취소
                           </button>
-                          <button className={styles.saveBtn}>
+                          <button
+                            className={styles.saveBtn}
+                            onClick={() => handleSaveOriginalEdit(subQ.sub_question_id)}
+                          >
                             저장
                           </button>
                         </div>
@@ -717,6 +889,14 @@ export const SubQs = () => {
             </div>
           );
         })}
+      </div>
+      <div className={styles.finalizeRow}>
+        <button
+          className={styles.finalizeBtn}
+          onClick={handleFinalizeAll}
+        >
+          문제 확정하기 (JSON 다운로드)
+        </button>
       </div>
     </div>
   );

@@ -351,6 +351,31 @@
   background: var(--color-primary-hover);
 }
 
+.finalizeRow {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.finalizeBtn {
+  background: #111827;
+  border: none;
+  color: #f9fafb;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.finalizeBtn:hover {
+  background: #0f172a;
+}
+
+.finalizeBtn:active {
+  transform: translateY(1px);
+}
+
 .verificationResult {
   margin-top: 16px;
   padding: 16px;
