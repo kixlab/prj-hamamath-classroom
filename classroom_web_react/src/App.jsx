@@ -28,7 +28,7 @@ const AppContent = () => {
               <ProblemInput onSubmit={handleCoTSubmit} />
             </div>
           )}
-          {currentStep === 2 && currentCotData && (
+          {currentStep === 2 && (
             <div className={styles.workflowPanel}>
               {loading && (
                 <div className={styles.loading}>
@@ -37,7 +37,18 @@ const AppContent = () => {
                 </div>
               )}
               {error && <div className={styles.error}>{error}</div>}
-              <CoTSteps />
+              {!loading && !error && currentCotData && <CoTSteps />}
+              {!loading && !error && !currentCotData && (
+                <div className={styles.error}>데이터를 불러올 수 없습니다.</div>
+              )}
+            </div>
+          )}
+          {currentStep === 3 && (
+            <div className={styles.workflowPanel}>
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                <p style={{ fontSize: '1.125rem', marginBottom: '8px' }}>하위문항 생성 기능은 준비 중입니다.</p>
+                <p style={{ fontSize: '0.875rem' }}>곧 제공될 예정입니다.</p>
+              </div>
             </div>
           )}
         </div>

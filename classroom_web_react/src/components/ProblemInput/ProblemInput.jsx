@@ -4,7 +4,7 @@ import { api } from '../../services/api';
 import styles from './ProblemInput.module.css';
 
 export const ProblemInput = ({ onSubmit }) => {
-  const { setCurrentCotData, setLoading, setError } = useApp();
+  const { setCurrentCotData, setCurrentStep, setLoading, setError } = useApp();
   const [problemList, setProblemList] = useState([]);
   const [selectedProblem, setSelectedProblem] = useState('');
   const [formData, setFormData] = useState({
@@ -107,13 +107,17 @@ export const ProblemInput = ({ onSubmit }) => {
       };
 
       const result = await api.createCoT(requestData);
-      setCurrentCotData({
+      const cotDataWithExtras = {
         ...result,
         img_description: formData.imgDescription,
         image_data: formData.imageData,
         main_solution: formData.solution,
-      });
-      onSubmit?.(result);
+      };
+      
+      // 데이터 설정 후 2단계로 이동
+      setCurrentCotData(cotDataWithExtras);
+      setCurrentStep(2);
+      onSubmit?.(cotDataWithExtras);
     } catch (err) {
       setError(err.message);
     } finally {

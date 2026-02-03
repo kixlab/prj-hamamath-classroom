@@ -51,7 +51,18 @@ npm run build
 `.env` 파일에 다음 변수를 설정할 수 있습니다:
 
 ```
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8001
+```
+
+## 포트 설정
+
+- **React 개발 서버**: `http://localhost:8000` (포트 8000)
+- **백엔드 API 서버**: `http://localhost:8001` (포트 8001)
+
+백엔드 서버 실행:
+```bash
+cd /Users/Doh/Desktop/prj-hamamath-server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 ## 주요 기능

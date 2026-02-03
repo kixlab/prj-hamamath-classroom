@@ -2,7 +2,7 @@ import styles from './WorkflowTabs.module.css';
 import { useApp } from '../../contexts/AppContext';
 
 export const WorkflowTabs = () => {
-  const { currentStep, setCurrentStep } = useApp();
+  const { currentStep, setCurrentStep, currentCotData } = useApp();
 
   const tabs = [
     { step: 1, label: '문제 입력' },
@@ -11,24 +11,35 @@ export const WorkflowTabs = () => {
     { step: 4, label: '루브릭 생성' },
   ];
 
+  // 탭 활성화 조건: CoT 데이터가 있으면 2, 3번 탭 활성화 가능
+  const canAccessStep = (step) => {
+    if (step === 1) return true;
+    if (step === 2) return currentCotData !== null;
+    if (step === 3) return currentCotData !== null;
+    return false;
+  };
+
   return (
     <div className={styles.workflowTabs}>
-      {tabs.map((tab) => (
-        <button
-          key={tab.step}
-          className={`${styles.workflowTab} ${
-            currentStep === tab.step ? styles.active : ''
-          } ${currentStep < tab.step ? styles.disabled : ''}`}
-          onClick={() => currentStep >= tab.step && setCurrentStep(tab.step)}
-          data-step={tab.step}
-        >
-          <span className={styles.tabNumber}>{tab.step}</span>
-          <span className={styles.tabLabel}>{tab.label}</span>
-          <span className={styles.tabCheck} style={{ display: 'none' }}>
-            ✓
-          </span>
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const isDisabled = !canAccessStep(tab.step);
+        return (
+          <button
+            key={tab.step}
+            className={`${styles.workflowTab} ${
+              currentStep === tab.step ? styles.active : ''
+            } ${isDisabled ? styles.disabled : ''}`}
+            onClick={() => !isDisabled && setCurrentStep(tab.step)}
+            data-step={tab.step}
+          >
+            <span className={styles.tabNumber}>{tab.step}</span>
+            <span className={styles.tabLabel}>{tab.label}</span>
+            <span className={styles.tabCheck} style={{ display: 'none' }}>
+              ✓
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 };
