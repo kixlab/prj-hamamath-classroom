@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
 import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
-import { GuidelineSubQuestions } from './components/GuidelineSubQuestions/GuidelineSubQuestions';
+import { SubQs } from './components/SubQs/SubQs';
 import { useApp } from './contexts/AppContext';
 import styles from './App.module.css';
 
@@ -48,7 +48,7 @@ const AppContent = () => {
           )}
           {currentStep === 3 && (
             <div className={styles.workflowPanel}>
-              <GuidelineSubQuestions />
+              <SubQs />
             </div>
           )}
         </div>

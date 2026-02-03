@@ -3,9 +3,9 @@ import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
 import { useMathJax } from '../../hooks/useMathJax';
 import { formatQuestion, formatAnswer, formatVerificationResult } from '../../utils/formatting';
-import styles from './GuidelineSubQuestions.module.css';
+import styles from './SubQs.module.css';
 
-export const GuidelineSubQuestions = () => {
+export const SubQs = () => {
   const { 
     currentCotData, 
     currentGuidelineData, 
@@ -413,18 +413,64 @@ export const GuidelineSubQuestions = () => {
                 {hasRegenerated ? (
                   <>
                     <div className={styles.originalQuestionBox}>
-                      <div className={styles.questionLabel}>원본 문항</div>
-                      <div className={styles.questionContent}>
-                        {formatQuestion(originalQuestion)}
+                      <div className={styles.questionLabelRow}>
+                        <div className={styles.questionLabel}>원본 문항</div>
+                        {!isEditing && (
+                          <button 
+                            className={styles.editToggleBtn}
+                            onClick={() => toggleEdit(subQ.sub_question_id)}
+                          >
+                            편집
+                          </button>
+                        )}
                       </div>
-                      {originalAnswer && (
-                        <div className={styles.answerContent}>
-                          <strong>정답:</strong> {formatAnswer(originalAnswer)}
+                      {isEditing ? (
+                        <div className={styles.editMode}>
+                          <textarea
+                            className={styles.editTextarea}
+                            defaultValue={originalQuestion}
+                            rows={3}
+                          />
+                          <input
+                            type="text"
+                            className={styles.editInput}
+                            defaultValue={originalAnswer}
+                            placeholder="정답을 입력하세요"
+                          />
+                          <div className={styles.editActions}>
+                            <button className={styles.cancelBtn} onClick={() => toggleEdit(subQ.sub_question_id)}>
+                              취소
+                            </button>
+                            <button className={styles.saveBtn}>
+                              저장
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={styles.displayMode}>
+                          <div className={styles.questionContent}>
+                            {formatQuestion(originalQuestion)}
+                          </div>
+                          {originalAnswer && (
+                            <div className={styles.answerContent}>
+                              <strong>정답:</strong> {formatAnswer(originalAnswer)}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                     <div className={styles.regeneratedQuestionBox}>
-                      <div className={styles.questionLabel}>재생성 문항</div>
+                      <div className={styles.questionLabelRow}>
+                        <div className={styles.questionLabel}>재생성 문항</div>
+                        {!isEditing && (
+                          <button 
+                            className={styles.editToggleBtn}
+                            onClick={() => toggleEdit(subQ.sub_question_id)}
+                          >
+                            편집
+                          </button>
+                        )}
+                      </div>
                       {isEditing ? (
                         <div className={styles.editMode}>
                           <textarea
@@ -457,12 +503,6 @@ export const GuidelineSubQuestions = () => {
                               <strong>정답:</strong> {formatAnswer(regeneratedAnswer)}
                             </div>
                           )}
-                          <button 
-                            className={styles.editToggleBtn}
-                            onClick={() => toggleEdit(subQ.sub_question_id)}
-                          >
-                            편집
-                          </button>
                         </div>
                       )}
                     </div>
