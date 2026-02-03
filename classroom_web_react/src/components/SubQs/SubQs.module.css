@@ -151,6 +151,12 @@
   margin-bottom: 8px;
 }
 
+.questionActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .displayMode {
   position: relative;
 }
@@ -220,6 +226,23 @@
 }
 
 .editToggleBtn:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.selectBtn {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  color: #4b5563;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.selectBtnActive {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: white;
@@ -308,6 +331,13 @@
 
 .regenerateBtn span:first-child {
   font-size: 1em;
+}
+
+.regenerateBtn:disabled {
+  background: #e5e7eb;
+  border: 1px solid #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .feedbackInput {

@@ -21,9 +21,12 @@ export const SubQs = () => {
     total: 0,
     currentStep: '',
   });
-  // 원본 문항 / 재생성 문항 각각에 대한 편집 상태
+  // 원본 문항 / 재생성 문항 각각에 대한 편집 상태 및 최종 선택 상태
   const [editingOriginalStates, setEditingOriginalStates] = useState({});
   const [editingRegeneratedStates, setEditingRegeneratedStates] = useState({});
+  const [showRegeneratedStates, setShowRegeneratedStates] = useState({});
+  const [hideUnselectedStates, setHideUnselectedStates] = useState({});
+  const [preferredVersion, setPreferredVersion] = useState({});
   const [feedbackStates, setFeedbackStates] = useState({});
   const [verificationStates, setVerificationStates] = useState({});
   const containerRef = useMathJax([currentGuidelineData?.guide_sub_questions]);
@@ -34,11 +37,22 @@ export const SubQs = () => {
     const originalA = (subQ.guide_sub_answer || '').trim();
     const reQ = (subQ.re_sub_question || '').trim();
     const reA = (subQ.re_sub_answer || '').trim();
+    const preferred = preferredVersion[subQ.sub_question_id];
 
-    // 1. 원본/재생성 둘 다 있으면 재생성 우선
-    // 2. 피드백/재생성/편집 결과는 이미 re_* 또는 guide_* 에 반영되어 있다고 가정
-    const finalQuestion = reQ || originalQ;
-    const finalAnswer = reQ ? reA || originalA : originalA;
+    let finalQuestion;
+    let finalAnswer;
+
+    if (preferred === 'original') {
+      finalQuestion = originalQ;
+      finalAnswer = originalA;
+    } else if (preferred === 'regenerated') {
+      finalQuestion = reQ || originalQ;
+      finalAnswer = reQ ? reA || originalA : originalA;
+    } else {
+      // 기본 규칙: 원본/재생성 둘 다 있으면 재생성 우선
+      finalQuestion = reQ || originalQ;
+      finalAnswer = reQ ? reA || originalA : originalA;
+    }
 
     return {
       finalQuestion,
@@ -410,69 +424,6 @@ export const SubQs = () => {
     }));
   };
 
-  const handleRegenerateSingle = async (subqId) => {
-    if (!currentCotData || !currentGuidelineData) return;
-
-    const subQuestions = currentGuidelineData.guide_sub_questions || [];
-    const targetSubQ = subQuestions.find(q => q.sub_question_id === subqId);
-    if (!targetSubQ) return;
-
-    const cotSteps = currentCotData.steps || [];
-    // sub_question_id (예: '1-1')와 sub_skill_id가 일치하는 step 찾기
-    let cotStep = cotSteps.find(s => s.sub_skill_id === subqId);
-    if (!cotStep) {
-      // 매칭 실패 시 인덱스로 찾기
-      const stepOrder = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2'];
-      const index = stepOrder.indexOf(subqId);
-      if (index >= 0 && index < cotSteps.length) {
-        cotStep = cotSteps[index];
-      } else {
-        setError(`CoT 단계를 찾을 수 없습니다: ${subqId}`);
-        return;
-      }
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const verifyResponse = await api.verifyAndRegenerate({
-        main_problem: currentCotData.problem,
-        main_answer: currentCotData.answer,
-        main_solution: currentCotData.main_solution || null,
-        grade: currentCotData.grade,
-        cot_step: {
-          step_id: cotStep.step_id,
-          sub_skill_id: cotStep.sub_skill_id,
-          step_name: cotStep.step_name,
-          step_name_en: cotStep.step_name_en || '',
-          sub_skill_name: cotStep.sub_skill_name,
-          step_content: cotStep.step_content,
-          prompt_used: cotStep.prompt_used || null,
-        },
-        subject_area: currentGuidelineData.subject_area,
-        considerations: currentCotData.considerations || [],
-        sub_question: targetSubQ,
-        previous_sub_questions: subQuestions.filter(q => q.sub_question_id !== subqId),
-        skip_regeneration: false,
-      });
-
-      // 업데이트된 하위문항으로 교체
-      const updatedSubQuestions = subQuestions.map(q => 
-        q.sub_question_id === subqId ? verifyResponse.sub_question : q
-      );
-
-      setCurrentGuidelineData({
-        ...currentGuidelineData,
-        guide_sub_questions: updatedSubQuestions
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleFeedbackRegenerate = async (subqId, userFeedback) => {
     if (!currentCotData || !currentGuidelineData) return;
 
@@ -590,6 +541,9 @@ export const SubQs = () => {
           const hasRegenerated = !!(subQ.re_sub_question && subQ.re_sub_question.trim().length > 0);
           const isOriginalEditing = editingOriginalStates[subQ.sub_question_id];
           const isRegeneratedEditing = editingRegeneratedStates[subQ.sub_question_id];
+          const showRegenerated = !!showRegeneratedStates[subQ.sub_question_id];
+          const hideUnselected = !!hideUnselectedStates[subQ.sub_question_id];
+          const selectedVersion = preferredVersion[subQ.sub_question_id]; // 'original' | 'regenerated' | undefined
           const isFeedbackOpen = feedbackStates[subQ.sub_question_id];
           const isVerificationOpen = verificationStates[subQ.sub_question_id];
           
@@ -597,6 +551,16 @@ export const SubQs = () => {
           const originalAnswer = subQ.guide_sub_answer || subQ.sub_answer || '';
           const regeneratedQuestion = subQ.re_sub_question || '';
           const regeneratedAnswer = subQ.re_sub_answer || '';
+
+          // 카드 표시 여부 계산
+          const showOriginalCard =
+            !hasRegenerated || // 재생성 자체가 없으면 항상 원본만
+            !hideUnselected || // 아직 "선택되지 않은 문항 숨기기"를 안 누른 상태
+            selectedVersion !== 'regenerated'; // 재생성이 선택된 경우에만 원본을 숨김
+
+          const showRegeneratedCard =
+            showRegenerated && // 재생성 보기 토글이 켜져 있고
+            (!hideUnselected || selectedVersion !== 'original'); // 원본이 선택된 경우에만 재생성 숨김
 
           return (
             <div key={subQ.sub_question_id} className={styles.subQuestionCard}>
@@ -610,17 +574,35 @@ export const SubQs = () => {
               <div className={styles.questionSection}>
                 {hasRegenerated ? (
                   <>
+                    {showOriginalCard && (
                     <div className={styles.originalQuestionBox}>
                       <div className={styles.questionLabelRow}>
                         <div className={styles.questionLabel}>원본 문항</div>
-                        {!isOriginalEditing && (
-                          <button 
-                            className={styles.editToggleBtn}
-                            onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
-                          >
-                            편집
-                          </button>
-                        )}
+                        <div className={styles.questionActions}>
+                          {!isOriginalEditing && (
+                            <button 
+                              className={styles.editToggleBtn}
+                              onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                            >
+                              편집
+                            </button>
+                          )}
+                          {showRegenerated && !hideUnselected && (
+                            <button
+                              className={`${styles.selectBtn} ${
+                                selectedVersion === 'original' ? styles.selectBtnActive : ''
+                              }`}
+                              onClick={() => {
+                                setPreferredVersion((prev) => ({
+                                  ...prev,
+                                  [subQ.sub_question_id]: 'original',
+                                }));
+                              }}
+                            >
+                              {selectedVersion === 'original' ? '선택됨' : '이 문항 선택'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {isOriginalEditing ? (
                         <div className={styles.editMode}>
@@ -667,63 +649,83 @@ export const SubQs = () => {
                         </div>
                       )}
                     </div>
-                    <div className={styles.regeneratedQuestionBox}>
-                      <div className={styles.questionLabelRow}>
-                        <div className={styles.questionLabel}>재생성 문항</div>
-                        {!isRegeneratedEditing && (
-                          <button 
-                            className={styles.editToggleBtn}
-                            onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
-                          >
-                            편집
-                          </button>
+                    )}
+                    {showRegeneratedCard && (
+                      <div className={styles.regeneratedQuestionBox}>
+                        <div className={styles.questionLabelRow}>
+                          <div className={styles.questionLabel}>재생성 문항</div>
+                          <div className={styles.questionActions}>
+                            {!isRegeneratedEditing && (
+                              <button 
+                                className={styles.editToggleBtn}
+                                onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
+                              >
+                                편집
+                              </button>
+                            )}
+                            {showRegenerated && !hideUnselected && (
+                              <button
+                                className={`${styles.selectBtn} ${
+                                  selectedVersion === 'regenerated' ? styles.selectBtnActive : ''
+                                }`}
+                                onClick={() =>
+                                  setPreferredVersion((prev) => ({
+                                    ...prev,
+                                    [subQ.sub_question_id]: 'regenerated',
+                                  }))
+                                }
+                              >
+                                {selectedVersion === 'regenerated' ? '선택됨' : '이 문항 선택'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {isRegeneratedEditing ? (
+                          <div className={styles.editMode}>
+                            <textarea
+                              className={styles.editTextarea}
+                              defaultValue={regeneratedQuestion}
+                              rows={3}
+                              data-subq-id={subQ.sub_question_id}
+                              data-type="regenerated-question"
+                            />
+                            <input
+                              type="text"
+                              className={styles.editInput}
+                              defaultValue={regeneratedAnswer}
+                              placeholder="정답을 입력하세요"
+                              data-subq-id={subQ.sub_question_id}
+                              data-type="regenerated-answer"
+                            />
+                            <div className={styles.editActions}>
+                              <button
+                                className={styles.cancelBtn}
+                                onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
+                              >
+                                취소
+                              </button>
+                              <button
+                                className={styles.saveBtn}
+                                onClick={() => handleSaveRegeneratedEdit(subQ.sub_question_id)}
+                              >
+                                저장
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={styles.displayMode}>
+                            <div className={styles.questionContent}>
+                              {formatQuestion(regeneratedQuestion)}
+                            </div>
+                            {regeneratedAnswer && (
+                              <div className={styles.answerContent}>
+                                <strong>정답:</strong> {formatAnswer(regeneratedAnswer)}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
-                      {isRegeneratedEditing ? (
-                        <div className={styles.editMode}>
-                          <textarea
-                            className={styles.editTextarea}
-                            defaultValue={regeneratedQuestion}
-                            rows={3}
-                            data-subq-id={subQ.sub_question_id}
-                            data-type="regenerated-question"
-                          />
-                          <input
-                            type="text"
-                            className={styles.editInput}
-                            defaultValue={regeneratedAnswer}
-                            placeholder="정답을 입력하세요"
-                            data-subq-id={subQ.sub_question_id}
-                            data-type="regenerated-answer"
-                          />
-                          <div className={styles.editActions}>
-                            <button
-                              className={styles.cancelBtn}
-                              onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
-                            >
-                              취소
-                            </button>
-                            <button
-                              className={styles.saveBtn}
-                              onClick={() => handleSaveRegeneratedEdit(subQ.sub_question_id)}
-                            >
-                              저장
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className={styles.displayMode}>
-                          <div className={styles.questionContent}>
-                            {formatQuestion(regeneratedQuestion)}
-                          </div>
-                          {regeneratedAnswer && (
-                            <div className={styles.answerContent}>
-                              <strong>정답:</strong> {formatAnswer(regeneratedAnswer)}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </>
                 ) : (
                   <div className={styles.originalQuestionBox}>
@@ -818,10 +820,59 @@ export const SubQs = () => {
                 {!isFeedbackOpen && (
                   <button
                     className={styles.regenerateBtn}
-                    onClick={() => handleRegenerateSingle(subQ.sub_question_id)}
+                    disabled={!hasRegenerated}
+                    onClick={() => {
+                      if (!hasRegenerated) return;
+                      const currentlyShown = !!showRegenerated;
+                      const selected = selectedVersion;
+                      const hideUnselectedNow = !!hideUnselected;
+
+                      // 아직 선택된 문항이 없으면: 단순히 재생성 문항 보기/접기 토글
+                      if (!selected) {
+                        setShowRegeneratedStates((prev) => ({
+                          ...prev,
+                          [subQ.sub_question_id]: !currentlyShown,
+                        }));
+                        setHideUnselectedStates((prev) => ({
+                          ...prev,
+                          [subQ.sub_question_id]: false,
+                        }));
+                        return;
+                      }
+
+                      // 선택된 문항이 있고 현재 둘 다 보이는 상태(B)에서
+                      // → "문항 숨기기" : 선택되지 않은 문항을 숨기고 선택된 것만 남김 (C 상태)
+                      if (currentlyShown && !hideUnselectedNow) {
+                        setHideUnselectedStates((prev) => ({
+                          ...prev,
+                          [subQ.sub_question_id]: true,
+                        }));
+                        return;
+                      }
+
+                      // 이미 선택만 남은 상태(C)에서 다시 누르면
+                      // → 비교 모드(B)로 되돌아가서 두 문항을 다시 모두 보여줌
+                      if (currentlyShown && hideUnselectedNow) {
+                        setHideUnselectedStates((prev) => ({
+                          ...prev,
+                          [subQ.sub_question_id]: false,
+                        }));
+                        setShowRegeneratedStates((prev) => ({
+                          ...prev,
+                          [subQ.sub_question_id]: true,
+                        }));
+                        return;
+                      }
+                    }}
                   >
                     <span>🔄</span>
-                    <span>재생성</span>
+                    <span>
+                      {hasRegenerated
+                        ? showRegenerated && !hideUnselected
+                          ? '문항 숨기기'
+                          : '재생성 문항 보기'
+                        : '재생성 준비 중'}
+                    </span>
                   </button>
                 )}
               </div>
