@@ -15,6 +15,7 @@ export const Header = ({ onNewProblem }) => {
         id="hamburgerMenuBtn"
         onClick={handleHamburgerClick}
         aria-label="메뉴 열기"
+        style={{ display: sidebarOpen ? 'none' : 'block' }}
       >
         ☰
       </button>

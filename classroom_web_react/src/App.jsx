@@ -1,5 +1,6 @@
 import { AppProvider } from './contexts/AppContext';
 import { Header } from './components/Header/Header';
+import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
 import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
@@ -21,6 +22,7 @@ const AppContent = () => {
   return (
     <div className={styles.app}>
       <Header onNewProblem={handleNewProblem} />
+      <Sidebar />
       <div className={styles.container}>
         <WorkflowTabs />
         <div className={styles.workflowContent}>
