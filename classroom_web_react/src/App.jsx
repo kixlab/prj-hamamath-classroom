@@ -3,6 +3,7 @@ import { Header } from './components/Header/Header';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
 import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
+import { GuidelineSubQuestions } from './components/GuidelineSubQuestions/GuidelineSubQuestions';
 import { useApp } from './contexts/AppContext';
 import styles from './App.module.css';
 
@@ -45,10 +46,7 @@ const AppContent = () => {
           )}
           {currentStep === 3 && (
             <div className={styles.workflowPanel}>
-              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                <p style={{ fontSize: '1.125rem', marginBottom: '8px' }}>하위문항 생성 기능은 준비 중입니다.</p>
-                <p style={{ fontSize: '0.875rem' }}>곧 제공될 예정입니다.</p>
-              </div>
+              <GuidelineSubQuestions />
             </div>
           )}
         </div>

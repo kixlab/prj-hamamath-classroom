@@ -143,21 +143,6 @@ export const formatVerificationResult = (verificationResult) => {
     return '';
   }
 
-  const toggleId = `verification-result-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-  return `
-    <div style="margin-top: 12px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-      <div style="font-weight: 600; color: #495057; margin-bottom: 12px; font-size: 0.95em; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" 
-           onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.toggle-icon').textContent = this.nextElementSibling.style.display === 'none' ? '▶' : '▼';">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 1.2em;">🔍</span>
-          <span>검증 결과</span>
-        </div>
-        <span class="toggle-icon" style="font-size: 0.8em; color: #6c757d;">▶</span>
-      </div>
-      <div id="${toggleId}" style="display: none;">
-        ${verifierCards.join('')}
-      </div>
-    </div>
-  `;
+  // 토글 기능 제거 - React 컴포넌트에서 토글 처리
+  return verifierCards.join('');
 };

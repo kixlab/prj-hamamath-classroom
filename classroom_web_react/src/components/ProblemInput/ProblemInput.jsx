@@ -18,18 +18,19 @@ export const ProblemInput = ({ onSubmit }) => {
     imgDescription: '',
   });
 
-  useEffect(() => {
-    loadProblemList();
-  }, []);
+  // 문제 목록 로드는 필요 없음
+  // useEffect(() => {
+  //   loadProblemList();
+  // }, []);
 
-  const loadProblemList = async () => {
-    try {
-      const files = await api.getProblemList();
-      setProblemList(files);
-    } catch (err) {
-      console.error('문제 목록 로드 중 오류:', err);
-    }
-  };
+  // const loadProblemList = async () => {
+  //   try {
+  //     const files = await api.getProblemList();
+  //     setProblemList(files);
+  //   } catch (err) {
+  //     console.error('문제 목록 로드 중 오류:', err);
+  //   }
+  // };
 
   const handleProblemSelect = async (filename) => {
     if (!filename || filename === '__dummy_from_csv__') {

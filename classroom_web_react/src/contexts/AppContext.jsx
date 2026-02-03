@@ -19,6 +19,7 @@ export const AppProvider = ({ children }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -47,6 +48,8 @@ export const AppProvider = ({ children }) => {
     setLoading,
     error,
     setError,
+    sidebarOpen,
+    setSidebarOpen,
     reset,
   };
 
