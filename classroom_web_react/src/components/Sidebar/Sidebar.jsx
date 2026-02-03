@@ -20,7 +20,14 @@ export const Sidebar = () => {
     // 서버 목록도 가져오기
     let serverResults = [];
     try {
-      const resp = await fetch('/api/v1/history/list');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
+      
+      const resp = await fetch('/api/v1/history/list', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
       if (resp.ok) {
         const serverData = await resp.json();
         if (Array.isArray(serverData)) {
@@ -28,7 +35,10 @@ export const Sidebar = () => {
         }
       }
     } catch (err) {
-      console.warn('서버 저장 목록 불러오기 실패:', err);
+      // 네트워크 에러나 타임아웃은 조용히 무시 (백엔드 서버가 없을 수 있음)
+      if (err.name !== 'AbortError') {
+        // AbortError가 아닌 경우에만 로그 (타임아웃은 정상)
+      }
     }
 
     // localStorage와 서버 결과 병합

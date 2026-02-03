@@ -171,19 +171,20 @@ export const SubQs = () => {
         }
 
         guideSubQuestions.push(subQuestion);
+
+        // 각 단계가 끝날 때마다 즉시 화면에 반영
+        const guidelineData = {
+          main_problem: currentCotData.problem,
+          main_answer: currentCotData.answer,
+          main_solution: currentCotData.main_solution || null,
+          grade: currentCotData.grade,
+          subject_area: matchedSubjectArea,
+          guide_sub_questions: [...guideSubQuestions],
+        };
+
+        setCurrentGuidelineData(guidelineData);
       }
 
-      // 최종 Guideline 데이터 저장
-      const guidelineData = {
-        main_problem: currentCotData.problem,
-        main_answer: currentCotData.answer,
-        main_solution: currentCotData.main_solution || null,
-        grade: currentCotData.grade,
-        subject_area: matchedSubjectArea,
-        guide_sub_questions: guideSubQuestions,
-      };
-
-      setCurrentGuidelineData(guidelineData);
       setProgress({ current: 8, total: 8, currentStep: '완료' });
     } catch (err) {
       setError(err.message);
