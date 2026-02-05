@@ -1,5 +1,7 @@
 .guidelineContainer {
-  padding: 32px;
+  padding: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .loading {
@@ -141,7 +143,7 @@
 
 .selected {
   border: 3px solid var(--color-primary) !important;
-  background: #f8f9fa;
+  background: #f8f9fa !important;
 }
 
 .questionLabelRow {
