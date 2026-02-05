@@ -1,4 +1,4 @@
-export const escapeHtml = (str) => {
+export const escapeHtml = (str: string | null | undefined): string => {
   if (str === null || str === undefined) return '';
   return String(str)
     .replace(/&/g, '&amp;')
@@ -8,25 +8,25 @@ export const escapeHtml = (str) => {
     .replace(/'/g, '&#39;');
 };
 
-export const formatAnswer = (answer) => {
+export const formatAnswer = (answer: string | null | undefined): string => {
   if (!answer) return '';
-  answer = answer.trim();
-  if (/^\\+$/.test(answer)) return '';
-  answer = answer.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
-  if (!answer) return '';
-  answer = answer.replace(/\n/g, '<br>');
-  return answer.replace(/(=\s*\d+)\s+(?=\d)/g, '$1<br>');
+  let formatted = answer.trim();
+  if (/^\\+$/.test(formatted)) return '';
+  formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+  if (!formatted) return '';
+  formatted = formatted.replace(/\n/g, '<br>');
+  return formatted.replace(/(=\s*\d+)\s+(?=\d)/g, '$1<br>');
 };
 
-export const formatQuestion = (question) => {
+export const formatQuestion = (question: string | null | undefined): string => {
   if (!question) return '';
-  question = question.trim();
-  if (/^\\+$/.test(question)) return '';
-  question = question.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
-  return question || '';
+  let formatted = question.trim();
+  if (/^\\+$/.test(formatted)) return '';
+  formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+  return formatted || '';
 };
 
-export const formatVerificationResult = (verificationResult) => {
+export const formatVerificationResult = (verificationResult: string | null | undefined): string => {
   if (!verificationResult || !verificationResult.trim()) return '';
 
   let cleanedResult = verificationResult.trim();
@@ -35,7 +35,7 @@ export const formatVerificationResult = (verificationResult) => {
   }
 
   const lines = cleanedResult.split(/\n/);
-  const verifierBlocks = [];
+  const verifierBlocks: string[] = [];
   let currentBlock = '';
 
   for (let i = 0; i < lines.length; i++) {
@@ -62,7 +62,7 @@ export const formatVerificationResult = (verificationResult) => {
     verifierBlocks.push(cleanedResult.trim());
   }
 
-  const verifierCards = [];
+  const verifierCards: string[] = [];
 
   verifierBlocks.forEach((block) => {
     const lines = block.split('\n').filter((line) => line.trim());

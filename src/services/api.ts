@@ -1,10 +1,81 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-function getApiUrl(path) {
+function getApiUrl(path: string): string {
   if (path.startsWith('/')) {
     return API_BASE_URL + path;
   }
   return API_BASE_URL + '/' + path;
+}
+
+interface CoTCreateData {
+  problem_text: string;
+  image_url?: string;
+}
+
+interface MatchSubjectAreaData {
+  main_problem: string;
+  main_answer: string;
+  main_solution?: string | null;
+  grade: string;
+}
+
+interface GenerateSubQuestionData {
+  main_problem: string;
+  main_answer: string;
+  main_solution?: string | null;
+  grade: string;
+  cot_step: {
+    step_id: string;
+    sub_skill_id: string;
+    step_name: string;
+    step_name_en?: string;
+    sub_skill_name: string;
+    step_content: string;
+    prompt_used?: string | null;
+  };
+  subject_area: string;
+  considerations?: string[];
+  previous_sub_questions?: any[];
+}
+
+interface VerifyAndRegenerateData {
+  main_problem: string;
+  main_answer: string;
+  main_solution?: string | null;
+  grade: string;
+  cot_step: {
+    step_id: string | number;
+    sub_skill_id: string;
+    step_name: string;
+    step_name_en?: string;
+    sub_skill_name: string;
+    step_content: string;
+    prompt_used?: string | null;
+  };
+  subject_area: string;
+  considerations?: string[];
+  sub_question: {
+    guide_sub_question: string;
+    guide_sub_answer: string;
+    sub_question_id?: string;
+    step_id?: string;
+    sub_skill_id?: string;
+    step_name?: string;
+    sub_skill_name?: string;
+  };
+  previous_sub_questions?: any[];
+  skip_regeneration?: boolean;
+}
+
+interface ExportWordData {
+  grade: string;
+  subject_area?: string;
+  sub_questions: Array<{
+    question: string;
+    answer: string;
+    step_number: number;
+    sub_question_number: number;
+  }>;
 }
 
 export const api = {
@@ -18,7 +89,7 @@ export const api = {
   },
 
   // 특정 문제 데이터 조회
-  async getProblem(filename) {
+  async getProblem(filename: string) {
     const response = await fetch(getApiUrl(`/api/v1/cot/refined/${filename}`));
     if (!response.ok) {
       throw new Error('문제 데이터를 가져올 수 없습니다.');
@@ -27,7 +98,7 @@ export const api = {
   },
 
   // CoT 생성
-  async createCoT(data) {
+  async createCoT(data: CoTCreateData) {
     const response = await fetch(getApiUrl('/api/v1/cot/'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -41,7 +112,7 @@ export const api = {
   },
 
   // 수학 영역 매칭
-  async matchSubjectArea(data) {
+  async matchSubjectArea(data: MatchSubjectAreaData) {
     const response = await fetch(getApiUrl('/api/v1/achievement/match-subject-area'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,7 +126,7 @@ export const api = {
   },
 
   // 단일 하위 문항 생성
-  async generateSingleSubQuestion(data) {
+  async generateSingleSubQuestion(data: GenerateSubQuestionData) {
     const response = await fetch(getApiUrl('/api/v1/guideline/generate-single'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -69,7 +140,7 @@ export const api = {
   },
 
   // 하위 문항 재생성
-  async regenerateSingleSubQuestion(data) {
+  async regenerateSingleSubQuestion(data: GenerateSubQuestionData) {
     const response = await fetch(getApiUrl('/api/v1/guideline/regenerate-single'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -83,21 +154,30 @@ export const api = {
   },
 
   // 검증 및 재생성
-  async verifyAndRegenerate(data) {
+  async verifyAndRegenerate(data: VerifyAndRegenerateData) {
     const response = await fetch(getApiUrl('/api/v1/verifier/orchestrator/verify-and-regenerate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || '검증 및 재생성 중 오류가 발생했습니다.');
+      const errorData = await response.json().catch(() => ({}));
+      // 422 에러의 경우 상세 정보를 로그에 출력
+      if (response.status === 422) {
+        console.error('422 Validation Error - Full Response:', JSON.stringify(errorData, null, 2));
+        console.error('Request Data:', JSON.stringify(data, null, 2));
+      }
+      // detail이 배열인 경우 (FastAPI validation errors)
+      const errorMessage = Array.isArray((errorData as any).detail)
+        ? (errorData as any).detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ')
+        : (errorData as any).detail || JSON.stringify(errorData);
+      throw new Error(errorMessage);
     }
     return response.json();
   },
 
   // 결과 저장
-  async saveResult(data) {
+  async saveResult(data: any) {
     const response = await fetch(getApiUrl('/api/v1/history/save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -110,7 +190,7 @@ export const api = {
   },
 
   // 결과 불러오기
-  async getResult(problemId) {
+  async getResult(problemId: string) {
     const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`));
     if (!response.ok) {
       if (response.status === 404) {
@@ -131,7 +211,7 @@ export const api = {
   },
 
   // Word 파일 다운로드
-  async exportWord(data) {
+  async exportWord(data: ExportWordData) {
     const response = await fetch(getApiUrl('/api/v1/guideline/export-word'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, RefObject } from 'react';
 
 // MathJax가 로드될 때까지 기다리는 함수
-const waitForMathJax = () => {
+const waitForMathJax = (): Promise<void> => {
   return new Promise((resolve) => {
     if (window.MathJax && window.MathJax.typesetPromise) {
       resolve();
@@ -22,8 +22,8 @@ const waitForMathJax = () => {
   });
 };
 
-export const useMathJax = (dependencies = []) => {
-  const containerRef = useRef(null);
+export const useMathJax = (dependencies: unknown[] = []): RefObject<HTMLDivElement> => {
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const renderMath = async () => {

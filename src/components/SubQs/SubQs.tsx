@@ -5,6 +5,36 @@ import { useMathJax } from '../../hooks/useMathJax';
 import { formatQuestion, formatAnswer, formatVerificationResult } from '../../utils/formatting';
 import styles from './SubQs.module.css';
 
+interface SubQuestion {
+  sub_question_id: string;
+  step_id: string;
+  sub_skill_id: string;
+  step_name: string;
+  sub_skill_name: string;
+  guide_sub_question: string;
+  guide_sub_answer: string;
+  re_sub_question?: string;
+  re_sub_answer?: string;
+  verification_result?: string;
+  re_verification_result?: string;
+  sub_answer?: string;
+}
+
+interface GuidelineData {
+  main_problem: string;
+  main_answer: string;
+  main_solution?: string | null;
+  grade: string;
+  subject_area: string;
+  guide_sub_questions: SubQuestion[];
+}
+
+interface Progress {
+  current: number;
+  total: number;
+  currentStep: string;
+}
+
 export const SubQs = () => {
   const {
     currentCotData,
@@ -16,31 +46,31 @@ export const SubQs = () => {
     error
   } = useApp();
   
-  const [progress, setProgress] = useState({
+  const [progress, setProgress] = useState<Progress>({
     current: 0,
     total: 0,
     currentStep: '',
   });
   // 원본 문항 / 재생성 문항 각각에 대한 편집 상태 및 최종 선택 상태
-  const [editingOriginalStates, setEditingOriginalStates] = useState({});
-  const [editingRegeneratedStates, setEditingRegeneratedStates] = useState({});
-  const [showRegeneratedStates, setShowRegeneratedStates] = useState({});
-  const [hideUnselectedStates, setHideUnselectedStates] = useState({});
-  const [preferredVersion, setPreferredVersion] = useState({});
-  const [feedbackStates, setFeedbackStates] = useState({});
-  const [verificationStates, setVerificationStates] = useState({});
+  const [editingOriginalStates, setEditingOriginalStates] = useState<Record<string, boolean>>({});
+  const [editingRegeneratedStates, setEditingRegeneratedStates] = useState<Record<string, boolean>>({});
+  const [showRegeneratedStates, setShowRegeneratedStates] = useState<Record<string, boolean>>({});
+  const [hideUnselectedStates, setHideUnselectedStates] = useState<Record<string, boolean>>({});
+  const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
+  const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
+  const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([currentGuidelineData?.guide_sub_questions]);
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
-  const getFinalQA = (subQ) => {
+  const getFinalQA = (subQ: SubQuestion) => {
     const originalQ = (subQ.guide_sub_question || '').trim();
     const originalA = (subQ.guide_sub_answer || '').trim();
     const reQ = (subQ.re_sub_question || '').trim();
     const reA = (subQ.re_sub_answer || '').trim();
     const preferred = preferredVersion[subQ.sub_question_id];
 
-    let finalQuestion;
-    let finalAnswer;
+    let finalQuestion: string;
+    let finalAnswer: string;
 
     if (preferred === 'original') {
       finalQuestion = originalQ;
@@ -80,10 +110,10 @@ export const SubQs = () => {
     });
 
     const data = {
-      main_problem: currentCotData?.problem ?? null,
-      main_answer: currentCotData?.answer ?? null,
-      main_solution: currentCotData?.main_solution ?? null,
-      grade: currentCotData?.grade ?? null,
+      main_problem: (currentCotData as any)?.problem ?? null,
+      main_answer: (currentCotData as any)?.answer ?? null,
+      main_solution: (currentCotData as any)?.main_solution ?? null,
+      grade: (currentCotData as any)?.grade ?? null,
       finalized_sub_questions: finalized,
     };
 
@@ -107,13 +137,19 @@ export const SubQs = () => {
     matchedSubjectArea,
     considerations,
     previousSubQuestions,
+  }: {
+    cotStep: any;
+    subQuestion: SubQuestion;
+    matchedSubjectArea: string;
+    considerations: string[];
+    previousSubQuestions: SubQuestion[];
   }) => {
     try {
       const verifyResponse = await api.verifyAndRegenerate({
-        main_problem: currentCotData.problem,
-        main_answer: currentCotData.answer,
-        main_solution: currentCotData.main_solution || null,
-        grade: currentCotData.grade,
+        main_problem: (currentCotData as any).problem,
+        main_answer: (currentCotData as any).answer,
+        main_solution: (currentCotData as any).main_solution || null,
+        grade: (currentCotData as any).grade,
         cot_step: {
           step_id: cotStep.step_id,
           sub_skill_id: cotStep.sub_skill_id,
@@ -125,82 +161,101 @@ export const SubQs = () => {
         },
         subject_area: matchedSubjectArea,
         considerations: considerations,
-        sub_question: subQuestion,
-        previous_sub_questions: previousSubQuestions,
+        sub_question: {
+          guide_sub_question: subQuestion.guide_sub_question,
+          guide_sub_answer: subQuestion.guide_sub_answer,
+          sub_question_id: subQuestion.sub_question_id,
+          step_id: subQuestion.step_id,
+          sub_skill_id: subQuestion.sub_skill_id,
+          step_name: subQuestion.step_name,
+          sub_skill_name: subQuestion.sub_skill_name,
+        },
+        previous_sub_questions: previousSubQuestions.map((q) => ({
+          sub_question_id: q.sub_question_id,
+          step_id: q.step_id,
+          sub_skill_id: q.sub_skill_id,
+          step_name: q.step_name,
+          sub_skill_name: q.sub_skill_name,
+          guide_sub_question: q.guide_sub_question,
+          guide_sub_answer: q.guide_sub_answer,
+        })),
         skip_regeneration: false,
       });
 
-      let enrichedSubQuestion = { ...subQuestion };
+      let enrichedSubQuestion: SubQuestion = { ...subQuestion };
 
-      if (verifyResponse.was_regenerated) {
-        const verificationResults = verifyResponse.verification_results || {};
-        const verifierNames = {
+      if ((verifyResponse as any).was_regenerated) {
+        const verificationResults = (verifyResponse as any).verification_results || {};
+        const verifierNames: Record<string, string> = {
           stage_elicitation: 'Stage Elicitation',
           context_alignment: 'Context Alignment',
           answer_validity: 'Answer Validity',
           prompt_validity: 'Prompt Validity',
         };
 
-        const allFeedbacks = [];
+        const allFeedbacks: string[] = [];
         for (const [key, result] of Object.entries(verificationResults)) {
           const verifierName = verifierNames[key] || key;
-          const scoreStr = result.score !== null ? result.score : 'N/A';
-          const evalSummary = result.evaluation_summary || '';
-          const improveSuggestions = result.improvement_suggestions || '';
+          const resultData = result as any;
+          const scoreStr = resultData.score !== null ? resultData.score : 'N/A';
+          const evalSummary = resultData.evaluation_summary || '';
+          const improveSuggestions = resultData.improvement_suggestions || '';
           if (evalSummary || improveSuggestions) {
             allFeedbacks.push(
               `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`
             );
           } else {
             allFeedbacks.push(
-              `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`
+              `[${verifierName}] 점수: ${scoreStr}, ${resultData.feedback || ''}`
             );
           }
         }
 
         enrichedSubQuestion = {
           ...enrichedSubQuestion,
-          re_sub_question: verifyResponse.sub_question.re_sub_question,
-          re_sub_answer: verifyResponse.sub_question.re_sub_answer,
+          re_sub_question: (verifyResponse as any).sub_question?.re_sub_question || (verifyResponse as any).sub_question?.guide_sub_question,
+          re_sub_answer: (verifyResponse as any).sub_question?.re_sub_answer || (verifyResponse as any).sub_question?.guide_sub_answer,
           re_verification_result: allFeedbacks.join('\n'),
           verification_result: formatVerificationResult(
             Object.entries(verificationResults)
               .map(([key, result]) => {
                 const verifierName = verifierNames[key] || key;
-                const scoreStr = result.score !== null ? result.score : 'N/A';
-                const evalSummary = result.evaluation_summary || '';
-                const improveSuggestions = result.improvement_suggestions || '';
+                const resultData = result as any;
+                const scoreStr = resultData.score !== null ? resultData.score : 'N/A';
+                const evalSummary = resultData.evaluation_summary || '';
+                const improveSuggestions = resultData.improvement_suggestions || '';
                 if (evalSummary || improveSuggestions) {
                   return `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`;
                 }
-                return `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`;
+                return `[${verifierName}] 점수: ${scoreStr}, ${resultData.feedback || ''}`;
               })
               .join('\n')
           ),
         };
       } else {
         // 재생성되지 않은 경우에도 검증 결과 저장
-        const verificationResults = verifyResponse.verification_results || {};
-        const verifierNames = {
+        const verificationResults = (verifyResponse as any).verification_results || {};
+        const verifierNames: Record<string, string> = {
           stage_elicitation: 'Stage Elicitation',
           context_alignment: 'Context Alignment',
           answer_validity: 'Answer Validity',
           prompt_validity: 'Prompt Validity',
         };
 
-        const allFeedbacks = [];
+        const allFeedbacks: string[] = [];
         for (const [key, result] of Object.entries(verificationResults)) {
           const verifierName = verifierNames[key] || key;
-          const scoreStr = result.score !== null ? result.score : 'N/A';
-          const evalSummary = result.evaluation_summary || '';
-          const improveSuggestions = result.improvement_suggestions || '';
+          const resultData = result as any;
+          const scoreStr = resultData.score !== null ? resultData.score : 'N/A';
+          const evalSummary = resultData.evaluation_summary || '';
+          const improveSuggestions = resultData.improvement_suggestions || '';
           if (evalSummary || improveSuggestions) {
             allFeedbacks.push(
               `[${verifierName}] 점수: ${scoreStr}\n[평가 요약]\n${evalSummary}\n[개선 제안]\n${improveSuggestions}`
             );
           } else {
             allFeedbacks.push(
-              `[${verifierName}] 점수: ${scoreStr}, ${result.feedback || ''}`
+              `[${verifierName}] 점수: ${scoreStr}, ${resultData.feedback || ''}`
             );
           }
         }
@@ -225,16 +280,16 @@ export const SubQs = () => {
         return {
           ...prev,
           guide_sub_questions: updatedSubQuestions,
-        };
+        } as GuidelineData;
       });
-    } catch (err) {
+    } catch (err: any) {
       // 백그라운드 오류는 콘솔에만 남기고 UI는 유지
-      console.error('하위문항 검증/재생성 중 오류:', err);
+      console.error('하위문항 검증/재생성 중 오류:', err.message || err);
     }
   };
 
   const generateGuideline = async () => {
-    if (!currentCotData || !currentCotData.steps) {
+    if (!currentCotData || !(currentCotData as any).steps) {
       setError('CoT 데이터가 없습니다.');
       return;
     }
@@ -247,21 +302,21 @@ export const SubQs = () => {
       // 1단계: 수학 영역 매칭
       setProgress({ current: 0, total: 8, currentStep: '수학 영역 매칭 중...' });
       const achievementData = await api.matchSubjectArea({
-        main_problem: currentCotData.problem,
-        main_answer: currentCotData.answer,
-        main_solution: currentCotData.main_solution || null,
-        grade: currentCotData.grade,
+        main_problem: (currentCotData as any).problem,
+        main_answer: (currentCotData as any).answer,
+        main_solution: (currentCotData as any).main_solution || null,
+        grade: (currentCotData as any).grade,
       });
 
-      const matchedSubjectArea = achievementData.subject_area || currentCotData.subject_area;
-      const considerations = currentCotData.considerations || [];
+      const matchedSubjectArea = achievementData.subject_area || (currentCotData as any).subject_area;
+      const considerations = (currentCotData as any).considerations || [];
 
       // 2단계: 각 단계별로 순차 처리 (1-1 ~ 4-2)
-      const guideSubQuestions = [];
+      const guideSubQuestions: SubQuestion[] = [];
       const stepOrder = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2'];
 
-      for (let i = 0; i < currentCotData.steps.length; i++) {
-        const cotStep = currentCotData.steps[i];
+      for (let i = 0; i < (currentCotData as any).steps.length; i++) {
+        const cotStep = (currentCotData as any).steps[i];
         const stepId = stepOrder[i];
         
         setProgress({ 
@@ -272,10 +327,10 @@ export const SubQs = () => {
 
         // 1단계: 하위 문항(원본)만 생성
         const guidelineResponse = await api.generateSingleSubQuestion({
-          main_problem: currentCotData.problem,
-          main_answer: currentCotData.answer,
-          main_solution: currentCotData.main_solution || null,
-          grade: currentCotData.grade,
+          main_problem: (currentCotData as any).problem,
+          main_answer: (currentCotData as any).answer,
+          main_solution: (currentCotData as any).main_solution || null,
+          grade: (currentCotData as any).grade,
           cot_step: {
             step_id: cotStep.step_id,
             sub_skill_id: cotStep.sub_skill_id,
@@ -290,18 +345,18 @@ export const SubQs = () => {
           previous_sub_questions: guideSubQuestions.slice(),
         });
 
-        const subQuestion = guidelineResponse.sub_question;
+        const subQuestion: SubQuestion = guidelineResponse.sub_question;
         const previousSubQuestions = guideSubQuestions.slice();
 
         // 원본 문항은 즉시 누적해서 화면에 표시
         guideSubQuestions.push(subQuestion);
 
         // 각 단계가 끝날 때마다 즉시 화면에 반영
-        const guidelineData = {
-          main_problem: currentCotData.problem,
-          main_answer: currentCotData.answer,
-          main_solution: currentCotData.main_solution || null,
-          grade: currentCotData.grade,
+        const guidelineData: GuidelineData = {
+          main_problem: (currentCotData as any).problem,
+          main_answer: (currentCotData as any).answer,
+          main_solution: (currentCotData as any).main_solution || null,
+          grade: (currentCotData as any).grade,
           subject_area: matchedSubjectArea,
           guide_sub_questions: [...guideSubQuestions],
         };
@@ -319,21 +374,21 @@ export const SubQs = () => {
       }
 
       setProgress({ current: 8, total: 8, currentStep: '완료' });
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || '오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
   // 원본 편집 저장: guide_sub_question / guide_sub_answer 업데이트
-  const handleSaveOriginalEdit = (subqId) => {
+  const handleSaveOriginalEdit = (subqId: string) => {
     const questionEl = document.querySelector(
       `textarea[data-subq-id="${subqId}"][data-type="original-question"]`
-    );
+    ) as HTMLTextAreaElement;
     const answerEl = document.querySelector(
       `input[data-subq-id="${subqId}"][data-type="original-answer"]`
-    );
+    ) as HTMLInputElement;
 
     const newQuestion = (questionEl?.value ?? '').trim();
     const newAnswer = (answerEl?.value ?? '').trim();
@@ -352,7 +407,7 @@ export const SubQs = () => {
       return {
         ...prev,
         guide_sub_questions: updated,
-      };
+      } as GuidelineData;
     });
 
     setEditingOriginalStates((prev) => ({
@@ -362,13 +417,13 @@ export const SubQs = () => {
   };
 
   // 재생성 편집 저장: re_sub_question / re_sub_answer 업데이트
-  const handleSaveRegeneratedEdit = (subqId) => {
+  const handleSaveRegeneratedEdit = (subqId: string) => {
     const questionEl = document.querySelector(
       `textarea[data-subq-id="${subqId}"][data-type="regenerated-question"]`
-    );
+    ) as HTMLTextAreaElement;
     const answerEl = document.querySelector(
       `input[data-subq-id="${subqId}"][data-type="regenerated-answer"]`
-    );
+    ) as HTMLInputElement;
 
     const newQuestion = (questionEl?.value ?? '').trim();
     const newAnswer = (answerEl?.value ?? '').trim();
@@ -387,7 +442,7 @@ export const SubQs = () => {
       return {
         ...prev,
         guide_sub_questions: updated,
-      };
+      } as GuidelineData;
     });
 
     setEditingRegeneratedStates((prev) => ({
@@ -396,44 +451,44 @@ export const SubQs = () => {
     }));
   };
 
-  const toggleOriginalEdit = (subqId) => {
+  const toggleOriginalEdit = (subqId: string) => {
     setEditingOriginalStates(prev => ({
       ...prev,
       [subqId]: !prev[subqId]
     }));
   };
 
-  const toggleRegeneratedEdit = (subqId) => {
+  const toggleRegeneratedEdit = (subqId: string) => {
     setEditingRegeneratedStates(prev => ({
       ...prev,
       [subqId]: !prev[subqId]
     }));
   };
 
-  const toggleFeedback = (subqId) => {
+  const toggleFeedback = (subqId: string) => {
     setFeedbackStates(prev => ({
       ...prev,
       [subqId]: !prev[subqId]
     }));
   };
 
-  const toggleVerification = (subqId) => {
+  const toggleVerification = (subqId: string) => {
     setVerificationStates(prev => ({
       ...prev,
       [subqId]: !prev[subqId]
     }));
   };
 
-  const handleFeedbackRegenerate = async (subqId, userFeedback) => {
+  const handleFeedbackRegenerate = async (subqId: string, userFeedback: string) => {
     if (!currentCotData || !currentGuidelineData) return;
 
     const subQuestions = currentGuidelineData.guide_sub_questions || [];
     const targetSubQ = subQuestions.find(q => q.sub_question_id === subqId);
     if (!targetSubQ) return;
 
-    const cotSteps = currentCotData.steps || [];
+    const cotSteps = (currentCotData as any).steps || [];
     // sub_question_id (예: '1-1')와 sub_skill_id가 일치하는 step 찾기
-    let cotStep = cotSteps.find(s => s.sub_skill_id === subqId);
+    let cotStep = cotSteps.find((s: any) => s.sub_skill_id === subqId);
     if (!cotStep) {
       // 매칭 실패 시 인덱스로 찾기
       const stepOrder = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2'];
@@ -451,10 +506,10 @@ export const SubQs = () => {
 
     try {
       const regenerateResponse = await api.regenerateSingleSubQuestion({
-        main_problem: currentCotData.problem,
-        main_answer: currentCotData.answer,
-        main_solution: currentCotData.main_solution || null,
-        grade: currentCotData.grade,
+        main_problem: (currentCotData as any).problem,
+        main_answer: (currentCotData as any).answer,
+        main_solution: (currentCotData as any).main_solution || null,
+        grade: (currentCotData as any).grade,
         cot_step: {
           step_id: cotStep.step_id,
           sub_skill_id: cotStep.sub_skill_id,
@@ -465,30 +520,30 @@ export const SubQs = () => {
           prompt_used: cotStep.prompt_used || null,
         },
         subject_area: currentGuidelineData.subject_area,
-        considerations: currentCotData.considerations || [],
+        considerations: (currentCotData as any).considerations || [],
         previous_sub_questions: subQuestions.filter(q => q.sub_question_id !== subqId),
         original_sub_question: targetSubQ,
         verification_feedbacks: [`[사용자 피드백] ${userFeedback}`],
         failing_verifiers: ['stage_elicitation', 'context_alignment', 'answer_validity', 'prompt_validity'],
-      });
+      } as any);
 
       // 업데이트된 하위문항으로 교체
       const updatedSubQuestions = subQuestions.map(q => 
-        q.sub_question_id === subqId ? regenerateResponse.sub_question : q
+        q.sub_question_id === subqId ? (regenerateResponse as any).sub_question : q
       );
 
       setCurrentGuidelineData({
         ...currentGuidelineData,
         guide_sub_questions: updatedSubQuestions
-      });
+      } as GuidelineData);
 
       // 피드백 입력 모드 닫기
       setFeedbackStates(prev => ({
         ...prev,
         [subqId]: false
       }));
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || '오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -807,7 +862,7 @@ export const SubQs = () => {
                   <button
                     className={styles.regenerateBtn}
                     onClick={() => {
-                      const feedbackText = document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`)?.value || '';
+                      const feedbackText = (document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`) as HTMLTextAreaElement)?.value || '';
                       if (feedbackText.trim()) {
                         handleFeedbackRegenerate(subQ.sub_question_id, feedbackText);
                       }
@@ -894,7 +949,7 @@ export const SubQs = () => {
                     <button 
                       className={styles.submitBtn}
                       onClick={() => {
-                        const feedbackText = document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`)?.value || '';
+                        const feedbackText = (document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`) as HTMLTextAreaElement)?.value || '';
                         if (feedbackText.trim()) {
                           handleFeedbackRegenerate(subQ.sub_question_id, feedbackText);
                         }

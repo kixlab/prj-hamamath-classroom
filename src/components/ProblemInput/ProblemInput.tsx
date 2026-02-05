@@ -1,13 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, ChangeEvent, FormEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
 import styles from './ProblemInput.module.css';
 
-export const ProblemInput = ({ onSubmit }) => {
+interface ProblemInputProps {
+  onSubmit?: (data: any) => void;
+}
+
+interface FormData {
+  problem: string;
+  answer: string;
+  solution: string;
+  grade: string;
+  image: File | null;
+  imagePreview: string | null;
+  imageData: string | null;
+  imgDescription: string;
+}
+
+export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const { setCurrentCotData, setCurrentStep, setLoading, setError } = useApp();
-  const [problemList, setProblemList] = useState([]);
-  const [selectedProblem, setSelectedProblem] = useState('');
-  const [formData, setFormData] = useState({
+  const [problemList, setProblemList] = useState<string[]>([]);
+  const [selectedProblem, setSelectedProblem] = useState<string>('');
+  const [formData, setFormData] = useState<FormData>({
     problem: '',
     answer: '',
     solution: '',
@@ -18,21 +33,7 @@ export const ProblemInput = ({ onSubmit }) => {
     imgDescription: '',
   });
 
-  // 문제 목록 로드는 필요 없음
-  // useEffect(() => {
-  //   loadProblemList();
-  // }, []);
-
-  // const loadProblemList = async () => {
-  //   try {
-  //     const files = await api.getProblemList();
-  //     setProblemList(files);
-  //   } catch (err) {
-  //     console.error('문제 목록 로드 중 오류:', err);
-  //   }
-  // };
-
-  const handleProblemSelect = async (filename) => {
+  const handleProblemSelect = async (filename: string) => {
     if (!filename || filename === '__dummy_from_csv__') {
       if (filename === '__dummy_from_csv__') {
         try {
@@ -67,12 +68,12 @@ export const ProblemInput = ({ onSubmit }) => {
     }
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64String = reader.result;
+        const base64String = reader.result as string;
         setFormData((prev) => ({
           ...prev,
           image: file,
@@ -93,7 +94,7 @@ export const ProblemInput = ({ onSubmit }) => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -119,8 +120,8 @@ export const ProblemInput = ({ onSubmit }) => {
       setCurrentCotData(cotDataWithExtras);
       setCurrentStep(2);
       onSubmit?.(cotDataWithExtras);
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || '오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }

@@ -17,7 +17,7 @@ export const CoTSteps = () => {
   return (
     <>
       <div className={styles.cotSteps} ref={containerRef}>
-        {currentCotData.steps.map((step, index) => (
+        {currentCotData.steps.map((step: any, index: number) => (
           <div key={step.sub_skill_id} className={styles.stepCard} id={`cot-step-${step.sub_skill_id}`}>
             <div className={styles.stepHeader}>
               <div className={styles.stepNumber}>{index + 1}</div>

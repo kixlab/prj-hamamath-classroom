@@ -12,7 +12,7 @@ export const WorkflowTabs = () => {
   ];
 
   // 탭 활성화 조건: CoT 데이터가 있으면 2, 3번 탭 활성화 가능
-  const canAccessStep = (step) => {
+  const canAccessStep = (step: number): boolean => {
     if (step === 1) return true;
     if (step === 2) return currentCotData !== null;
     if (step === 3) return currentCotData !== null;

@@ -1,11 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult } from '../../hooks/useStorage';
 import styles from './Sidebar.module.css';
 
+interface SavedResultItem {
+  problemId: string;
+  timestamp: string;
+  dateStr: string;
+  status: string[];
+  source: 'local' | 'server';
+}
+
 export const Sidebar = () => {
-  const { sidebarOpen, setSidebarOpen, currentProblemId, currentCotData, currentGuidelineData, setCurrentStep, setCurrentCotData, setCurrentSubQData, setCurrentGuidelineData, setCurrentProblemId } = useApp();
-  const [savedResults, setSavedResults] = useState([]);
+  const { 
+    sidebarOpen, 
+    setSidebarOpen, 
+    currentProblemId, 
+    currentCotData, 
+    currentGuidelineData, 
+    setCurrentStep, 
+    setCurrentCotData, 
+    setCurrentSubQData, 
+    setCurrentGuidelineData, 
+    setCurrentProblemId 
+  } = useApp();
+  const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
 
   useEffect(() => {
     updateSavedResultsList();
@@ -14,11 +33,11 @@ export const Sidebar = () => {
   const updateSavedResultsList = async () => {
     const saved = getSavedResults();
     const localProblemIds = Object.keys(saved).sort((a, b) => {
-      return new Date(saved[b].timestamp || 0) - new Date(saved[a].timestamp || 0);
+      return new Date(saved[b].timestamp || 0).getTime() - new Date(saved[a].timestamp || 0).getTime();
     });
 
     // 서버 목록도 가져오기
-    let serverResults = [];
+    let serverResults: any[] = [];
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
@@ -34,7 +53,7 @@ export const Sidebar = () => {
           serverResults = serverData;
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       // 네트워크 에러나 타임아웃은 조용히 무시 (백엔드 서버가 없을 수 있음)
       if (err.name !== 'AbortError') {
         // AbortError가 아닌 경우에만 로그 (타임아웃은 정상)
@@ -42,8 +61,8 @@ export const Sidebar = () => {
     }
 
     // localStorage와 서버 결과 병합
-    const allResults = [];
-    const seenIds = new Set();
+    const allResults: SavedResultItem[] = [];
+    const seenIds = new Set<string>();
 
     // localStorage 결과 먼저 추가
     for (const problemId of localProblemIds) {
@@ -60,7 +79,7 @@ export const Sidebar = () => {
         const hasCot = !!result.cotData;
         const hasSubQ = !!result.subQData;
         const hasGuideline = !!result.guidelineData;
-        const status = [];
+        const status: string[] = [];
         if (hasCot) status.push('CoT');
         if (hasSubQ) status.push('하위문항');
         if (hasGuideline) status.push('Guideline');
@@ -87,7 +106,7 @@ export const Sidebar = () => {
           hour: '2-digit',
           minute: '2-digit',
         });
-        const status = [];
+        const status: string[] = [];
         if (item.has_cot) status.push('CoT');
         if (item.has_subq) status.push('하위문항');
         if (item.has_guideline) status.push('Guideline');
@@ -105,7 +124,7 @@ export const Sidebar = () => {
 
     // 타임스탬프 기준 정렬
     allResults.sort((a, b) => {
-      return new Date(b.timestamp) - new Date(a.timestamp);
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
     });
 
     setSavedResults(allResults);
@@ -144,7 +163,7 @@ export const Sidebar = () => {
     }
 
     try {
-      const finalSubQuestions = currentGuidelineData.guide_sub_questions.map((subQ) => {
+      const finalSubQuestions = (currentGuidelineData as any).guide_sub_questions?.map((subQ: any) => {
         const hasRegenerated = subQ.re_sub_question && subQ.re_sub_question.trim().length > 0;
         return {
           sub_question_id: subQ.sub_question_id,
@@ -155,14 +174,14 @@ export const Sidebar = () => {
           guide_sub_question: hasRegenerated ? subQ.re_sub_question : subQ.guide_sub_question,
           guide_sub_answer: hasRegenerated ? (subQ.re_sub_answer || subQ.guide_sub_answer) : subQ.guide_sub_answer,
         };
-      });
+      }) || [];
 
       const requestData = {
-        main_problem: currentCotData.problem,
-        main_answer: currentCotData.answer,
-        main_solution: currentCotData.main_solution || null,
-        grade: currentCotData.grade || '',
-        subject_area: currentGuidelineData.subject_area || null,
+        main_problem: (currentCotData as any).problem,
+        main_answer: (currentCotData as any).answer,
+        main_solution: (currentCotData as any).main_solution || null,
+        grade: (currentCotData as any).grade || '',
+        subject_area: (currentGuidelineData as any).subject_area || null,
         guide_sub_questions: finalSubQuestions,
       };
 
@@ -174,7 +193,7 @@ export const Sidebar = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || '워드 파일 생성 중 오류가 발생했습니다.');
+        throw new Error((errorData as any).detail || '워드 파일 생성 중 오류가 발생했습니다.');
       }
 
       const blob = await response.blob();
@@ -187,12 +206,12 @@ export const Sidebar = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch (err: any) {
       alert(err.message || '워드 파일 생성 중 오류가 발생했습니다.');
     }
   };
 
-  const handleLoadResult = async (problemId) => {
+  const handleLoadResult = async (problemId: string) => {
     try {
       const result = await loadResult(problemId);
       if (result) {
@@ -219,7 +238,7 @@ export const Sidebar = () => {
     }
   };
 
-  const handleDeleteResult = async (problemId, e) => {
+  const handleDeleteResult = async (problemId: string, e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (window.confirm(`"${problemId}" 결과를 삭제하시겠습니까?`)) {
       await deleteResult(problemId);

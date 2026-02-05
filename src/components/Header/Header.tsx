@@ -1,7 +1,11 @@
 import { useApp } from '../../contexts/AppContext';
 import styles from './Header.module.css';
 
-export const Header = ({ onNewProblem }) => {
+interface HeaderProps {
+  onNewProblem: () => void;
+}
+
+export const Header = ({ onNewProblem }: HeaderProps) => {
   const { sidebarOpen, setSidebarOpen } = useApp();
 
   const handleHamburgerClick = () => {

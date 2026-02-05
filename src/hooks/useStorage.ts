@@ -1,11 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { CoTData, GuidelineData } from '../types';
 
 const STORAGE_KEY = 'hamamath_saved_results';
 const MAX_SAVED_RESULTS = 50;
 const LAST_PROBLEM_KEY = 'hamamath_last_problem_id';
 
+interface SavedResult {
+  problemId: string;
+  timestamp: string;
+  cotData: CoTData | null;
+  subQData: any | null;
+  guidelineData: GuidelineData | null;
+}
+
+interface SavedResults {
+  [problemId: string]: SavedResult;
+}
+
 // 전역 함수로 export
-export function getSavedResults() {
+export function getSavedResults(): SavedResults {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) : {};
@@ -15,7 +28,7 @@ export function getSavedResults() {
   }
 }
 
-export async function loadResult(problemId) {
+export async function loadResult(problemId: string): Promise<SavedResult | null> {
   // 먼저 localStorage에서 확인
   const savedResults = getSavedResults();
   let result = savedResults[problemId];
@@ -49,7 +62,7 @@ export async function loadResult(problemId) {
   return result;
 }
 
-export async function deleteResult(problemId) {
+export async function deleteResult(problemId: string): Promise<void> {
   // localStorage에서 삭제
   const savedResults = getSavedResults();
   delete savedResults[problemId];
@@ -68,14 +81,19 @@ export async function deleteResult(problemId) {
   }
 }
 
-export function clearAllResults() {
+export function clearAllResults(): void {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LAST_PROBLEM_KEY);
 }
 
-export function saveResult(problemId, cotData, subQData, guidelineData) {
+export function saveResult(
+  problemId: string,
+  cotData: CoTData | null,
+  subQData: any | null,
+  guidelineData: GuidelineData | null
+): void {
   const savedResults = getSavedResults();
-  const resultData = {
+  const resultData: SavedResult = {
     problemId: problemId,
     timestamp: new Date().toISOString(),
     cotData: cotData,
@@ -94,7 +112,7 @@ export function saveResult(problemId, cotData, subQData, guidelineData) {
     });
 
     const keysToKeep = sortedKeys.slice(-MAX_SAVED_RESULTS);
-    const newSavedResults = {};
+    const newSavedResults: SavedResults = {};
     keysToKeep.forEach((key) => {
       newSavedResults[key] = savedResults[key];
     });
@@ -113,8 +131,9 @@ export function saveResult(problemId, cotData, subQData, guidelineData) {
     }).catch((err) => {
       console.error('서버 저장 실패:', err);
     });
-  } catch (e) {
-    if (e.name === 'QuotaExceededError' || e.code === 22) {
+  } catch (e: unknown) {
+    const error = e as Error & { name?: string; code?: number };
+    if (error.name === 'QuotaExceededError' || error.code === 22) {
       console.warn('localStorage 용량 초과. 오래된 결과를 삭제합니다.');
       const resultKeys = Object.keys(savedResults);
       const sortedKeys = resultKeys.sort((a, b) => {
@@ -124,7 +143,7 @@ export function saveResult(problemId, cotData, subQData, guidelineData) {
       });
 
       const keysToKeep = sortedKeys.slice(-Math.floor(MAX_SAVED_RESULTS / 2));
-      const newSavedResults = {};
+      const newSavedResults: SavedResults = {};
       keysToKeep.forEach((key) => {
         newSavedResults[key] = savedResults[key];
       });
@@ -147,7 +166,7 @@ export function saveResult(problemId, cotData, subQData, guidelineData) {
 
 // React Hook 버전 (기존 호환성 유지)
 export const useStorage = () => {
-  const [savedResults, setSavedResults] = useState({});
+  const [savedResults, setSavedResults] = useState<SavedResults>({});
 
   useEffect(() => {
     try {
@@ -160,12 +179,17 @@ export const useStorage = () => {
     }
   }, []);
 
-  const saveResultHook = useCallback((problemId, cotData, subQData, guidelineData) => {
+  const saveResultHook = useCallback((
+    problemId: string,
+    cotData: CoTData | null,
+    subQData: any | null,
+    guidelineData: GuidelineData | null
+  ) => {
     saveResult(problemId, cotData, subQData, guidelineData);
     setSavedResults(getSavedResults());
   }, []);
 
-  const loadResultHook = useCallback((problemId) => {
+  const loadResultHook = useCallback((problemId: string): SavedResult | null => {
     const result = savedResults[problemId];
     if (result) {
       localStorage.setItem(LAST_PROBLEM_KEY, problemId);
@@ -174,7 +198,7 @@ export const useStorage = () => {
     return null;
   }, [savedResults]);
 
-  const deleteResultHook = useCallback((problemId) => {
+  const deleteResultHook = useCallback((problemId: string) => {
     deleteResult(problemId);
     setSavedResults(getSavedResults());
   }, []);
