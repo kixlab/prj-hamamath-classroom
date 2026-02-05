@@ -652,6 +652,16 @@ export const SubQs = () => {
                                   ...prev,
                                   [subQ.sub_question_id]: 'original',
                                 }));
+                                // 선택되지 않은 문항(재생성) 자동 숨기기
+                                setHideUnselectedStates((prev) => ({
+                                  ...prev,
+                                  [subQ.sub_question_id]: true,
+                                }));
+                                // 재생성 문항 보기 상태는 유지
+                                setShowRegeneratedStates((prev) => ({
+                                  ...prev,
+                                  [subQ.sub_question_id]: true,
+                                }));
                               }}
                             >
                               {selectedVersion === 'original' ? '선택됨' : '이 문항 선택'}
@@ -723,12 +733,22 @@ export const SubQs = () => {
                                 className={`${styles.selectBtn} ${
                                   selectedVersion === 'regenerated' ? styles.selectBtnActive : ''
                                 }`}
-                                onClick={() =>
+                                onClick={() => {
                                   setPreferredVersion((prev) => ({
                                     ...prev,
                                     [subQ.sub_question_id]: 'regenerated',
-                                  }))
-                                }
+                                  }));
+                                  // 선택되지 않은 문항(원본) 자동 숨기기
+                                  setHideUnselectedStates((prev) => ({
+                                    ...prev,
+                                    [subQ.sub_question_id]: true,
+                                  }));
+                                  // 재생성 문항 보기 상태는 유지
+                                  setShowRegeneratedStates((prev) => ({
+                                    ...prev,
+                                    [subQ.sub_question_id]: true,
+                                  }));
+                                }}
                               >
                                 {selectedVersion === 'regenerated' ? '선택됨' : '이 문항 선택'}
                               </button>
@@ -923,7 +943,9 @@ export const SubQs = () => {
                     <span>🔄</span>
                     <span>
                       {hasRegenerated
-                        ? showRegenerated && !hideUnselected
+                        ? selectedVersion === 'regenerated'
+                          ? '원본 문항 보기'
+                          : showRegenerated && !hideUnselected
                           ? '문항 숨기기'
                           : '재생성 문항 보기'
                         : '재생성 준비 중'}
