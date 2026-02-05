@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -18,15 +18,6 @@ interface SubQuestion {
   verification_result?: string;
   re_verification_result?: string;
   sub_answer?: string;
-}
-
-interface GuidelineData {
-  main_problem: string;
-  main_answer: string;
-  main_solution?: string | null;
-  grade: string;
-  subject_area: string;
-  guide_sub_questions: SubQuestion[];
 }
 
 interface Progress {
@@ -59,7 +50,7 @@ export const SubQs = () => {
   const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
-  const containerRef = useMathJax([currentGuidelineData?.guide_sub_questions]);
+  const containerRef = useMathJax([(currentGuidelineData as any)?.guide_sub_questions]);
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
   const getFinalQA = (subQ: SubQuestion) => {
@@ -92,11 +83,11 @@ export const SubQs = () => {
 
   // 전체 문제에 대한 최종 문항/정답을 한 번에 JSON으로 다운로드
   const handleFinalizeAll = () => {
-    if (!currentGuidelineData || !currentGuidelineData.guide_sub_questions) {
+    if (!currentGuidelineData || !(currentGuidelineData as any).guide_sub_questions) {
       return;
     }
 
-    const finalized = currentGuidelineData.guide_sub_questions.map((subQ) => {
+    const finalized = (currentGuidelineData as any).guide_sub_questions.map((subQ: any) => {
       const { finalQuestion, finalAnswer } = getFinalQA(subQ);
       return {
         sub_question_id: subQ.sub_question_id,
@@ -263,11 +254,11 @@ export const SubQs = () => {
       }
 
       // 해당 sub_question만 상태에 merge
-      setCurrentGuidelineData((prev) => {
+      (setCurrentGuidelineData as any)((prev: any) => {
         if (!prev || !prev.guide_sub_questions) return prev;
-        const subQuestions = prev.guide_sub_questions;
+        const subQuestions = prev.guide_sub_questions as SubQuestion[];
         const idx = subQuestions.findIndex(
-          (q) => q.sub_question_id === enrichedSubQuestion.sub_question_id
+          (q: SubQuestion) => q.sub_question_id === enrichedSubQuestion.sub_question_id
         );
         if (idx === -1) return prev;
 
@@ -280,7 +271,7 @@ export const SubQs = () => {
         return {
           ...prev,
           guide_sub_questions: updatedSubQuestions,
-        } as GuidelineData;
+        };
       });
     } catch (err: any) {
       // 백그라운드 오류는 콘솔에만 남기고 UI는 유지
@@ -352,7 +343,7 @@ export const SubQs = () => {
         guideSubQuestions.push(subQuestion);
 
         // 각 단계가 끝날 때마다 즉시 화면에 반영
-        const guidelineData: GuidelineData = {
+        const guidelineData: any = {
           main_problem: (currentCotData as any).problem,
           main_answer: (currentCotData as any).answer,
           main_solution: (currentCotData as any).main_solution || null,
@@ -361,7 +352,7 @@ export const SubQs = () => {
           guide_sub_questions: [...guideSubQuestions],
         };
 
-        setCurrentGuidelineData(guidelineData);
+        (setCurrentGuidelineData as any)(guidelineData);
 
         // 검증 + 재생성은 백그라운드에서 병렬로 처리
         runBackgroundVerify({
@@ -393,9 +384,9 @@ export const SubQs = () => {
     const newQuestion = (questionEl?.value ?? '').trim();
     const newAnswer = (answerEl?.value ?? '').trim();
 
-    setCurrentGuidelineData((prev) => {
+    (setCurrentGuidelineData as any)((prev: any) => {
       if (!prev || !prev.guide_sub_questions) return prev;
-      const updated = prev.guide_sub_questions.map((q) =>
+      const updated = (prev.guide_sub_questions as SubQuestion[]).map((q: SubQuestion) =>
         q.sub_question_id === subqId
           ? {
               ...q,
@@ -407,7 +398,7 @@ export const SubQs = () => {
       return {
         ...prev,
         guide_sub_questions: updated,
-      } as GuidelineData;
+      };
     });
 
     setEditingOriginalStates((prev) => ({
@@ -428,9 +419,9 @@ export const SubQs = () => {
     const newQuestion = (questionEl?.value ?? '').trim();
     const newAnswer = (answerEl?.value ?? '').trim();
 
-    setCurrentGuidelineData((prev) => {
+    (setCurrentGuidelineData as any)((prev: any) => {
       if (!prev || !prev.guide_sub_questions) return prev;
-      const updated = prev.guide_sub_questions.map((q) =>
+      const updated = (prev.guide_sub_questions as SubQuestion[]).map((q: SubQuestion) =>
         q.sub_question_id === subqId
           ? {
               ...q,
@@ -442,7 +433,7 @@ export const SubQs = () => {
       return {
         ...prev,
         guide_sub_questions: updated,
-      } as GuidelineData;
+      };
     });
 
     setEditingRegeneratedStates((prev) => ({
@@ -482,8 +473,8 @@ export const SubQs = () => {
   const handleFeedbackRegenerate = async (subqId: string, userFeedback: string) => {
     if (!currentCotData || !currentGuidelineData) return;
 
-    const subQuestions = currentGuidelineData.guide_sub_questions || [];
-    const targetSubQ = subQuestions.find(q => q.sub_question_id === subqId);
+    const subQuestions: SubQuestion[] = (currentGuidelineData as any).guide_sub_questions || [];
+    const targetSubQ = subQuestions.find((q: SubQuestion) => q.sub_question_id === subqId);
     if (!targetSubQ) return;
 
     const cotSteps = (currentCotData as any).steps || [];
@@ -521,21 +512,21 @@ export const SubQs = () => {
         },
         subject_area: currentGuidelineData.subject_area,
         considerations: (currentCotData as any).considerations || [],
-        previous_sub_questions: subQuestions.filter(q => q.sub_question_id !== subqId),
+        previous_sub_questions: subQuestions.filter((q: SubQuestion) => q.sub_question_id !== subqId),
         original_sub_question: targetSubQ,
         verification_feedbacks: [`[사용자 피드백] ${userFeedback}`],
         failing_verifiers: ['stage_elicitation', 'context_alignment', 'answer_validity', 'prompt_validity'],
       } as any);
 
       // 업데이트된 하위문항으로 교체
-      const updatedSubQuestions = subQuestions.map(q => 
+      const updatedSubQuestions = subQuestions.map((q: SubQuestion) => 
         q.sub_question_id === subqId ? (regenerateResponse as any).sub_question : q
       );
 
-      setCurrentGuidelineData({
+      (setCurrentGuidelineData as any)({
         ...currentGuidelineData,
         guide_sub_questions: updatedSubQuestions
-      } as GuidelineData);
+      });
 
       // 피드백 입력 모드 닫기
       setFeedbackStates(prev => ({
@@ -549,7 +540,7 @@ export const SubQs = () => {
     }
   };
 
-  if (!currentGuidelineData || !currentGuidelineData.guide_sub_questions) {
+  if (!currentGuidelineData || !(currentGuidelineData as any).guide_sub_questions) {
     return (
       <div className={styles.guidelineContainer}>
         {loading && (
@@ -592,7 +583,7 @@ export const SubQs = () => {
       {error && <div className={styles.error}>{error}</div>}
       
       <div className={styles.guidelineSubQuestions}>
-        {currentGuidelineData.guide_sub_questions.map((subQ) => {
+        {(currentGuidelineData as any).guide_sub_questions.map((subQ: SubQuestion) => {
           const hasRegenerated = !!(subQ.re_sub_question && subQ.re_sub_question.trim().length > 0);
           const isOriginalEditing = editingOriginalStates[subQ.sub_question_id];
           const isRegeneratedEditing = editingRegeneratedStates[subQ.sub_question_id];
@@ -944,11 +935,11 @@ export const SubQs = () => {
                     <span>
                       {hasRegenerated
                         ? selectedVersion === 'regenerated'
-                          ? '원본 문항 보기'
+                          ? '문항 비교하기'
                           : showRegenerated && !hideUnselected
                           ? '문항 숨기기'
-                          : '재생성 문항 보기'
-                        : '재생성 준비 중'}
+                          : '문항 재생성'
+                        : '준비 중'}
                     </span>
                   </button>
                 )}
