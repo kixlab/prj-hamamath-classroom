@@ -630,7 +630,7 @@ export const SubQs = () => {
                 {hasRegenerated ? (
                   <>
                     {showOriginalCard && (
-                    <div className={styles.originalQuestionBox}>
+                    <div className={`${styles.originalQuestionBox} ${selectedVersion === 'original' ? styles.selected : ''}`}>
                       <div className={styles.questionLabelRow}>
                         <div className={styles.questionLabel}>원본 문항</div>
                         <div className={styles.questionActions}>
@@ -716,7 +716,7 @@ export const SubQs = () => {
                     </div>
                     )}
                     {showRegeneratedCard && (
-                      <div className={styles.regeneratedQuestionBox}>
+                      <div className={`${styles.regeneratedQuestionBox} ${selectedVersion === 'regenerated' ? styles.selected : ''}`}>
                         <div className={styles.questionLabelRow}>
                           <div className={styles.questionLabel}>재생성 문항</div>
                           <div className={styles.questionActions}>

@@ -128,13 +128,20 @@
   border-radius: 6px;
   border: 1px solid #dee2e6;
   margin-bottom: 12px;
+  transition: border-color 0.2s, border-width 0.2s;
 }
 
 .regeneratedQuestionBox {
   padding: 16px;
-  background: #dbeafe;
+  background: #f8f9fa;
   border-radius: 6px;
-  border: 1px solid #93c5fd;
+  border: 1px solid #dee2e6;
+  transition: border-color 0.2s, border-width 0.2s;
+}
+
+.selected {
+  border: 3px solid var(--color-primary) !important;
+  background: #f8f9fa;
 }
 
 .questionLabelRow {
