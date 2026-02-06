@@ -363,6 +363,33 @@
   transform: translateY(1px);
 }
 
+/* Empty state */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+}
+
+.emptyState p {
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+}
+
+.generateBtn {
+  background: var(--color-primary);
+  border: none;
+  color: white;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.generateBtn:hover {
+  background: var(--color-primary-hover);
+}
+
 /* Loading state */
 .loadingState {
   text-align: center;
@@ -414,6 +441,18 @@
 
 .retryBtn:hover {
   background: var(--color-primary-hover);
+}
+
+/* Per-card regenerating state */
+.rubricCardRegenerating {
+  opacity: 0.55;
+  pointer-events: none;
+  position: relative;
+}
+
+.regenerateBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Responsive */

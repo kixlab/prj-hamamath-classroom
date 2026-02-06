@@ -76,6 +76,17 @@ interface GenerateRubricPipelineData {
   variant: 'with_error_types';
 }
 
+interface RegenerateRubricSingleData {
+  main_problem: string;
+  main_answer: string;
+  grade: string;
+  subject_area?: string;
+  sub_question: any;
+  current_rubric: Record<string, { score: number; description: string; criteria: string[] }>;
+  feedback?: string | null;
+  variant?: string;
+}
+
 interface ExportWordData {
   grade: string;
   subject_area?: string;
@@ -231,6 +242,23 @@ export const api = {
       const errorMessage = Array.isArray((errorData as any).detail)
         ? (errorData as any).detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ')
         : (errorData as any).detail || '루브릭 생성 중 오류가 발생했습니다.';
+      throw new Error(errorMessage);
+    }
+    return response.json();
+  },
+
+  // 단일 루브릭 재생성 (with optional feedback)
+  async regenerateRubricSingle(data: RegenerateRubricSingleData) {
+    const response = await fetch(getApiUrl('/api/v1/rubric/regenerate-single'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = Array.isArray((errorData as any).detail)
+        ? (errorData as any).detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ')
+        : (errorData as any).detail || '루브릭 재생성 중 오류가 발생했습니다.';
       throw new Error(errorMessage);
     }
     return response.json();

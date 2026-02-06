@@ -57,7 +57,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
   const [currentSubQData, setCurrentSubQData] = useState<any | null>(null);
   const [currentGuidelineData, setCurrentGuidelineData] = useState<GuidelineData | null>(dummyGuidelineData);
   const [lastGuidelineDataBeforeVerifyFix, setLastGuidelineDataBeforeVerifyFix] = useState<GuidelineData | null>(null);
-  const [currentStep, setCurrentStep] = useState<number>(4);
+  const [currentStep, setCurrentStep] = useState<number>(3);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);

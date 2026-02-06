@@ -30,7 +30,7 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
     const sq = subQuestions[idx] || {};
     const rubric = sr.rubric || {};
     const levelKeys: Array<'상' | '중' | '하'> = ['상', '중', '하'];
-    const scoreMap: Record<string, number> = { '상': 3, '중': 2, '하': 1 };
+    const scoreMap: Record<string, number> = { '상': 2, '중': 1, '하': 0 };
 
     const levels: RubricLevel[] = levelKeys
       .filter((key) => rubric[key])
@@ -38,7 +38,7 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
         const data = rubric[key];
         return {
           level: key,
-          score: scoreMap[key],
+          score: data.score ?? scoreMap[key],
           title: data.description || '',
           description: data.description || '',
           bullets: Array.isArray(data.criteria) ? data.criteria : [],
@@ -65,6 +65,7 @@ export const Rubrics = () => {
   const [error, setError] = useState<string | null>(null);
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [editingStates, setEditingStates] = useState<Record<string, boolean>>({});
+  const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const containerRef = useMathJax([rubrics]);
   const hasCalledRef = useRef(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -135,14 +136,76 @@ export const Rubrics = () => {
     setEditingStates((prev) => ({ ...prev, [id]: false }));
   };
 
+  const buildCurrentRubric = (rubricItem: RubricItem) => {
+    const result: Record<string, { score: number; description: string; criteria: string[] }> = {};
+    for (const lv of rubricItem.levels) {
+      result[lv.level] = { score: lv.score, description: lv.description, criteria: lv.bullets };
+    }
+    return result;
+  };
+
+  const findSubQuestion = (id: string) => {
+    const gd = currentGuidelineData as any;
+    return (gd?.guide_sub_questions || []).find((sq: any) => sq.sub_question_id === id);
+  };
+
+  const handleRegenerateSingle = async (id: string, feedback?: string | null) => {
+    const gd = currentGuidelineData as any;
+    const rubricItem = rubrics.find((r) => r.sub_question_id === id);
+    const subQuestion = findSubQuestion(id);
+    if (!rubricItem || !subQuestion || !gd) return;
+
+    setRegeneratingIds((prev) => new Set(prev).add(id));
+    setFeedbackStates((prev) => ({ ...prev, [id]: false }));
+
+    try {
+      const response = await api.regenerateRubricSingle({
+        main_problem: gd.main_problem,
+        main_answer: gd.main_answer,
+        grade: gd.grade,
+        subject_area: gd.subject_area,
+        sub_question: subQuestion,
+        current_rubric: buildCurrentRubric(rubricItem),
+        feedback: feedback || null,
+        variant: 'with_error_types',
+      });
+
+      const rubricData = response.rubric || {};
+      const levelKeys: Array<'상' | '중' | '하'> = ['상', '중', '하'];
+      const scoreMap: Record<string, number> = { '상': 2, '중': 1, '하': 0 };
+
+      const newLevels: RubricLevel[] = levelKeys
+        .filter((key) => rubricData[key])
+        .map((key) => {
+          const data = rubricData[key];
+          return {
+            level: key,
+            score: data.score ?? scoreMap[key],
+            title: data.description || '',
+            description: data.description || '',
+            bullets: Array.isArray(data.criteria) ? data.criteria : [],
+          };
+        });
+
+      setRubrics((prev) =>
+        prev.map((r) => r.sub_question_id === id ? { ...r, levels: newLevels } : r),
+      );
+    } catch (err: any) {
+      console.error('루브릭 재생성 오류:', err);
+      alert(err.message || '루브릭 재생성 중 오류가 발생했습니다.');
+    } finally {
+      setRegeneratingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   const handleFeedbackRegenerate = (id: string) => {
     const feedbackEl = document.querySelector(`.feedback-rubric-${id}`) as HTMLTextAreaElement;
     const feedbackText = feedbackEl?.value?.trim();
-    if (feedbackText) {
-      // TODO: call API to regenerate rubric with feedback
-      console.log('Rubric feedback for', id, ':', feedbackText);
-    }
-    setFeedbackStates((prev) => ({ ...prev, [id]: false }));
+    handleRegenerateSingle(id, feedbackText || null);
   };
 
   const handleDownloadJson = () => {
@@ -200,8 +263,8 @@ export const Rubrics = () => {
   if (!rubrics.length) {
     return (
       <div className={styles.rubricContainer}>
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9ca3af' }}>
-          루브릭 데이터가 없습니다.
+        <div className={styles.emptyState}>
+          <p>하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.</p>
         </div>
       </div>
     );
@@ -213,9 +276,10 @@ export const Rubrics = () => {
         {rubrics.map((rubric) => {
           const isFeedbackOpen = feedbackStates[rubric.sub_question_id];
           const isEditing = editingStates[rubric.sub_question_id];
+          const isRegenerating = regeneratingIds.has(rubric.sub_question_id);
 
           return (
-            <div key={rubric.sub_question_id} className={styles.rubricCard}>
+            <div key={rubric.sub_question_id} className={`${styles.rubricCard} ${isRegenerating ? styles.rubricCardRegenerating : ''}`}>
               <div className={styles.rubricHeader}>
                 <span className={styles.rubricId}>{rubric.sub_question_id}</span>
                 <span className={styles.rubricTitle}>
@@ -318,14 +382,16 @@ export const Rubrics = () => {
                 </button>
                 <button
                   className={styles.regenerateBtn}
+                  disabled={regeneratingIds.has(rubric.sub_question_id)}
                   onClick={() => {
                     if (isFeedbackOpen) {
                       handleFeedbackRegenerate(rubric.sub_question_id);
+                    } else {
+                      handleRegenerateSingle(rubric.sub_question_id);
                     }
-                    // TODO: regenerate without feedback
                   }}
                 >
-                  <span>재생성</span>
+                  <span>{regeneratingIds.has(rubric.sub_question_id) ? '생성 중...' : '재생성'}</span>
                 </button>
               </div>
 
