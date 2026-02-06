@@ -33,6 +33,10 @@ export const useMathJax = (dependencies: unknown[] = []): RefObject<HTMLDivEleme
 
       if (window.MathJax && window.MathJax.typesetPromise && containerRef.current) {
         try {
+          // Clear previous typeset so MathJax re-processes updated content
+          if (window.MathJax.typesetClear) {
+            window.MathJax.typesetClear([containerRef.current]);
+          }
           await window.MathJax.typesetPromise([containerRef.current]);
         } catch (err) {
           console.error('MathJax 렌더링 오류:', err);

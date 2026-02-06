@@ -66,6 +66,7 @@ declare global {
         processEnvironments: boolean;
       };
       typesetPromise?: (elements?: HTMLElement[]) => Promise<void>;
+      typesetClear?: (elements?: HTMLElement[]) => void;
     };
   }
 }
