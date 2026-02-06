@@ -98,6 +98,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    // 문제 풀이 요청이 시작되면 바로 2단계로 이동해서 로딩 표시를 보여준다
+    setCurrentStep(2);
 
     try {
       const requestData = {
@@ -116,9 +118,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         main_solution: formData.solution,
       };
       
-      // 데이터 설정 후 2단계로 이동
       setCurrentCotData(cotDataWithExtras);
-      setCurrentStep(2);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
       setError(err.message || '오류가 발생했습니다.');

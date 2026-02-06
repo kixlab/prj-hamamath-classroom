@@ -37,11 +37,14 @@ export const SubQs = () => {
   // 원본 문항 / 재생성 문항 각각에 대한 편집 상태 및 최종 선택 상태
   const [editingOriginalStates, setEditingOriginalStates] = useState<Record<string, boolean>>({});
   const [editingRegeneratedStates, setEditingRegeneratedStates] = useState<Record<string, boolean>>({});
+  // 재생성 문항 비교 토글: 기본값은 "펼쳐진 상태"를 목표로 하되,
+  // 실제 토글 상태는 하위문항 데이터가 로드된 뒤에 계산된다.
   const [showRegeneratedStates, setShowRegeneratedStates] = useState<Record<string, boolean>>({});
   const [hideUnselectedStates, setHideUnselectedStates] = useState<Record<string, boolean>>({});
   const [preferredVersion, setPreferredVersion] = useState<Record<string, "original" | "regenerated">>({});
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
+  const [regeneratingStates, setRegeneratingStates] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([(currentGuidelineData as any)?.guide_sub_questions]);
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
@@ -234,7 +237,14 @@ export const SubQs = () => {
             allFeedbacks.push(`[${verifierName}] 점수: ${scoreStr}, ${resultData.feedback || ""}`);
           }
         }
-        enrichedSubQuestion.verification_result = allFeedbacks.join("\n");
+        // 재생성되지 않았더라도, 백엔드가 수정된 sub_question을 돌려줬다면
+        // 해당 내용을 재생성 문항 박스에 표시할 수 있도록 복사해 둔다.
+        enrichedSubQuestion = {
+          ...enrichedSubQuestion,
+          re_sub_question: (verifyResponse as any).sub_question?.re_sub_question || (verifyResponse as any).sub_question?.guide_sub_question || enrichedSubQuestion.re_sub_question,
+          re_sub_answer: (verifyResponse as any).sub_question?.re_sub_answer || (verifyResponse as any).sub_question?.guide_sub_answer || enrichedSubQuestion.re_sub_answer,
+          verification_result: allFeedbacks.join("\n"),
+        };
       }
 
       // 해당 sub_question만 상태에 merge
@@ -255,9 +265,20 @@ export const SubQs = () => {
           guide_sub_questions: updatedSubQuestions,
         };
       });
+
+      // 해당 문항의 재생성 진행 상태 해제
+      setRegeneratingStates((prev) => ({
+        ...prev,
+        [enrichedSubQuestion.sub_question_id]: false,
+      }));
     } catch (err: any) {
       // 백그라운드 오류는 콘솔에만 남기고 UI는 유지
       console.error("하위문항 검증/재생성 중 오류:", err.message || err);
+      // 오류가 발생해도 재생성 진행 상태는 해제
+      setRegeneratingStates((prev) => ({
+        ...prev,
+        [subQuestion.sub_question_id]: false,
+      }));
     }
   };
 
@@ -337,6 +358,10 @@ export const SubQs = () => {
         (setCurrentGuidelineData as any)(guidelineData);
 
         // 검증 + 재생성은 백그라운드에서 병렬로 처리
+        setRegeneratingStates((prev) => ({
+          ...prev,
+          [subQuestion.sub_question_id]: true,
+        }));
         runBackgroundVerify({
           cotStep,
           subQuestion,
@@ -467,6 +492,10 @@ export const SubQs = () => {
     }
 
     setLoading(true);
+    setRegeneratingStates((prev) => ({
+      ...prev,
+      [subqId]: true,
+    }));
     setError(null);
 
     try {
@@ -509,6 +538,10 @@ export const SubQs = () => {
       setError(err.message || "오류가 발생했습니다.");
     } finally {
       setLoading(false);
+      setRegeneratingStates((prev) => ({
+        ...prev,
+        [subqId]: false,
+      }));
     }
   };
 
@@ -559,11 +592,13 @@ export const SubQs = () => {
           const hasRegenerated = !!(subQ.re_sub_question && subQ.re_sub_question.trim().length > 0);
           const isOriginalEditing = editingOriginalStates[subQ.sub_question_id];
           const isRegeneratedEditing = editingRegeneratedStates[subQ.sub_question_id];
-          const showRegenerated = !!showRegeneratedStates[subQ.sub_question_id];
+          // 토글의 디폴트는 "펼쳐진 상태"가 되도록, 값이 아직 설정되지 않았다면 true로 간주
+          const showRegenerated = showRegeneratedStates[subQ.sub_question_id] ?? true;
           const hideUnselected = !!hideUnselectedStates[subQ.sub_question_id];
           const selectedVersion = preferredVersion[subQ.sub_question_id]; // 'original' | 'regenerated' | undefined
           const isFeedbackOpen = feedbackStates[subQ.sub_question_id];
           const isVerificationOpen = verificationStates[subQ.sub_question_id];
+          const isRegenerating = !!regeneratingStates[subQ.sub_question_id];
 
           const originalQuestion = subQ.guide_sub_question || "";
           const originalAnswer = subQ.guide_sub_answer || subQ.sub_answer || "";
@@ -728,39 +763,58 @@ export const SubQs = () => {
                     )}
                   </>
                 ) : (
-                  <div className={styles.originalQuestionBox}>
-                    <div className={styles.questionLabelRow}>
-                      <div className={styles.questionLabel}>원본 문항</div>
-                      {!isOriginalEditing && (
-                        <button className={styles.editToggleBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
-                          편집
-                        </button>
-                      )}
-                    </div>
-                    {isOriginalEditing ? (
-                      <div className={styles.editMode}>
-                        <textarea className={styles.editTextarea} defaultValue={originalQuestion} rows={3} data-subq-id={subQ.sub_question_id} data-type="original-question" />
-                        <input type="text" className={styles.editInput} defaultValue={originalAnswer} placeholder="정답을 입력하세요" data-subq-id={subQ.sub_question_id} data-type="original-answer" />
-                        <div className={styles.editActions}>
-                          <button className={styles.cancelBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
-                            취소
+                  <>
+                    <div className={styles.originalQuestionBox}>
+                      <div className={styles.questionLabelRow}>
+                        <div className={styles.questionLabel}>원본 문항</div>
+                        {!isOriginalEditing && (
+                          <button className={styles.editToggleBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
+                            편집
                           </button>
-                          <button className={styles.saveBtn} onClick={() => handleSaveOriginalEdit(subQ.sub_question_id)}>
-                            저장
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={styles.displayMode}>
-                        <div className={styles.questionContent}>{formatQuestion(originalQuestion)}</div>
-                        {originalAnswer && (
-                          <div className={styles.answerContent}>
-                            <strong>정답:</strong> {formatAnswer(originalAnswer)}
-                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                      {isOriginalEditing ? (
+                        <div className={styles.editMode}>
+                          <textarea className={styles.editTextarea} defaultValue={originalQuestion} rows={3} data-subq-id={subQ.sub_question_id} data-type="original-question" />
+                          <input
+                            type="text"
+                            className={styles.editInput}
+                            defaultValue={originalAnswer}
+                            placeholder="정답을 입력하세요"
+                            data-subq-id={subQ.sub_question_id}
+                            data-type="original-answer"
+                          />
+                          <div className={styles.editActions}>
+                            <button className={styles.cancelBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
+                              취소
+                            </button>
+                            <button className={styles.saveBtn} onClick={() => handleSaveOriginalEdit(subQ.sub_question_id)}>
+                              저장
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={styles.displayMode}>
+                          <div className={styles.questionContent}>{formatQuestion(originalQuestion)}</div>
+                          {originalAnswer && (
+                            <div className={styles.answerContent}>
+                              <strong>정답:</strong> {formatAnswer(originalAnswer)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className={styles.regeneratedQuestionBox}>
+                      <div className={styles.questionLabelRow}>
+                        <div className={styles.questionLabel}>재생성 문항</div>
+                      </div>
+                      <div className={styles.displayMode}>
+                        <div className={styles.questionContent}>
+                          {isRegenerating ? "준비중" : "재생성한 문항이 없습니다"}
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -787,12 +841,10 @@ export const SubQs = () => {
                     <span>재생성</span>
                   </button>
                 )}
-                {!isFeedbackOpen && (
+                {!isFeedbackOpen && hasRegenerated && !isRegenerating && (
                   <button
                     className={styles.regenerateBtn}
-                    disabled={!hasRegenerated}
                     onClick={() => {
-                      if (!hasRegenerated) return;
                       const currentlyShown = !!showRegenerated;
                       const selected = selectedVersion;
                       const hideUnselectedNow = !!hideUnselected;
@@ -835,8 +887,31 @@ export const SubQs = () => {
                       }
                     }}
                   >
-                    <span>🔄</span>
-                    <span>{hasRegenerated ? (selectedVersion === "regenerated" ? "문항 비교하기" : showRegenerated && !hideUnselected ? "문항 숨기기" : "문항 재생성") : "준비 중"}</span>
+                    <span>🆚</span>
+                    <span>
+                      {(() => {
+                        const currentlyShown = !!showRegenerated;
+                        const selected = selectedVersion;
+                        const hideUnselectedNow = !!hideUnselected;
+
+                        // 재생성 문항이 표시되지 않은 상태에서 → "문항 재생성" (비교 모드로 진입)
+                        if (!currentlyShown) {
+                          return "문항 재생성";
+                        }
+
+                        // 재생성 문항이 표시되고, 두 문항이 모두 보이는 상태(B) → "문항 숨기기"
+                        if (currentlyShown && !hideUnselectedNow) {
+                          return "문항 숨기기";
+                        }
+
+                        // 재생성 문항이 표시되고, 선택된 문항만 보이는 상태(C) → "문항 비교하기"
+                        if (currentlyShown && hideUnselectedNow) {
+                          return "문항 비교하기";
+                        }
+
+                        return "문항 재생성";
+                      })()}
+                    </span>
                   </button>
                 )}
               </div>
