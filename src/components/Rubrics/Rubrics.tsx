@@ -65,6 +65,8 @@ export const Rubrics = () => {
   const [error, setError] = useState<string | null>(null);
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [editingStates, setEditingStates] = useState<Record<string, boolean>>({});
+  // Controlled edit drafts: { [sub_question_id]: { [level]: { title, description, bullets } } }
+  const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { title: string; description: string; bullets: string }>>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const containerRef = useMathJax([rubrics]);
   const hasCalledRef = useRef(false);
@@ -111,26 +113,51 @@ export const Rubrics = () => {
   };
 
   const toggleEdit = (id: string) => {
+    const wasEditing = editingStates[id];
+    if (!wasEditing) {
+      // Entering edit mode — initialize drafts from current rubric state
+      const rubric = rubrics.find((r) => r.sub_question_id === id);
+      if (rubric) {
+        const draft: Record<string, { title: string; description: string; bullets: string }> = {};
+        for (const lv of rubric.levels) {
+          draft[lv.level] = { title: lv.title, description: lv.description, bullets: lv.bullets.join('\n') };
+        }
+        setEditDrafts((prev) => ({ ...prev, [id]: draft }));
+      }
+    }
     setEditingStates((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const updateDraft = (id: string, level: string, field: 'title' | 'description' | 'bullets', value: string) => {
+    setEditDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [level]: { ...prev[id]?.[level], [field]: value },
+      },
+    }));
+  };
+
   const handleSaveEdit = (id: string) => {
+    const draft = editDrafts[id];
+    if (!draft) return;
+
     setRubrics((prev) =>
       prev.map((r) => {
         if (r.sub_question_id !== id) return r;
-        const updated = { ...r, levels: r.levels.map((lv) => {
-          const prefix = `${id}-${lv.level}`;
-          const titleEl = document.querySelector(`textarea[data-rubric-id="${prefix}-title"]`) as HTMLTextAreaElement;
-          const descEl = document.querySelector(`textarea[data-rubric-id="${prefix}-desc"]`) as HTMLTextAreaElement;
-          const bulletsEl = document.querySelector(`textarea[data-rubric-id="${prefix}-bullets"]`) as HTMLTextAreaElement;
-          return {
-            ...lv,
-            title: titleEl?.value?.trim() || lv.title,
-            description: descEl?.value?.trim() || lv.description,
-            bullets: bulletsEl?.value?.split('\n').filter((b: string) => b.trim()) || lv.bullets,
-          };
-        })};
-        return updated;
+        return {
+          ...r,
+          levels: r.levels.map((lv) => {
+            const d = draft[lv.level];
+            if (!d) return lv;
+            return {
+              ...lv,
+              title: d.title.trim() || lv.title,
+              description: d.description.trim() || lv.description,
+              bullets: d.bullets.split('\n').filter((b) => b.trim()),
+            };
+          }),
+        };
       }),
     );
     setEditingStates((prev) => ({ ...prev, [id]: false }));
@@ -291,7 +318,7 @@ export const Rubrics = () => {
               {isEditing ? (
                 <div className={styles.editMode}>
                   {rubric.levels.map((lv) => {
-                    const prefix = `${rubric.sub_question_id}-${lv.level}`;
+                    const draft = editDrafts[rubric.sub_question_id]?.[lv.level];
                     const levelStyle =
                       lv.level === '상' ? styles.levelHigh :
                       lv.level === '중' ? styles.levelMid : styles.levelLow;
@@ -308,27 +335,27 @@ export const Rubrics = () => {
                           <label>제목</label>
                           <textarea
                             className={styles.editTextarea}
-                            defaultValue={lv.title}
+                            value={draft?.title ?? lv.title}
+                            onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'title', e.target.value)}
                             rows={1}
-                            data-rubric-id={`${prefix}-title`}
                           />
                         </div>
                         <div className={styles.levelEditGroup}>
                           <label>설명</label>
                           <textarea
                             className={styles.editTextarea}
-                            defaultValue={lv.description}
+                            value={draft?.description ?? lv.description}
+                            onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'description', e.target.value)}
                             rows={2}
-                            data-rubric-id={`${prefix}-desc`}
                           />
                         </div>
                         <div className={styles.levelEditGroup}>
                           <label>세부 기준 (줄바꿈으로 구분)</label>
                           <textarea
                             className={styles.editTextarea}
-                            defaultValue={lv.bullets.join('\n')}
+                            value={draft?.bullets ?? lv.bullets.join('\n')}
+                            onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'bullets', e.target.value)}
                             rows={3}
-                            data-rubric-id={`${prefix}-bullets`}
                           />
                         </div>
                       </div>
