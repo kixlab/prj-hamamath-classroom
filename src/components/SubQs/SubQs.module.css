@@ -1,5 +1,7 @@
 .guidelineContainer {
-  padding: 32px;
+  padding: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .loading {
@@ -128,13 +130,20 @@
   border-radius: 6px;
   border: 1px solid #dee2e6;
   margin-bottom: 12px;
+  transition: border-color 0.2s, border-width 0.2s;
 }
 
 .regeneratedQuestionBox {
   padding: 16px;
-  background: #dbeafe;
+  background: #f8f9fa;
   border-radius: 6px;
-  border: 1px solid #93c5fd;
+  border: 1px solid #dee2e6;
+  transition: border-color 0.2s, border-width 0.2s;
+}
+
+.selected {
+  border: 3px solid var(--color-primary) !important;
+  background: #f8f9fa !important;
 }
 
 .questionLabelRow {
@@ -215,20 +224,18 @@
 }
 
 .editToggleBtn {
-  background: transparent;
+  background: var(--color-primary);
   border: 1px solid var(--color-primary);
-  color: var(--color-primary);
+  color: white;
   padding: 6px 12px;
   border-radius: 4px;
   font-size: 0.85em;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: opacity 0.2s;
 }
 
 .editToggleBtn:hover {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
+  opacity: 0.8;
 }
 
 .selectBtn {
