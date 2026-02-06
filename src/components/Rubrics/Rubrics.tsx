@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import { api } from '../../services/api';
 import { useMathJax } from '../../hooks/useMathJax';
 import styles from './Rubrics.module.css';
 
 interface RubricLevel {
   level: '상' | '중' | '하';
+  score: number;
   title: string;
   description: string;
   bullets: string[];
@@ -16,56 +18,92 @@ interface RubricItem {
   sub_skill_name: string;
   question: string;
   levels: RubricLevel[];
+  level_analysis?: any;
+  raw_response?: any;
 }
 
-// Generate dummy rubric data from guideline sub-questions
-function buildDummyRubrics(guidelineData: any): RubricItem[] {
+function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricItem[] {
+  const simulationRubrics = apiResponse?.simulation_rubrics || [];
   const subQuestions = guidelineData?.guide_sub_questions || [];
-  return subQuestions.map((sq: any) => ({
-    sub_question_id: sq.sub_question_id,
-    step_name: sq.step_name,
-    sub_skill_name: sq.sub_skill_name,
-    question: sq.guide_sub_question,
-    levels: [
-      {
-        level: '상' as const,
-        title: '모든 조건을 정확히 파악하고 적용한 답변',
-        description: '문제에 주어진 조건을 모두 올바르게 이해하고 적용하였으며, 정확한 계산을 통해 올바른 답을 제시함.',
-        bullets: [
-          `문제의 핵심 조건을 정확히 파악하고 풀이에 반영함`,
-          `논리적으로 완결된 풀이 과정을 제시함`,
-        ],
-      },
-      {
-        level: '중' as const,
-        title: '일부 조건을 이해했으나, 완전하게 연결하지 못한 답변',
-        description: '문제의 일부 조건을 인식하고 계산을 시도하였으나, 조건을 완전하게 연결하지 못함.',
-        bullets: [
-          `일부 조건은 이해했으나 풀이 과정에서 누락이 있음`,
-          `계산 과정에서 부분적인 오류가 있음`,
-        ],
-      },
-      {
-        level: '하' as const,
-        title: '기초적인 이해의 부족으로 인한 주요 오해가 있는 답변',
-        description: '문제를 잘못 인식하거나 핵심 조건을 무시하여 풀이에 주요 오류가 있음.',
-        bullets: [
-          `문제의 핵심 조건을 인지하지 못함`,
-          `풀이 방향이 문제의 요구와 맞지 않음`,
-        ],
-      },
-    ],
-  }));
+
+  return simulationRubrics.map((sr: any, idx: number) => {
+    const sq = subQuestions[idx] || {};
+    const rubric = sr.rubric || {};
+    const levelKeys: Array<'상' | '중' | '하'> = ['상', '중', '하'];
+    const scoreMap: Record<string, number> = { '상': 3, '중': 2, '하': 1 };
+
+    const levels: RubricLevel[] = levelKeys
+      .filter((key) => rubric[key])
+      .map((key) => {
+        const data = rubric[key];
+        return {
+          level: key,
+          score: scoreMap[key],
+          title: data.description || '',
+          description: data.description || '',
+          bullets: Array.isArray(data.criteria) ? data.criteria : [],
+        };
+      });
+
+    return {
+      sub_question_id: sr.sub_question_id || sq.sub_question_id || `sq-${idx + 1}`,
+      step_name: sq.step_name || '',
+      sub_skill_name: sq.sub_skill_name || '',
+      question: sq.guide_sub_question || '',
+      levels,
+      level_analysis: sr.level_analysis,
+      raw_response: sr,
+    };
+  });
 }
 
 export const Rubrics = () => {
   const { currentGuidelineData } = useApp();
-  const [rubrics, setRubrics] = useState<RubricItem[]>(() =>
-    buildDummyRubrics(currentGuidelineData),
-  );
+  const [rubrics, setRubrics] = useState<RubricItem[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [generatingMessage, setGeneratingMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [editingStates, setEditingStates] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([rubrics]);
+  const hasCalledRef = useRef(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (!currentGuidelineData || !(currentGuidelineData as any).guide_sub_questions) return;
+    if (hasCalledRef.current) return;
+    hasCalledRef.current = true;
+
+    const gd = currentGuidelineData as any;
+
+    const generateRubrics = async () => {
+      setGenerating(true);
+      setGeneratingMessage('루브릭 생성 중... (시간이 다소 소요될 수 있습니다)');
+      setError(null);
+
+      try {
+        const response = await api.generateRubricPipeline({
+          main_problem: gd.main_problem,
+          main_answer: gd.main_answer,
+          grade: gd.grade,
+          subject_area: gd.subject_area,
+          sub_questions: gd.guide_sub_questions,
+          variant: 'with_error_types',
+        });
+
+        const mapped = mapApiResponseToRubrics(response, gd);
+        setRubrics(mapped);
+      } catch (err: any) {
+        console.error('루브릭 생성 오류:', err);
+        setError(err.message || '루브릭 생성 중 오류가 발생했습니다.');
+      } finally {
+        setGenerating(false);
+        setGeneratingMessage('');
+      }
+    };
+
+    generateRubrics();
+  }, [currentGuidelineData, retryCount]);
 
   const toggleFeedback = (id: string) => {
     setFeedbackStates((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -127,6 +165,37 @@ export const Rubrics = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  if (generating) {
+    return (
+      <div className={styles.rubricContainer}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner}></div>
+          <div className={styles.loadingMessage}>{generatingMessage}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.rubricContainer}>
+        <div className={styles.errorState}>
+          <div className={styles.errorMessage}>{error}</div>
+          <button
+            className={styles.retryBtn}
+            onClick={() => {
+              hasCalledRef.current = false;
+              setError(null);
+              setRetryCount((c) => c + 1);
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!rubrics.length) {
     return (
@@ -260,26 +329,24 @@ export const Rubrics = () => {
                 </button>
               </div>
 
-              {isFeedbackOpen && (
-                <div className={styles.feedbackInput}>
-                  <textarea
-                    className={`${styles.feedbackTextarea} feedback-rubric-${rubric.sub_question_id}`}
-                    rows={3}
-                    placeholder="루브릭 수정 요청사항을 입력하세요."
-                  />
-                  <div className={styles.feedbackActions}>
-                    <button className={styles.cancelBtn} onClick={() => toggleFeedback(rubric.sub_question_id)}>
-                      취소
-                    </button>
-                    <button
-                      className={styles.submitBtn}
-                      onClick={() => handleFeedbackRegenerate(rubric.sub_question_id)}
-                    >
-                      입력
-                    </button>
-                  </div>
+              <div className={styles.feedbackInput} style={{ display: isFeedbackOpen ? 'block' : 'none' }}>
+                <textarea
+                  className={`${styles.feedbackTextarea} feedback-rubric-${rubric.sub_question_id}`}
+                  rows={3}
+                  placeholder="루브릭 수정 요청사항을 입력하세요."
+                />
+                <div className={styles.feedbackActions}>
+                  <button className={styles.cancelBtn} onClick={() => toggleFeedback(rubric.sub_question_id)}>
+                    취소
+                  </button>
+                  <button
+                    className={styles.submitBtn}
+                    onClick={() => handleFeedbackRegenerate(rubric.sub_question_id)}
+                  >
+                    입력
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           );
         })}

@@ -67,6 +67,15 @@ interface VerifyAndRegenerateData {
   skip_regeneration?: boolean;
 }
 
+interface GenerateRubricPipelineData {
+  main_problem: string;
+  main_answer: string;
+  grade: string;
+  subject_area: string;
+  sub_questions: any[];
+  variant: 'with_error_types';
+}
+
 interface ExportWordData {
   grade: string;
   subject_area?: string;
@@ -206,6 +215,23 @@ export const api = {
     const response = await fetch(getApiUrl('/api/v1/history/dummy'));
     if (!response.ok) {
       throw new Error('더미 데이터를 가져올 수 없습니다.');
+    }
+    return response.json();
+  },
+
+  // 루브릭 파이프라인 생성 (simulation-based)
+  async generateRubricPipeline(data: GenerateRubricPipelineData) {
+    const response = await fetch(getApiUrl('/api/v1/rubric/pipeline'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = Array.isArray((errorData as any).detail)
+        ? (errorData as any).detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ')
+        : (errorData as any).detail || '루브릭 생성 중 오류가 발생했습니다.';
+      throw new Error(errorMessage);
     }
     return response.json();
   },
