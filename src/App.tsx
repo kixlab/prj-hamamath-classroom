@@ -5,6 +5,7 @@ import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
 import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
 import { SubQs } from './components/SubQs/SubQs';
+import { Rubrics } from './components/Rubrics/Rubrics';
 import styles from './App.module.css';
 
 const AppContent = () => {
@@ -48,6 +49,11 @@ const AppContent = () => {
           {currentStep === 3 && (
             <div className={styles.workflowPanel}>
               <SubQs />
+            </div>
+          )}
+          {currentStep === 4 && (
+            <div className={styles.workflowPanel}>
+              <Rubrics />
             </div>
           )}
         </div>

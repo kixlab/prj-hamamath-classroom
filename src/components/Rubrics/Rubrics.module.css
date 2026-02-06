@@ -1,0 +1,381 @@
+.rubricContainer {
+  padding: 0;
+  width: 100%;
+}
+
+.rubricCards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rubricCard {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px;
+  transition: border-color 0.2s;
+}
+
+.rubricCard:hover {
+  border-color: var(--color-primary);
+}
+
+.rubricHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rubricId {
+  background: var(--color-primary);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: center;
+}
+
+.rubricTitle {
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.rubricQuestionInline {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.levelCards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.levelCard {
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  background: #f8f9fa;
+}
+
+.levelCard.levelHigh {
+}
+
+.levelCard.levelMid {
+}
+
+.levelCard.levelLow {
+}
+
+.levelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.levelBadge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: white;
+}
+
+.levelBadge.badgeHigh {
+  background: #2563eb;
+}
+
+.levelBadge.badgeMid {
+  background: #f59e0b;
+}
+
+.levelBadge.badgeLow {
+  background: #ef4444;
+}
+
+.levelLabel {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.levelDescription {
+  font-size: 0.875rem;
+  color: #495057;
+  line-height: 1.7;
+  margin-bottom: 8px;
+}
+
+.levelBullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.levelBullets li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 0.85rem;
+  color: #6b7280;
+  line-height: 1.7;
+  margin-bottom: 4px;
+}
+
+.levelBullets li::before {
+  content: "\2022";
+  position: absolute;
+  left: 0;
+  color: #9ca3af;
+}
+
+/* Action buttons - matching SubQs pattern */
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #495057;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionBtn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.regenerateBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-primary);
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.regenerateBtn:hover {
+  background: var(--color-primary-hover);
+}
+
+/* Feedback input - matching SubQs pattern */
+.feedbackInput {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fff3cd;
+  border-radius: 6px;
+  border: 1px solid #ffc107;
+  box-sizing: border-box;
+  align-self: stretch;
+}
+
+.feedbackTextarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.feedbackActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #495057;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.submitBtn {
+  background: var(--color-primary);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submitBtn:hover {
+  background: var(--color-primary-hover);
+}
+
+/* Edit mode */
+.editMode {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editTextarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.editToggleBtn {
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.editToggleBtn:hover {
+  opacity: 0.8;
+}
+
+.saveBtn {
+  background: var(--color-primary);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.saveBtn:hover {
+  background: var(--color-primary-hover);
+}
+
+.levelEditGroup {
+  margin-bottom: 12px;
+}
+
+.levelEditGroup label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.finalizeRow {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.downloadBtn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.downloadBtn:hover {
+  background: #f3f4f6;
+}
+
+.downloadBtn:active {
+  transform: translateY(1px);
+}
+
+.finalizeBtn {
+  background: #111827;
+  border: none;
+  color: #f9fafb;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.finalizeBtn:hover {
+  background: #0f172a;
+}
+
+.finalizeBtn:active {
+  transform: translateY(1px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .levelCards {
+    flex-direction: column;
+  }
+
+  .actionButtons {
+    flex-direction: column;
+  }
+
+  .actionBtn,
+  .regenerateBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}

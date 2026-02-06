@@ -27,7 +27,7 @@ interface Progress {
 }
 
 export const SubQs = () => {
-  const { currentCotData, currentGuidelineData, setCurrentGuidelineData, setLoading, setError, loading, error } = useApp();
+  const { currentCotData, currentGuidelineData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, loading, error } = useApp();
 
   const [progress, setProgress] = useState<Progress>({
     current: 0,
@@ -74,7 +74,11 @@ export const SubQs = () => {
   };
 
   // 전체 문제에 대한 최종 문항/정답을 한 번에 JSON으로 다운로드
-  const handleFinalizeAll = () => {
+  const handleFinalize = () => {
+    setCurrentStep(4);
+  };
+
+  const handleDownloadJson = () => {
     if (!currentGuidelineData || !(currentGuidelineData as any).guide_sub_questions) {
       return;
     }
@@ -899,8 +903,11 @@ export const SubQs = () => {
         })}
       </div>
       <div className={styles.finalizeRow}>
-        <button className={styles.finalizeBtn} onClick={handleFinalizeAll}>
-          문제 확정하기 (JSON 다운로드)
+        <button className={styles.downloadBtn} onClick={handleDownloadJson}>
+          JSON 다운로드
+        </button>
+        <button className={styles.finalizeBtn} onClick={handleFinalize}>
+          문제 확정하기
         </button>
       </div>
     </div>
