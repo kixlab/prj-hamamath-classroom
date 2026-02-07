@@ -5,10 +5,13 @@ import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
 import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
 import { SubQs } from './components/SubQs/SubQs';
+import { useMathJax } from './hooks/useMathJax';
+import { formatQuestion, formatAnswer } from './utils/formatting';
 import styles from './App.module.css';
 
 const AppContent = () => {
-  const { currentStep, setCurrentStep, currentCotData, loading, error } = useApp();
+  const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error } = useApp();
+  const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
 
   const handleNewProblem = () => {
     setCurrentStep(1);
@@ -17,6 +20,13 @@ const AppContent = () => {
   const handleCoTSubmit = () => {
     setCurrentStep(2);
   };
+
+  const mainProblem = (currentCotData as any)?.problem;
+  const mainAnswer = (currentCotData as any)?.answer;
+  const mainImage = (currentCotData as any)?.image_data;
+  const mainSolution = (currentCotData as any)?.main_solution;
+  const grade = (currentCotData as any)?.grade;
+  const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
 
   return (
     <div className={styles.app}>
@@ -47,7 +57,58 @@ const AppContent = () => {
           )}
           {currentStep === 3 && (
             <div className={styles.workflowPanel}>
-              <SubQs />
+              <div className={styles.subQsSplitLayout}>
+                <aside className={styles.mainProblemColumn} ref={mainProblemRef}>
+                  <div className={styles.mainProblemPanel}>
+                    <h3 className={styles.mainProblemTitle}>입력한 문제</h3>
+                    {mainImage && (
+                      <div className={styles.mainProblemImageWrap}>
+                        <img
+                          src={mainImage}
+                          alt="문제 이미지"
+                          className={styles.mainProblemImage}
+                        />
+                      </div>
+                    )}
+                    {mainProblem ? (
+                      <>
+                        <div className={styles.mainProblemContent}>{formatQuestion(mainProblem)}</div>
+                        {mainAnswer && (
+                          <div className={styles.mainProblemAnswer}>
+                            <span className={styles.mainProblemAnswerLabel}>정답:</span>{' '}
+                            <span dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
+                          </div>
+                        )}
+                        {mainSolution && (
+                          <div className={styles.mainProblemSolution}>
+                            <span className={styles.mainProblemSolutionLabel}>모범답안</span>
+                            <div className={styles.mainProblemSolutionContent}>{mainSolution}</div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      !mainImage && <p className={styles.mainProblemEmpty}>문제 데이터가 없습니다.</p>
+                    )}
+                    {(grade || subjectArea) && (
+                      <div className={styles.mainProblemMeta}>
+                        {grade && (
+                          <div>
+                            <span className={styles.mainProblemMetaLabel}>학년:</span> {grade}
+                          </div>
+                        )}
+                        {subjectArea && (
+                          <div>
+                            <span className={styles.mainProblemMetaLabel}>수학 영역:</span> {subjectArea}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </aside>
+                <main className={styles.subQsColumn}>
+                  <SubQs />
+                </main>
+              </div>
             </div>
           )}
         </div>

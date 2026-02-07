@@ -22,6 +22,126 @@
   animation: fadeIn 0.3s ease;
 }
 
+/* 하위문항 탭: 왼쪽 40% 입력한 문제, 오른쪽 60% 하위문항 */
+.subQsSplitLayout {
+  display: flex;
+  width: 100%;
+  min-height: 60vh;
+  gap: 0;
+}
+
+.mainProblemColumn {
+  width: 30%;
+  flex-shrink: 0;
+  align-self: flex-start;
+  position: sticky;
+  /* 헤더 + 탭 아래에 고정 */
+  top: calc(var(--header-height, 48px) + 52px);
+  max-height: calc(100vh - var(--header-height, 48px) - 52px);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  z-index: 10;
+}
+
+.mainProblemPanel {
+  padding: 24px;
+  height: 100%;
+}
+
+.mainProblemTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.mainProblemMeta {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.mainProblemMeta > div + div {
+  margin-top: 6px;
+}
+
+.mainProblemMetaLabel {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mainProblemImageWrap {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.mainProblemImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  vertical-align: top;
+}
+
+.mainProblemContent {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  margin-bottom: 16px;
+}
+
+.mainProblemAnswer {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.mainProblemAnswerLabel {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mainProblemSolution {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.mainProblemSolutionLabel {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.mainProblemSolutionContent {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.mainProblemEmpty {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.subQsColumn {
+  width: 70%;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--color-bg);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -74,7 +194,7 @@
   .container {
     border-radius: 12px;
   }
-  
+
   .error {
     margin: 16px 20px;
   }

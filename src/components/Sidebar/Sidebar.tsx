@@ -1,6 +1,7 @@
 import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult } from '../../hooks/useStorage';
+import { api } from '../../services/api';
 import styles from './Sidebar.module.css';
 
 interface SavedResultItem {
@@ -22,7 +23,8 @@ export const Sidebar = () => {
     setCurrentCotData, 
     setCurrentSubQData, 
     setCurrentGuidelineData, 
-    setCurrentProblemId 
+    setCurrentProblemId,
+    preferredVersion = {},
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
 
@@ -161,51 +163,13 @@ export const Sidebar = () => {
       alert('다운로드할 Guideline 데이터가 없습니다. 먼저 3단계 Guideline 하위 문항을 생성해주세요.');
       return;
     }
-
     try {
-      const finalSubQuestions = (currentGuidelineData as any).guide_sub_questions?.map((subQ: any) => {
-        const hasRegenerated = subQ.re_sub_question && subQ.re_sub_question.trim().length > 0;
-        return {
-          sub_question_id: subQ.sub_question_id,
-          step_id: subQ.step_id,
-          sub_skill_id: subQ.sub_skill_id,
-          step_name: subQ.step_name,
-          sub_skill_name: subQ.sub_skill_name,
-          guide_sub_question: hasRegenerated ? subQ.re_sub_question : subQ.guide_sub_question,
-          guide_sub_answer: hasRegenerated ? (subQ.re_sub_answer || subQ.guide_sub_answer) : subQ.guide_sub_answer,
-        };
-      }) || [];
-
-      const requestData = {
-        main_problem: (currentCotData as any).problem,
-        main_answer: (currentCotData as any).answer,
-        main_solution: (currentCotData as any).main_solution || null,
-        grade: (currentCotData as any).grade || '',
-        subject_area: (currentGuidelineData as any).subject_area || null,
-        guide_sub_questions: finalSubQuestions,
-      };
-
-      const response = await fetch('/api/v1/guideline/export-word', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error((errorData as any).detail || '워드 파일 생성 중 오류가 발생했습니다.');
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const problemId = currentProblemId || 'individual';
-      link.download = `학습지_${problemId}_${new Date().toISOString().slice(0, 10)}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      await api.exportWordFromGuideline(
+        currentCotData as any,
+        currentGuidelineData as any,
+        preferredVersion,
+        currentProblemId
+      );
     } catch (err: any) {
       alert(err.message || '워드 파일 생성 중 오류가 발생했습니다.');
     }

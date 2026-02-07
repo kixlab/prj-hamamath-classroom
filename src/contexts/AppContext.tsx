@@ -25,7 +25,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [preferredVersion, setPreferredVersion] = useState<Record<number, 'original' | 'regenerated'>>({});
+  const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);

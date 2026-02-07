@@ -19,14 +19,14 @@ interface FormData {
 }
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { setCurrentCotData, setCurrentStep, setLoading, setError } = useApp();
+  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError } = useApp();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
-    problem: '',
-    answer: '',
+    problem: '어떤 수를 5로 나누었더니 몫이 15이고, 나머지가 4였습니다. 어떤 수는 얼마일까요?',
+    answer: '79',
     solution: '',
-    grade: '',
+    grade: '3',
     image: null,
     imagePreview: null,
     imageData: null,
@@ -98,6 +98,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    // 문제 풀이 요청이 시작되면 바로 2단계로 이동해서 로딩 표시를 보여준다
+    setCurrentStep(2);
 
     try {
       const requestData = {
@@ -115,10 +117,10 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         image_data: formData.imageData,
         main_solution: formData.solution,
       };
-      
-      // 데이터 설정 후 2단계로 이동
+
+      // 새로운 문제에 대한 CoT가 생성되면, 이전 문제의 하위문항(guideline) 정보는 초기화
+      setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
-      setCurrentStep(2);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
       setError(err.message || '오류가 발생했습니다.');
