@@ -45,6 +45,11 @@ export const SubQs = () => {
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
   const [regeneratingStates, setRegeneratingStates] = useState<Record<string, boolean>>({});
+  // B 생성 모드: 단계별로 교사 확정 후 다음 단계로 진행
+  const [bMode, setBMode] = useState<boolean>(false);
+  const [bVisibleCount, setBVisibleCount] = useState<number>(0);
+  const [bCurrentIndex, setBCurrentIndex] = useState<number>(0); // 다음에 생성할 단계 인덱스
+  const [bSubjectArea, setBSubjectArea] = useState<string | null>(null); // B 모드에서 재사용할 subject_area
   const containerRef = useMathJax([(currentGuidelineData as any)?.guide_sub_questions]);
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
@@ -156,15 +161,20 @@ export const SubQs = () => {
           step_name: subQuestion.step_name,
           sub_skill_name: subQuestion.sub_skill_name,
         },
-        previous_sub_questions: previousSubQuestions.map((q) => ({
-          sub_question_id: q.sub_question_id,
-          step_id: q.step_id,
-          sub_skill_id: q.sub_skill_id,
-          step_name: q.step_name,
-          sub_skill_name: q.sub_skill_name,
-          guide_sub_question: q.guide_sub_question,
-          guide_sub_answer: q.guide_sub_answer,
-        })),
+        // previous_sub_questions: 재생성 문항이 존재하면 재생성 문항을 우선 사용
+        previous_sub_questions: previousSubQuestions.map((q) => {
+          const hasReGeneratedQ = !!(q.re_sub_question && q.re_sub_question.trim().length > 0);
+          const hasReGeneratedA = !!(q.re_sub_answer && q.re_sub_answer.trim().length > 0);
+          return {
+            sub_question_id: q.sub_question_id,
+            step_id: q.step_id,
+            sub_skill_id: q.sub_skill_id,
+            step_name: q.step_name,
+            sub_skill_name: q.sub_skill_name,
+            guide_sub_question: hasReGeneratedQ ? q.re_sub_question! : q.guide_sub_question,
+            guide_sub_answer: hasReGeneratedA ? q.re_sub_answer! : q.guide_sub_answer,
+          };
+        }),
         skip_regeneration: false,
       });
 
@@ -247,6 +257,9 @@ export const SubQs = () => {
         };
       }
 
+      // 로컬/기존 subQuestion에도 재생성 결과를 반영해서 이후 단계의 previous_sub_questions 계산에 활용
+      Object.assign(subQuestion, enrichedSubQuestion);
+
       // 해당 sub_question만 상태에 merge
       (setCurrentGuidelineData as any)((prev: any) => {
         if (!prev || !prev.guide_sub_questions) return prev;
@@ -282,6 +295,7 @@ export const SubQs = () => {
     }
   };
 
+  // 타입 A: 전체 8단계를 한 번에 자동 생성
   const generateGuideline = async () => {
     if (!currentCotData || !(currentCotData as any).steps) {
       setError("CoT 데이터가 없습니다.");
@@ -320,6 +334,21 @@ export const SubQs = () => {
         });
 
         // 1단계: 하위 문항(원본)만 생성
+        // previous_sub_questions: 이전 단계들 중 재생성 문항이 있다면 재생성 문항을 우선 사용
+        const previousForGeneration = guideSubQuestions.map((q) => {
+          const hasReGeneratedQ = !!(q.re_sub_question && q.re_sub_question.trim().length > 0);
+          const hasReGeneratedA = !!(q.re_sub_answer && q.re_sub_answer.trim().length > 0);
+          return {
+            sub_question_id: q.sub_question_id,
+            step_id: q.step_id,
+            sub_skill_id: q.sub_skill_id,
+            step_name: q.step_name,
+            sub_skill_name: q.sub_skill_name,
+            guide_sub_question: hasReGeneratedQ ? q.re_sub_question! : q.guide_sub_question,
+            guide_sub_answer: hasReGeneratedA ? q.re_sub_answer! : q.guide_sub_answer,
+          };
+        });
+
         const guidelineResponse = await api.generateSingleSubQuestion({
           main_problem: (currentCotData as any).problem,
           main_answer: (currentCotData as any).answer,
@@ -336,7 +365,7 @@ export const SubQs = () => {
           },
           subject_area: matchedSubjectArea,
           considerations: considerations,
-          previous_sub_questions: guideSubQuestions.slice(),
+          previous_sub_questions: previousForGeneration,
         });
 
         const subQuestion: SubQuestion = guidelineResponse.sub_question;
@@ -357,12 +386,13 @@ export const SubQs = () => {
 
         (setCurrentGuidelineData as any)(guidelineData);
 
-        // 검증 + 재생성은 백그라운드에서 병렬로 처리
+        // 2단계: 검증 + 재생성은 현재 단계가 끝난 뒤 **동기적으로** 처리
+        // (1-1 원본 → 1-1 재생성 → 1-2 원본 → 1-2 재생성 ...)
         setRegeneratingStates((prev) => ({
           ...prev,
           [subQuestion.sub_question_id]: true,
         }));
-        runBackgroundVerify({
+        await runBackgroundVerify({
           cotStep,
           subQuestion,
           matchedSubjectArea,
@@ -372,6 +402,129 @@ export const SubQs = () => {
       }
 
       setProgress({ current: 8, total: 8, currentStep: "완료" });
+    } catch (err: any) {
+      setError(err.message || "오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 타입 B: 확정 버튼을 누를 때마다 다음 단계 한 개씩 생성
+  const generateNextStepB = async () => {
+    if (!currentCotData || !(currentCotData as any).steps) {
+      setError("CoT 데이터가 없습니다.");
+      return;
+    }
+
+    const steps = (currentCotData as any).steps;
+    const stepOrder = ["1-1", "1-2", "2-1", "2-2", "3-1", "3-2", "4-1", "4-2"];
+
+    // 이미 모든 단계를 생성했다면 종료
+    if (bCurrentIndex >= steps.length) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // B 모드에서도 subject_area는 한 번만 계산해서 재사용
+      let matchedSubjectArea = bSubjectArea;
+      const considerations = (currentCotData as any).considerations || [];
+
+      if (!matchedSubjectArea) {
+        setProgress({ current: 0, total: 8, currentStep: "수학 영역 매칭 중..." });
+        const achievementData = await api.matchSubjectArea({
+          main_problem: (currentCotData as any).problem,
+          main_answer: (currentCotData as any).answer,
+          main_solution: (currentCotData as any).main_solution || null,
+          grade: (currentCotData as any).grade,
+        });
+        matchedSubjectArea = achievementData.subject_area || (currentCotData as any).subject_area;
+        setBSubjectArea(matchedSubjectArea);
+      }
+      const subjectArea: string = matchedSubjectArea ?? "";
+
+      const guideSubQuestions: SubQuestion[] =
+        ((currentGuidelineData as any)?.guide_sub_questions as SubQuestion[]) || [];
+
+      const index = bCurrentIndex;
+      const cotStep = steps[index];
+      const stepId = stepOrder[index];
+
+      setProgress({
+        current: index + 1,
+        total: 8,
+        currentStep: `${stepId} 단계 처리 중...`,
+      });
+
+      // 이전 단계들에서 재생성 문항이 있다면 재생성 문항을 우선 사용
+      const previousForGeneration = guideSubQuestions.map((q) => {
+        const hasReGeneratedQ = !!(q.re_sub_question && q.re_sub_question.trim().length > 0);
+        const hasReGeneratedA = !!(q.re_sub_answer && q.re_sub_answer.trim().length > 0);
+        return {
+          sub_question_id: q.sub_question_id,
+          step_id: q.step_id,
+          sub_skill_id: q.sub_skill_id,
+          step_name: q.step_name,
+          sub_skill_name: q.sub_skill_name,
+          guide_sub_question: hasReGeneratedQ ? q.re_sub_question! : q.guide_sub_question,
+          guide_sub_answer: hasReGeneratedA ? q.re_sub_answer! : q.guide_sub_answer,
+        };
+      });
+
+      // 1단계: 현재 단계의 원본문항 생성
+      const guidelineResponse = await api.generateSingleSubQuestion({
+        main_problem: (currentCotData as any).problem,
+        main_answer: (currentCotData as any).answer,
+        main_solution: (currentCotData as any).main_solution || null,
+        grade: (currentCotData as any).grade,
+        cot_step: {
+          step_id: cotStep.step_id,
+          sub_skill_id: cotStep.sub_skill_id,
+          step_name: cotStep.step_name,
+          step_name_en: cotStep.step_name_en || "",
+          sub_skill_name: cotStep.sub_skill_name,
+          step_content: cotStep.step_content,
+          prompt_used: cotStep.prompt_used || null,
+        },
+        subject_area: subjectArea,
+        considerations: considerations,
+        previous_sub_questions: previousForGeneration,
+      });
+
+      const subQuestion: SubQuestion = guidelineResponse.sub_question;
+      const previousSubQuestions = guideSubQuestions.slice();
+
+      // 누적 + 화면 반영
+      const newGuideSubQuestions = [...guideSubQuestions, subQuestion];
+      const guidelineData: any = {
+        main_problem: (currentCotData as any).problem,
+        main_answer: (currentCotData as any).answer,
+        main_solution: (currentCotData as any).main_solution || null,
+        grade: (currentCotData as any).grade,
+        subject_area: subjectArea,
+        guide_sub_questions: newGuideSubQuestions,
+      };
+
+      (setCurrentGuidelineData as any)(guidelineData);
+
+      // 2단계: 검증 + 재생성 (동기적으로) → 재생성 결과가 반영된 후에야 다음 단계로 진행
+      setRegeneratingStates((prev) => ({
+        ...prev,
+        [subQuestion.sub_question_id]: true,
+      }));
+      await runBackgroundVerify({
+        cotStep,
+        subQuestion,
+        matchedSubjectArea: subjectArea,
+        considerations,
+        previousSubQuestions,
+      });
+
+      // 다음에 생성할 인덱스 + 화면에 보이는 개수 갱신
+      setBCurrentIndex(index + 1);
+      setBVisibleCount(index + 1);
     } catch (err: any) {
       setError(err.message || "오류가 발생했습니다.");
     } finally {
@@ -563,18 +716,52 @@ export const SubQs = () => {
         {!loading && !error && (
           <div className={styles.emptyState}>
             <p>하위문항이 생성되지 않았습니다.</p>
-            <button className={styles.generateButton} onClick={generateGuideline}>
-              하위문항 생성하기
-            </button>
+            <div className={styles.emptyActions}>
+              <button
+                className={styles.generateButton}
+                onClick={() => {
+                  // A 생성: 한 번에 모든 단계를 자동 생성
+                  setBMode(false);
+                  setBVisibleCount(0);
+                  setBCurrentIndex(0);
+                  setBSubjectArea(null);
+                  generateGuideline();
+                }}
+              >
+                A 생성
+              </button>
+              <button
+                className={styles.generateButton}
+                onClick={() => {
+                  // B 생성: 단계별로 교사 확정 후 다음 단계 진행
+                  setBMode(true);
+                  setBVisibleCount(0);
+                  setBCurrentIndex(0);
+                  setBSubjectArea(null);
+                  generateNextStepB();
+                }}
+              >
+                B 생성
+              </button>
+            </div>
           </div>
         )}
       </div>
     );
   }
 
+  // B 생성 모드일 때는 교사가 확정한 만큼만 단계별로 노출
+  const allSubQuestions = ((currentGuidelineData as any).guide_sub_questions || []) as SubQuestion[];
+  const visibleCount = bMode ? Math.max(1, bVisibleCount || 1) : allSubQuestions.length;
+  const visibleSubQuestions = allSubQuestions.slice(0, visibleCount);
+  const hasAnySubQuestions = allSubQuestions.length > 0;
+
   return (
     <div className={styles.guidelineContainer} ref={containerRef}>
-      {loading && (
+      {/* 최초 생성 전에는 전체 로딩 오버레이를 보여주되,
+          한 개라도 원본문항이 생성된 이후에는 오버레이를 숨기고
+          각 문항별 재생성 상태(isRegenerating)만으로 로딩을 표현한다. */}
+      {loading && !hasAnySubQuestions && (
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
           <div>로딩 중...</div>
@@ -588,7 +775,7 @@ export const SubQs = () => {
       {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.guidelineSubQuestions}>
-        {(currentGuidelineData as any).guide_sub_questions.map((subQ: SubQuestion) => {
+        {visibleSubQuestions.map((subQ: SubQuestion, index: number) => {
           const hasRegenerated = !!(subQ.re_sub_question && subQ.re_sub_question.trim().length > 0);
           const isOriginalEditing = editingOriginalStates[subQ.sub_question_id];
           const isRegeneratedEditing = editingRegeneratedStates[subQ.sub_question_id];
@@ -596,8 +783,12 @@ export const SubQs = () => {
           const showRegenerated = showRegeneratedStates[subQ.sub_question_id] ?? true;
           const hideUnselected = !!hideUnselectedStates[subQ.sub_question_id];
           const selectedVersion = preferredVersion[subQ.sub_question_id]; // 'original' | 'regenerated' | undefined
+          // 기본 선택: 재생성 문항이 존재하면 재생성 문항을 기본 선택으로 간주
+          const effectiveSelectedVersion =
+            selectedVersion ?? (hasRegenerated ? ("regenerated" as "regenerated") : undefined);
           const isFeedbackOpen = feedbackStates[subQ.sub_question_id];
           const isVerificationOpen = verificationStates[subQ.sub_question_id];
+          const isLastVisibleInBMode = bMode && index === visibleCount - 1;
           const isRegenerating = !!regeneratingStates[subQ.sub_question_id];
 
           const originalQuestion = subQ.guide_sub_question || "";
@@ -609,11 +800,11 @@ export const SubQs = () => {
           const showOriginalCard =
             !hasRegenerated || // 재생성 자체가 없으면 항상 원본만
             !hideUnselected || // 아직 "선택되지 않은 문항 숨기기"를 안 누른 상태
-            selectedVersion !== "regenerated"; // 재생성이 선택된 경우에만 원본을 숨김
+            effectiveSelectedVersion !== "regenerated"; // 재생성이 선택된 경우에만 원본을 숨김
 
           const showRegeneratedCard =
             showRegenerated && // 재생성 보기 토글이 켜져 있고
-            (!hideUnselected || selectedVersion !== "original"); // 원본이 선택된 경우에만 재생성 숨김
+            (!hideUnselected || effectiveSelectedVersion !== "original"); // 원본이 선택된 경우에만 재생성 숨김
 
           return (
             <div key={subQ.sub_question_id} className={styles.subQuestionCard}>
@@ -628,7 +819,7 @@ export const SubQs = () => {
                 {hasRegenerated ? (
                   <>
                     {showOriginalCard && (
-                      <div className={`${styles.originalQuestionBox} ${selectedVersion === "original" ? styles.selected : ""}`}>
+                      <div className={`${styles.originalQuestionBox} ${effectiveSelectedVersion === "original" ? styles.selected : ""}`}>
                         <div className={styles.questionLabelRow}>
                           <div className={styles.questionLabel}>원본 문항</div>
                           <div className={styles.questionActions}>
@@ -639,7 +830,7 @@ export const SubQs = () => {
                             )}
                             {showRegenerated && !hideUnselected && (
                               <button
-                                className={`${styles.selectBtn} ${selectedVersion === "original" ? styles.selectBtnActive : ""}`}
+                                className={`${styles.selectBtn} ${effectiveSelectedVersion === "original" ? styles.selectBtnActive : ""}`}
                                 onClick={() => {
                                   setPreferredVersion((prev) => ({
                                     ...prev,
@@ -657,7 +848,7 @@ export const SubQs = () => {
                                   }));
                                 }}
                               >
-                                {selectedVersion === "original" ? "선택됨" : "이 문항 선택"}
+                                {effectiveSelectedVersion === "original" ? "선택됨" : "이 문항 선택"}
                               </button>
                             )}
                           </div>
@@ -695,7 +886,7 @@ export const SubQs = () => {
                       </div>
                     )}
                     {showRegeneratedCard && (
-                      <div className={`${styles.regeneratedQuestionBox} ${selectedVersion === "regenerated" ? styles.selected : ""}`}>
+                      <div className={`${styles.regeneratedQuestionBox} ${effectiveSelectedVersion === "regenerated" ? styles.selected : ""}`}>
                         <div className={styles.questionLabelRow}>
                           <div className={styles.questionLabel}>재생성 문항</div>
                           <div className={styles.questionActions}>
@@ -706,7 +897,7 @@ export const SubQs = () => {
                             )}
                             {showRegenerated && !hideUnselected && (
                               <button
-                                className={`${styles.selectBtn} ${selectedVersion === "regenerated" ? styles.selectBtnActive : ""}`}
+                                className={`${styles.selectBtn} ${effectiveSelectedVersion === "regenerated" ? styles.selectBtnActive : ""}`}
                                 onClick={() => {
                                   setPreferredVersion((prev) => ({
                                     ...prev,
@@ -724,7 +915,7 @@ export const SubQs = () => {
                                   }));
                                 }}
                               >
-                                {selectedVersion === "regenerated" ? "선택됨" : "이 문항 선택"}
+                                {effectiveSelectedVersion === "regenerated" ? "선택됨" : "이 문항 선택"}
                               </button>
                             )}
                           </div>
@@ -809,9 +1000,7 @@ export const SubQs = () => {
                         <div className={styles.questionLabel}>재생성 문항</div>
                       </div>
                       <div className={styles.displayMode}>
-                        <div className={styles.questionContent}>
-                          {isRegenerating ? "준비중" : "재생성한 문항이 없습니다"}
-                        </div>
+                        <div className={styles.questionContent}>{isRegenerating ? "준비중" : "재생성한 문항이 없습니다"}</div>
                       </div>
                     </div>
                   </>
@@ -846,7 +1035,7 @@ export const SubQs = () => {
                     className={styles.regenerateBtn}
                     onClick={() => {
                       const currentlyShown = !!showRegenerated;
-                      const selected = selectedVersion;
+                      const selected = effectiveSelectedVersion;
                       const hideUnselectedNow = !!hideUnselected;
 
                       // 아직 선택된 문항이 없으면: 단순히 재생성 문항 보기/접기 토글
@@ -891,7 +1080,6 @@ export const SubQs = () => {
                     <span>
                       {(() => {
                         const currentlyShown = !!showRegenerated;
-                        const selected = selectedVersion;
                         const hideUnselectedNow = !!hideUnselected;
 
                         // 재생성 문항이 표시되지 않은 상태에서 → "문항 재생성" (비교 모드로 진입)
@@ -912,6 +1100,17 @@ export const SubQs = () => {
                         return "문항 재생성";
                       })()}
                     </span>
+                  </button>
+                )}
+                {bMode && isLastVisibleInBMode && (
+                  <button
+                    className={styles.generateButton}
+                    onClick={() => {
+                      // 현재 단계를 확정하고, 다음 단계 한 개를 생성
+                      generateNextStepB();
+                    }}
+                  >
+                    확정
                   </button>
                 )}
               </div>

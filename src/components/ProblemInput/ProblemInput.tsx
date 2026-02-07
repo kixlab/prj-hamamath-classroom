@@ -19,14 +19,14 @@ interface FormData {
 }
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { setCurrentCotData, setCurrentStep, setLoading, setError } = useApp();
+  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError } = useApp();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
-    problem: '',
-    answer: '',
+    problem: '어떤 수를 5로 나누었더니 몫이 15이고, 나머지가 4였습니다. 어떤 수는 얼마일까요?',
+    answer: '79',
     solution: '',
-    grade: '',
+    grade: '3',
     image: null,
     imagePreview: null,
     imageData: null,
@@ -117,7 +117,9 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         image_data: formData.imageData,
         main_solution: formData.solution,
       };
-      
+
+      // 새로운 문제에 대한 CoT가 생성되면, 이전 문제의 하위문항(guideline) 정보는 초기화
+      setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
