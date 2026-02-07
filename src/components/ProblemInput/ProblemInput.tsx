@@ -24,9 +24,11 @@ interface FormData {
 }
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError } = useApp();
+  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId } = useApp();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
+  /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
+  const [customProblemId, setCustomProblemId] = useState<string>("");
   const [formData, setFormData] = useState<FormData>({
     problem: "",
     answer: "",
@@ -49,7 +51,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(blob);
-          })
+          }),
       );
 
   const handleProblemSelect = async (filename: string) => {
@@ -186,6 +188,13 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         })),
       });
 
+      const problemId =
+        selectedProblem === "__example1_json__"
+          ? "example1.json"
+          : selectedProblem === "__example2_json__"
+            ? "example2.json"
+            : selectedProblem || customProblemId.trim() || `manual_${Date.now()}`;
+      setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
       onSubmit?.(cotDataWithExtras);
@@ -201,24 +210,37 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.formGroup}>
           <label htmlFor="problemSelect">문제 ID</label>
-          <select
-            id="problemSelect"
-            value={selectedProblem}
-            onChange={(e) => {
-              setSelectedProblem(e.target.value);
-              handleProblemSelect(e.target.value);
-            }}
-            className={styles.select}
-          >
-            <option value="">직접 입력하기</option>
-            {problemList.map((file) => (
-              <option key={file} value={file}>
-                {file.replace(".json", "")}
-              </option>
-            ))}
-            <option value="__example1_json__">example1.json</option>
-            <option value="__example2_json__">example2.json</option>
-          </select>
+          <div className={styles.problemIdRow}>
+            <select
+              id="problemSelect"
+              value={selectedProblem}
+              onChange={(e) => {
+                setSelectedProblem(e.target.value);
+                handleProblemSelect(e.target.value);
+              }}
+              className={styles.select}
+            >
+              <option value="">직접 입력하기</option>
+              {problemList.map((file) => (
+                <option key={file} value={file}>
+                  {file.replace(".json", "")}
+                </option>
+              ))}
+              <option value="__example1_json__">example1.json</option>
+              <option value="__example2_json__">example2.json</option>
+            </select>
+            {selectedProblem === "" && (
+              <input
+                type="text"
+                id="customProblemId"
+                value={customProblemId}
+                onChange={(e) => setCustomProblemId(e.target.value)}
+                placeholder="문제 ID 입력 (예: 곱셈과 나눗셈 3번 )"
+                className={styles.input}
+                aria-label="직접 입력 문제 ID"
+              />
+            )}
+          </div>
         </div>
 
         <div className={styles.formGroup}>
