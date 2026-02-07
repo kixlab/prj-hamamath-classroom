@@ -502,6 +502,26 @@
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.downloadBtn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.downloadBtn:hover {
+  background: #f3f4f6;
+}
+
+.downloadBtn:active {
+  transform: translateY(1px);
 }
 
 .finalizeBtn {

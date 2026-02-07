@@ -70,6 +70,26 @@ interface VerifyAndRegenerateData {
   skip_regeneration?: boolean;
 }
 
+interface GenerateRubricPipelineData {
+  main_problem: string;
+  main_answer: string;
+  grade: string;
+  subject_area: string;
+  sub_questions: any[];
+  variant: 'with_error_types';
+}
+
+interface RegenerateRubricSingleData {
+  main_problem: string;
+  main_answer: string;
+  grade: string;
+  subject_area?: string;
+  sub_question: any;
+  current_rubric: Record<string, { score: number; description: string; criteria: string[] }>;
+  feedback?: string | null;
+  variant?: string;
+}
+
 interface ExportWordData {
   grade: string;
   subject_area?: string;
@@ -204,11 +224,36 @@ export const api = {
     return response.json();
   },
 
-  // 더미 데이터 조회
-  async getDummyData() {
-    const response = await fetch(getApiUrl('/api/v1/history/dummy'));
+  // 루브릭 파이프라인 생성 (simulation-based)
+  async generateRubricPipeline(data: GenerateRubricPipelineData) {
+    const response = await fetch(getApiUrl('/api/v1/rubric/pipeline'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
     if (!response.ok) {
-      throw new Error('더미 데이터를 가져올 수 없습니다.');
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = Array.isArray((errorData as any).detail)
+        ? (errorData as any).detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ')
+        : (errorData as any).detail || '루브릭 생성 중 오류가 발생했습니다.';
+      throw new Error(errorMessage);
+    }
+    return response.json();
+  },
+
+  // 단일 루브릭 재생성 (with optional feedback)
+  async regenerateRubricSingle(data: RegenerateRubricSingleData) {
+    const response = await fetch(getApiUrl('/api/v1/rubric/regenerate-single'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = Array.isArray((errorData as any).detail)
+        ? (errorData as any).detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ')
+        : (errorData as any).detail || '루브릭 재생성 중 오류가 발생했습니다.';
+      throw new Error(errorMessage);
     }
     return response.json();
   },

@@ -38,6 +38,10 @@ export const useMathJax = (dependencies: unknown[] = []): RefObject<HTMLDivEleme
       const el = containerRef.current;
       if (!el || !window.MathJax?.typesetPromise) return;
       try {
+        // Clear previous typeset so MathJax re-processes updated content
+        if (window.MathJax.typesetClear) {
+          window.MathJax.typesetClear([el]);
+        }
         await window.MathJax.typesetPromise([el]);
         // 동적 삽입 직후 한 번 놓치는 경우 대비 한 번 더 시도
         await new Promise((r) => setTimeout(r, 50));

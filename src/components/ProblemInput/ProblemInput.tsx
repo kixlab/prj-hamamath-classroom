@@ -255,7 +255,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 id="customProblemId"
                 value={customProblemId}
                 onChange={(e) => setCustomProblemId(e.target.value)}
-                placeholder="문제 ID 입력 (예: 곱셈과 나눗셈 3번 )"
+                placeholder="문제 ID 입력 (예: myproblem.json)"
                 className={styles.input}
                 aria-label="직접 입력 문제 ID"
               />
