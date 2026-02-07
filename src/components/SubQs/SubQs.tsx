@@ -1008,6 +1008,7 @@ export const SubQs = () => {
                 {isFeedbackOpen && (
                   <button
                     className={styles.regenerateBtn}
+                    disabled={isRegenerating}
                     onClick={() => {
                       const feedbackText = (document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`) as HTMLTextAreaElement)?.value || "";
                       if (feedbackText.trim()) {
@@ -1015,8 +1016,17 @@ export const SubQs = () => {
                       }
                     }}
                   >
-                    <span>🔄</span>
-                    <span>재생성</span>
+                    {isRegenerating ? (
+                      <>
+                        <span className={styles.spinnerInline} aria-hidden />
+                        <span>처리 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>🔄</span>
+                        <span>재생성</span>
+                      </>
+                    )}
                   </button>
                 )}
                 {!isFeedbackOpen && hasRegenerated && !isRegenerating && (
@@ -1123,13 +1133,23 @@ export const SubQs = () => {
 
               {isFeedbackOpen && (
                 <div className={styles.feedbackInput}>
-                  <textarea className={`${styles.feedbackTextarea} feedback-textarea-${subQ.sub_question_id}`} rows={3} placeholder="수정 요청사항을 입력하세요." />
+                  <textarea
+                    className={`${styles.feedbackTextarea} feedback-textarea-${subQ.sub_question_id}`}
+                    rows={3}
+                    placeholder="수정 요청사항을 입력하세요."
+                    disabled={isRegenerating}
+                  />
                   <div className={styles.feedbackActions}>
-                    <button className={styles.cancelBtn} onClick={() => toggleFeedback(subQ.sub_question_id)}>
+                    <button
+                      className={styles.cancelBtn}
+                      onClick={() => toggleFeedback(subQ.sub_question_id)}
+                      disabled={isRegenerating}
+                    >
                       취소
                     </button>
                     <button
                       className={styles.submitBtn}
+                      disabled={isRegenerating}
                       onClick={() => {
                         const feedbackText = (document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`) as HTMLTextAreaElement)?.value || "";
                         if (feedbackText.trim()) {
@@ -1137,7 +1157,14 @@ export const SubQs = () => {
                         }
                       }}
                     >
-                      입력
+                      {isRegenerating ? (
+                        <>
+                          <span className={styles.spinnerInline} aria-hidden />
+                          처리 중...
+                        </>
+                      ) : (
+                        "입력"
+                      )}
                     </button>
                   </div>
                 </div>

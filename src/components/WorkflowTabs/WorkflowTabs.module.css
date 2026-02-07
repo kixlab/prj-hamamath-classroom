@@ -4,6 +4,9 @@
   border-bottom: 2px solid var(--color-border);
   padding: 0;
   gap: 0;
+  position: sticky;
+  top: var(--header-height, 48px);
+  z-index: 100;
 }
 
 .workflowTab {
