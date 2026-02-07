@@ -221,15 +221,6 @@ export const api = {
     return response.json();
   },
 
-  // 더미 데이터 조회
-  async getDummyData() {
-    const response = await fetch(getApiUrl('/api/v1/history/dummy'));
-    if (!response.ok) {
-      throw new Error('더미 데이터를 가져올 수 없습니다.');
-    }
-    return response.json();
-  },
-
   // 루브릭 파이프라인 생성 (simulation-based)
   async generateRubricPipeline(data: GenerateRubricPipelineData) {
     const response = await fetch(getApiUrl('/api/v1/rubric/pipeline'), {
