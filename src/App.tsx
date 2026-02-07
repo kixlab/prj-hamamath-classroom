@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
+import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
@@ -118,6 +120,21 @@ const AppContent = () => {
 };
 
 function App() {
+  const [userId, setUserId] = useState<string | null>(() =>
+    typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null
+  );
+
+  if (!userId) {
+    return (
+      <UserIdPage
+        onSuccess={(id) => {
+          localStorage.setItem(USER_ID_STORAGE_KEY, id);
+          setUserId(id);
+        }}
+      />
+    );
+  }
+
   return (
     <AppProvider>
       <AppContent />
