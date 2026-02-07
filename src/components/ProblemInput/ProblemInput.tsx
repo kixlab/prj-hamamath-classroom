@@ -115,7 +115,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         problem: result.problem,
         answer: result.answer,
         grade: result.grade,
-        main_solution: result.main_solution ?? formData.solution || null,
+        main_solution: result.main_solution ?? (formData.solution || null),
         stepsCount: result.steps?.length ?? 0,
         steps: result.steps?.map((s: any) => ({
           step_number: s.step_number,
