@@ -8,11 +8,16 @@ export const escapeHtml = (str: string | null | undefined): string => {
     .replace(/'/g, '&#39;');
 };
 
+/** LaTeX 구간 보존: $ 또는 \( \) 등이 있으면 백슬래시 제거하지 않음 */
+const looksLikeLatex = (s: string): boolean => /\$|\\\(|\\\[|\\times|\\frac|\\sqrt/.test(s);
+
 export const formatAnswer = (answer: string | null | undefined): string => {
   if (!answer) return '';
   let formatted = answer.trim();
   if (/^\\+$/.test(formatted)) return '';
-  formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+  if (!looksLikeLatex(formatted)) {
+    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+  }
   if (!formatted) return '';
   formatted = formatted.replace(/\n/g, '<br>');
   return formatted.replace(/(=\s*\d+)\s+(?=\d)/g, '$1<br>');
@@ -22,7 +27,9 @@ export const formatQuestion = (question: string | null | undefined): string => {
   if (!question) return '';
   let formatted = question.trim();
   if (/^\\+$/.test(formatted)) return '';
-  formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+  if (!looksLikeLatex(formatted)) {
+    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+  }
   return formatted || '';
 };
 
