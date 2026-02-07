@@ -1,4 +1,7 @@
+import { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
+import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
+import { initEventLogger, stopEventLogger } from './services/eventLogger';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
@@ -9,7 +12,11 @@ import { useMathJax } from './hooks/useMathJax';
 import { formatQuestion, formatAnswer } from './utils/formatting';
 import styles from './App.module.css';
 
-const AppContent = () => {
+interface AppContentProps {
+  onShowUserIdPage?: () => void;
+}
+
+const AppContent = ({ onShowUserIdPage }: AppContentProps) => {
   const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error } = useApp();
   const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
 
@@ -30,7 +37,7 @@ const AppContent = () => {
 
   return (
     <div className={styles.app}>
-      <Header onNewProblem={handleNewProblem} />
+      <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} />
       <Sidebar />
       <div className={styles.container}>
         <WorkflowTabs />
@@ -118,11 +125,48 @@ const AppContent = () => {
 };
 
 function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+  const [userId, setUserId] = useState<string | null>(() =>
+    typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null
   );
+
+  if (!userId) {
+    return (
+      <UserIdPage
+        onSuccess={(id) => {
+          localStorage.setItem(USER_ID_STORAGE_KEY, id);
+          setUserId(id);
+        }}
+      />
+    );
+  }
+
+  const showUserIdPage = () => {
+    localStorage.removeItem(USER_ID_STORAGE_KEY);
+    setUserId(null);
+  };
+
+  return (
+    <AppWithClickLogger userId={userId}>
+      <AppProvider>
+        <AppContent onShowUserIdPage={showUserIdPage} />
+      </AppProvider>
+    </AppWithClickLogger>
+  );
+}
+
+/** 유저 스터디용: 모든 클릭을 Firestore에 기록 */
+function AppWithClickLogger({
+  userId,
+  children,
+}: {
+  userId: string;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    initEventLogger(userId);
+    return () => stopEventLogger();
+  }, [userId]);
+  return <>{children}</>;
 }
 
 export default App;
