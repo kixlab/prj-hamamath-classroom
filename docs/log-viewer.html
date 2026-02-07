@@ -218,6 +218,68 @@
         background: #4d1e5f;
         color: #e0a0ff;
       }
+      .phase-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--muted);
+        background: var(--border);
+      }
+      .phase-badge.problem_input { background: #1e3a5f; color: #7eb8da; }
+      .phase-badge.cot { background: #1e4d3a; color: var(--success); }
+      .phase-badge.subq_generate { background: #3a1e5f; color: #c9a0ff; }
+      .phase-badge.subq_review { background: #1e5f4d; color: #7effd4; }
+      .step-id {
+        font-size: 0.8rem;
+        color: var(--warning);
+      }
+      .workflow-block {
+        margin-bottom: 32px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--card);
+      }
+      .workflow-header {
+        padding: 14px 20px;
+        background: linear-gradient(90deg, var(--border), #0a2540);
+        font-weight: 600;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .workflow-header code {
+        font-size: 0.85rem;
+        color: var(--warning);
+        word-break: break-all;
+      }
+      .phase-section {
+        border-top: 1px solid var(--border);
+      }
+      .phase-section:first-of-type { border-top: none; }
+      .phase-header {
+        padding: 10px 16px;
+        background: rgba(15, 52, 96, 0.5);
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .step-group {
+        margin: 0 8px 8px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        background: rgba(0,0,0,0.15);
+      }
+      .step-header {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        color: var(--warning);
+        border-bottom: 1px solid var(--border);
+      }
       .event-time {
         font-size: 0.85rem;
         color: var(--muted);
@@ -263,6 +325,11 @@
     <div class="controls">
       <label for="userId">유저 ID (컬렉션 이름)</label>
       <input type="text" id="userId" placeholder="예: test, user01" />
+      <label for="viewMode">보기</label>
+      <select id="viewMode">
+        <option value="workflow">워크플로우 계층 (기본)</option>
+        <option value="flat">평면 목록 (세션별)</option>
+      </select>
       <label for="eventFilter">이벤트 타입</label>
       <select id="eventFilter">
         <option value="">전체</option>
@@ -316,7 +383,7 @@
 
       function formatPayload(obj) {
         if (obj == null) return "";
-        const omit = ["userId", "sessionId", "eventIndex", "timestamp", "eventType", "pathname"];
+        const omit = ["userId", "sessionId", "eventIndex", "timestamp", "eventType", "pathname", "workflowId", "phase", "stepId"];
         const out = {};
         for (const [k, v] of Object.entries(obj)) {
           if (omit.includes(k)) continue;
@@ -335,17 +402,25 @@
         return (et || "").replace(/_/g, "-");
       }
 
-      function renderEvent(doc, filter) {
+      function renderEvent(doc, filter, options) {
+        options = options || {};
         const d = doc.data();
         const eventType = d.eventType || "unknown";
         if (filter && eventType !== filter) return "";
         const payload = formatPayload(d);
         const hasPayload = payload.length > 2;
         const eventId = "ev-" + doc.id;
+        const phase = d.phase;
+        const stepId = d.stepId;
+        const showPhase = options.showPhase !== false && phase;
+        const phaseBadge = showPhase ? `<span class="phase-badge ${phase}">${phase}</span>` : "";
+        const stepBadge = stepId ? `<span class="step-id">step ${escapeHtml(stepId)}</span>` : "";
         return `
-        <div class="event" data-doc-id="${doc.id}">
+        <div class="event" data-doc-id="${doc.id}" data-phase="${phase || ""}" data-step-id="${stepId || ""}">
           <div class="event-head" onclick="this.nextElementSibling.classList.toggle('hidden')">
             <span class="event-index">#${d.eventIndex ?? "-"}</span>
+            ${phaseBadge}
+            ${stepBadge}
             <span class="event-type ${getEventTypeClass(eventType)}">${eventType}</span>
             <span class="event-time">${formatTs(d.timestamp)}</span>
             ${hasPayload ? '<span style="color:var(--muted);font-size:0.8rem">▼ 펼치기</span>' : ""}
@@ -382,41 +457,139 @@
           const snap = await col.get();
           let docs = snap.docs;
           docs = docs.slice().sort((a, b) => (a.data().eventIndex ?? 0) - (b.data().eventIndex ?? 0));
-
-          const bySession = {};
-          docs.forEach((doc) => {
-            const d = doc.data();
-            const sid = d.sessionId || "no-session";
-            if (!bySession[sid]) bySession[sid] = [];
-            bySession[sid].push({ doc, d });
-          });
-
-          const sessionOrder = Object.keys(bySession).sort((a, b) => {
-            const a0 = bySession[a][0]?.d?.eventIndex ?? 0;
-            const b0 = bySession[b][0]?.d?.eventIndex ?? 0;
-            return a0 - b0;
-          });
+          const viewMode = document.getElementById("viewMode").value;
 
           let html = "";
-          let totalEvents = 0;
+          let totalEvents = docs.length;
           let filteredCount = 0;
-          sessionOrder.forEach((sid) => {
-            const events = bySession[sid];
-            totalEvents += events.length;
-            let sessionHtml = "";
-            events.forEach(({ doc }) => {
-              const row = renderEvent(doc, filter || null);
-              if (row) filteredCount++;
-              sessionHtml += row;
+
+          if (viewMode === "workflow") {
+            const byWorkflow = {};
+            docs.forEach((doc) => {
+              const d = doc.data();
+              const wid = d.workflowId || "\0no-workflow";
+              if (!byWorkflow[wid]) byWorkflow[wid] = [];
+              byWorkflow[wid].push({ doc, d });
             });
-            if (!sessionHtml && filter) return;
-            const shortId = sid.length > 24 ? sid.slice(0, 20) + "…" : sid;
-            html += `
-            <div class="session-block">
-              <div class="session-header">세션 <code>${escapeHtml(shortId)}</code> <span style="color:var(--muted);font-weight:normal">(${events.length}건)</span></div>
-              <div class="event-list">${sessionHtml || '<p style="color:var(--muted);padding:12px">해당 타입 없음</p>'}</div>
-            </div>`;
-          });
+
+            const phaseOrder = ["problem_input", "cot", "subq_generate", "subq_review"];
+            const phaseLabels = {
+              problem_input: "문제 입력 (problem_input)",
+              cot: "CoT (8단계 풀이)",
+              subq_generate: "하위 문항 생성 (subq_generate)",
+              subq_review: "하위 문항 검토 (subq_review)",
+            };
+
+            const workflowIds = Object.keys(byWorkflow).filter((k) => k !== "\0no-workflow").sort((a, b) => {
+              const a0 = byWorkflow[a][0]?.d?.eventIndex ?? 0;
+              const b0 = byWorkflow[b][0]?.d?.eventIndex ?? 0;
+              return a0 - b0;
+            });
+
+            workflowIds.forEach((wid) => {
+              const events = byWorkflow[wid];
+              const shortWid = wid.length > 28 ? wid.slice(0, 24) + "…" : wid;
+              let workflowBody = "";
+
+              phaseOrder.forEach((phase) => {
+                const phaseEvents = events.filter(({ d }) => d.phase === phase);
+                if (phaseEvents.length === 0) return;
+                const withStep = phaseEvents.some(({ d }) => d.stepId);
+                let phaseHtml = "";
+                if (withStep) {
+                  const byStep = {};
+                  phaseEvents.forEach(({ doc, d }) => {
+                    const step = d.stepId || "";
+                    if (!byStep[step]) byStep[step] = [];
+                    byStep[step].push(doc);
+                  });
+                  const stepOrder = Object.keys(byStep).sort();
+                  stepOrder.forEach((stepId) => {
+                    const stepDocs = byStep[stepId];
+                    let stepHtml = "";
+                    stepDocs.forEach((doc) => {
+                      const row = renderEvent(doc, filter || null);
+                      if (row) { filteredCount++; stepHtml += row; }
+                    });
+                    if (!stepHtml && filter) return;
+                    const stepLabel = stepId || "(stepId 없음)";
+                    phaseHtml += `<div class="step-group"><div class="step-header">${escapeHtml(stepLabel)}</div><div class="event-list">${stepHtml || ""}</div></div>`;
+                  });
+                } else {
+                  phaseEvents.forEach(({ doc }) => {
+                    const row = renderEvent(doc, filter || null);
+                    if (row) { filteredCount++; phaseHtml += row; }
+                  });
+                }
+                if (!phaseHtml && filter) return;
+                workflowBody += `
+                <div class="phase-section">
+                  <div class="phase-header">${phaseLabels[phase] || phase}</div>
+                  <div class="event-list">${phaseHtml || '<p style="color:var(--muted);padding:8px 12px;font-size:0.85rem">해당 타입 없음</p>'}</div>
+                </div>`;
+              });
+
+              const otherEvents = events.filter(({ d }) => !phaseOrder.includes(d.phase));
+              if (otherEvents.length > 0) {
+                let otherHtml = "";
+                otherEvents.forEach(({ doc }) => {
+                  const row = renderEvent(doc, filter || null);
+                  if (row) { filteredCount++; otherHtml += row; }
+                });
+                if (otherHtml || !filter)
+                  workflowBody += `<div class="phase-section"><div class="phase-header">기타 (클릭 등)</div><div class="event-list">${otherHtml || ""}</div></div>`;
+              }
+
+              html += `
+              <div class="workflow-block">
+                <div class="workflow-header">워크플로우 <code>${escapeHtml(shortWid)}</code> <span style="color:var(--muted);font-weight:normal">(${events.length}건)</span></div>
+                ${workflowBody || '<div class="event-list"><p style="color:var(--muted);padding:12px">해당 타입 없음</p></div>'}
+              </div>`;
+            });
+
+            if (byWorkflow["\0no-workflow"]) {
+              const noWf = byWorkflow["\0no-workflow"];
+              let noWfHtml = "";
+              noWf.forEach(({ doc }) => {
+                const row = renderEvent(doc, filter || null);
+                if (row) { filteredCount++; noWfHtml += row; }
+              });
+              html += `
+              <div class="session-block">
+                <div class="session-header">워크플로우 없음 (세션별) <span style="color:var(--muted);font-weight:normal">(${noWf.length}건)</span></div>
+                <div class="event-list">${noWfHtml || '<p style="color:var(--muted);padding:12px">해당 타입 없음</p>'}</div>
+              </div>`;
+            }
+          } else {
+            const bySession = {};
+            docs.forEach((doc) => {
+              const d = doc.data();
+              const sid = d.sessionId || "no-session";
+              if (!bySession[sid]) bySession[sid] = [];
+              bySession[sid].push({ doc, d });
+            });
+            const sessionOrder = Object.keys(bySession).sort((a, b) => {
+              const a0 = bySession[a][0]?.d?.eventIndex ?? 0;
+              const b0 = bySession[b][0]?.d?.eventIndex ?? 0;
+              return a0 - b0;
+            });
+            sessionOrder.forEach((sid) => {
+              const events = bySession[sid];
+              let sessionHtml = "";
+              events.forEach(({ doc }) => {
+                const row = renderEvent(doc, filter || null);
+                if (row) filteredCount++;
+                sessionHtml += row;
+              });
+              if (!sessionHtml && filter) return;
+              const shortId = sid.length > 24 ? sid.slice(0, 20) + "…" : sid;
+              html += `
+              <div class="session-block">
+                <div class="session-header">세션 <code>${escapeHtml(shortId)}</code> <span style="color:var(--muted);font-weight:normal">(${events.length}건)</span></div>
+                <div class="event-list">${sessionHtml || '<p style="color:var(--muted);padding:12px">해당 타입 없음</p>'}</div>
+              </div>`;
+            });
+          }
 
           document.getElementById("summary").textContent = `총 ${totalEvents}건 (유저: ${userId})${filter ? ` · 타입 "${filter}" ${filteredCount}건` : ""}`;
           document.getElementById("summary").classList.remove("hidden");

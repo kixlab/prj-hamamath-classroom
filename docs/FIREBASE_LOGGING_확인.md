@@ -24,7 +24,17 @@ service cloud.firestore {
 }
 ```
 
-3. **저장 구조 및 이벤트 종류**
+3. **워크플로우 계층 (계층별 쿼리/뷰용)**
+   - **상위**: 문제 입력 1회 = 하나의 워크플로우. `workflowId`로 묶음 (`wf_타임스탬프_랜덤`, problem_input 로그 시 생성).
+   - **중간**: `phase`로 구간 구분
+     - `problem_input`: 문제 입력 (워크플로우 루트)
+     - `cot`: CoT 단계 (cot_output, cot_edit)
+     - `subq_generate`: 하위 문항 생성 (confirm_next_clicked, sub_question_generated, rest_auto_generate_clicked)
+     - `subq_review`: 하위 문항 검토 (sub_question_verified, edit_original, edit_regenerated, verification_viewed, feedback_submitted, regenerated_output, version_selected)
+   - **하위**: 같은 phase 내에서 `stepId`로 단계별 구분 (예: subq_generate → "1-1", "1-2", … / subq_review → subqId "1-1", "2-1", …)
+   - 클릭 이벤트도 해당 시점의 `workflowId`가 있으면 같은 문서에 포함되어 같은 워크플로우 아래로 묶어서 볼 수 있음.
+
+4. **저장 구조 및 이벤트 종류**
    - **컬렉션 ID**: 로그인 시 입력한 아이디
    - **문서**: 이벤트 한 건 = Auto-ID 문서 하나 (클릭 + 아래 사용자/LLM 이벤트 모두 동일 컬렉션에 저장)
    - **이벤트 타입 (`eventType`) 요약**:
