@@ -31,6 +31,9 @@ export const useMathJax = (dependencies: unknown[] = []): RefObject<HTMLDivEleme
 
       await waitForMathJax();
 
+      // DOM이 완전히 반영된 뒤 수식 렌더링 (React 커밋 이후 실행 보장)
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
       if (window.MathJax && window.MathJax.typesetPromise && containerRef.current) {
         try {
           await window.MathJax.typesetPromise([containerRef.current]);

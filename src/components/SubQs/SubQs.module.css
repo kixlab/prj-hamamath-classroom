@@ -326,11 +326,32 @@
 
 .actionButtons {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
+}
+
+/* 1줄: 현재 문항 관련 (검증, 피드백, 문항 비교/숨기기) */
+.actionRowItem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 2줄: 다음 단계 진행 (확정 후 다음 / 나머지 자동 생성) */
+.actionRowWorkflow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.actionRowWorkflow .generateButton {
+  flex: 1;
+  min-width: 180px;
 }
 
 .actionBtn {
@@ -514,6 +535,19 @@
 
   .actionButtons {
     flex-direction: column;
+  }
+
+  .actionRowItem {
+    width: 100%;
+  }
+
+  .actionRowWorkflow {
+    width: 100%;
+  }
+
+  .actionRowWorkflow .generateButton {
+    min-width: 0;
+    flex: 1 1 100%;
   }
 
   .actionBtn,

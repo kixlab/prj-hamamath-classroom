@@ -866,7 +866,8 @@ export const SubQs = () => {
                             <div className={styles.questionContent}>{formatQuestion(originalQuestion)}</div>
                             {originalAnswer && (
                               <div className={styles.answerContent}>
-                                <strong>정답:</strong> {formatAnswer(originalAnswer)}
+                                <strong>정답:</strong>{" "}
+                                <span dangerouslySetInnerHTML={{ __html: formatAnswer(originalAnswer) }} />
                               </div>
                             )}
                           </div>
@@ -934,7 +935,8 @@ export const SubQs = () => {
                             <div className={styles.questionContent}>{formatQuestion(regeneratedQuestion)}</div>
                             {regeneratedAnswer && (
                               <div className={styles.answerContent}>
-                                <strong>정답:</strong> {formatAnswer(regeneratedAnswer)}
+                                <strong>정답:</strong>{" "}
+                                <span dangerouslySetInnerHTML={{ __html: formatAnswer(regeneratedAnswer) }} />
                               </div>
                             )}
                           </div>
@@ -978,7 +980,8 @@ export const SubQs = () => {
                           <div className={styles.questionContent}>{formatQuestion(originalQuestion)}</div>
                           {originalAnswer && (
                             <div className={styles.answerContent}>
-                              <strong>정답:</strong> {formatAnswer(originalAnswer)}
+                              <strong>정답:</strong>{" "}
+                              <span dangerouslySetInnerHTML={{ __html: formatAnswer(originalAnswer) }} />
                             </div>
                           )}
                         </div>
@@ -997,138 +1000,113 @@ export const SubQs = () => {
               </div>
 
               <div className={styles.actionButtons}>
-                <button className={styles.actionBtn} onClick={() => toggleVerification(subQ.sub_question_id)}>
-                  <span>🔍</span>
-                  <span>검증 결과 보기</span>
-                </button>
-                <button className={styles.actionBtnFeedback} onClick={() => toggleFeedback(subQ.sub_question_id)}>
-                  <span>💬</span>
-                  <span>피드백</span>
-                </button>
-                {isFeedbackOpen && (
-                  <button
-                    className={styles.regenerateBtn}
-                    disabled={isRegenerating}
-                    onClick={() => {
-                      const feedbackText = (document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`) as HTMLTextAreaElement)?.value || "";
-                      if (feedbackText.trim()) {
-                        handleFeedbackRegenerate(subQ.sub_question_id, feedbackText);
-                      }
-                    }}
-                  >
-                    {isRegenerating ? (
-                      <>
-                        <span className={styles.spinnerInline} aria-hidden />
-                        <span>처리 중...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>🔄</span>
-                        <span>재생성</span>
-                      </>
-                    )}
+                <div className={styles.actionRowItem}>
+                  <button className={styles.actionBtn} onClick={() => toggleVerification(subQ.sub_question_id)}>
+                    <span>🔍</span>
+                    <span>검증 결과 보기</span>
                   </button>
-                )}
-                {!isFeedbackOpen && hasRegenerated && !isRegenerating && (
-                  <button
-                    className={styles.regenerateBtn}
-                    onClick={() => {
-                      const currentlyShown = !!showRegenerated;
-                      const selected = effectiveSelectedVersion;
-                      const hideUnselectedNow = !!hideUnselected;
-
-                      // 아직 선택된 문항이 없으면: 단순히 재생성 문항 보기/접기 토글
-                      if (!selected) {
-                        setShowRegeneratedStates((prev) => ({
-                          ...prev,
-                          [subQ.sub_question_id]: !currentlyShown,
-                        }));
-                        setHideUnselectedStates((prev) => ({
-                          ...prev,
-                          [subQ.sub_question_id]: false,
-                        }));
-                        return;
-                      }
-
-                      // 선택된 문항이 있고 현재 둘 다 보이는 상태(B)에서
-                      // → "문항 숨기기" : 선택되지 않은 문항을 숨기고 선택된 것만 남김 (C 상태)
-                      if (currentlyShown && !hideUnselectedNow) {
-                        setHideUnselectedStates((prev) => ({
-                          ...prev,
-                          [subQ.sub_question_id]: true,
-                        }));
-                        return;
-                      }
-
-                      // 이미 선택만 남은 상태(C)에서 다시 누르면
-                      // → 비교 모드(B)로 되돌아가서 두 문항을 다시 모두 보여줌
-                      if (currentlyShown && hideUnselectedNow) {
-                        setHideUnselectedStates((prev) => ({
-                          ...prev,
-                          [subQ.sub_question_id]: false,
-                        }));
-                        setShowRegeneratedStates((prev) => ({
-                          ...prev,
-                          [subQ.sub_question_id]: true,
-                        }));
-                        return;
-                      }
-                    }}
-                  >
-                    <span>🆚</span>
-                    <span>
-                      {(() => {
+                  <button className={styles.actionBtnFeedback} onClick={() => toggleFeedback(subQ.sub_question_id)}>
+                    <span>💬</span>
+                    <span>피드백</span>
+                  </button>
+                  {isFeedbackOpen && (
+                    <button
+                      className={styles.regenerateBtn}
+                      disabled={isRegenerating}
+                      onClick={() => {
+                        const feedbackText = (document.querySelector(`.feedback-textarea-${subQ.sub_question_id}`) as HTMLTextAreaElement)?.value || "";
+                        if (feedbackText.trim()) {
+                          handleFeedbackRegenerate(subQ.sub_question_id, feedbackText);
+                        }
+                      }}
+                    >
+                      {isRegenerating ? (
+                        <>
+                          <span className={styles.spinnerInline} aria-hidden />
+                          <span>처리 중...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🔄</span>
+                          <span>재생성</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {!isFeedbackOpen && hasRegenerated && !isRegenerating && (
+                    <button
+                      className={styles.regenerateBtn}
+                      onClick={() => {
                         const currentlyShown = !!showRegenerated;
+                        const selected = effectiveSelectedVersion;
                         const hideUnselectedNow = !!hideUnselected;
 
-                        // 재생성 문항이 표시되지 않은 상태에서 → "문항 재생성" (비교 모드로 진입)
-                        if (!currentlyShown) {
-                          return "문항 재생성";
+                        if (!selected) {
+                          setShowRegeneratedStates((prev) => ({
+                            ...prev,
+                            [subQ.sub_question_id]: !currentlyShown,
+                          }));
+                          setHideUnselectedStates((prev) => ({
+                            ...prev,
+                            [subQ.sub_question_id]: false,
+                          }));
+                          return;
                         }
-
-                        // 재생성 문항이 표시되고, 두 문항이 모두 보이는 상태(B) → "문항 숨기기"
                         if (currentlyShown && !hideUnselectedNow) {
-                          return "문항 숨기기";
+                          setHideUnselectedStates((prev) => ({
+                            ...prev,
+                            [subQ.sub_question_id]: true,
+                          }));
+                          return;
                         }
-
-                        // 재생성 문항이 표시되고, 선택된 문항만 보이는 상태(C) → "문항 비교하기"
                         if (currentlyShown && hideUnselectedNow) {
-                          return "문항 비교하기";
+                          setHideUnselectedStates((prev) => ({
+                            ...prev,
+                            [subQ.sub_question_id]: false,
+                          }));
+                          setShowRegeneratedStates((prev) => ({
+                            ...prev,
+                            [subQ.sub_question_id]: true,
+                          }));
+                          return;
                         }
-
-                        return "문항 재생성";
-                      })()}
-                    </span>
-                  </button>
-                )}
-                {bMode &&
-                  isLastVisibleInBMode &&
-                  !restAutoGenerated &&
-                  (() => {
-                    const totalSteps = (currentCotData as any)?.steps?.length ?? 8;
-                    const hasNextStep = bCurrentIndex < totalSteps;
-                    if (!hasNextStep) return null; // 마지막 단계(4-2)에서는 버튼 미노출
-                    return (
-                      <>
-                        <button
-                          className={styles.generateButton}
-                          onClick={() => {
-                            generateNextStepB();
-                          }}
-                        >
-                          확정 후 다음 문항 생성
-                        </button>
-                        <button
-                          className={styles.generateButton}
-                          onClick={() => {
-                            generateRemainingStepsB();
-                          }}
-                        >
-                          확정 후 나머지 문항 자동 생성
-                        </button>
-                      </>
-                    );
-                  })()}
+                      }}
+                    >
+                      <span>🆚</span>
+                      <span>
+                        {(() => {
+                          const currentlyShown = !!showRegenerated;
+                          const hideUnselectedNow = !!hideUnselected;
+                          if (!currentlyShown) return "문항 재생성";
+                          if (currentlyShown && !hideUnselectedNow) return "문항 숨기기";
+                          if (currentlyShown && hideUnselectedNow) return "문항 비교하기";
+                          return "문항 재생성";
+                        })()}
+                      </span>
+                    </button>
+                  )}
+                </div>
+                {bMode && isLastVisibleInBMode && !restAutoGenerated && (() => {
+                  const totalSteps = (currentCotData as any)?.steps?.length ?? 8;
+                  const hasNextStep = bCurrentIndex < totalSteps;
+                  if (!hasNextStep) return null;
+                  return (
+                    <div className={styles.actionRowWorkflow}>
+                      <button
+                        className={styles.generateButton}
+                        onClick={() => generateNextStepB()}
+                      >
+                        확정 후 다음 문항 생성
+                      </button>
+                      <button
+                        className={styles.generateButton}
+                        onClick={() => generateRemainingStepsB()}
+                      >
+                        확정 후 나머지 문항 자동 생성
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               {isFeedbackOpen && (
