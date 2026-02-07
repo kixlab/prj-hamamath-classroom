@@ -69,6 +69,27 @@
   margin-bottom: 24px;
 }
 
+.exportWordRow {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.exportWordBtn {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.exportWordBtn:hover {
+  opacity: 0.9;
+}
+
 .generateButton {
   background: var(--color-primary);
   color: white;

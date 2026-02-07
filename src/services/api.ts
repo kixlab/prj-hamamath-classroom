@@ -1,6 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-function getApiUrl(path: string): string {
+export function getApiUrl(path: string): string {
   if (path.startsWith('/')) {
     return API_BASE_URL + path;
   }
@@ -210,7 +210,7 @@ export const api = {
     return response.json();
   },
 
-  // Word 파일 다운로드
+  // Word 파일 다운로드 (간단 스키마)
   async exportWord(data: ExportWordData) {
     const response = await fetch(getApiUrl('/api/v1/guideline/export-word'), {
       method: 'POST',
@@ -230,4 +230,81 @@ export const api = {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   },
+
+  /**
+   * 확정된 문제(사용자가 원본/재생성 중 선택한 버전)를 Word로 다운로드
+   */
+  async exportWordFromGuideline(
+    cotData: { problem?: string; answer?: string; main_solution?: string; grade?: string },
+    guidelineData: { subject_area?: string; guide_sub_questions?: Array<{
+      sub_question_id: string;
+      step_id: string | number;
+      sub_skill_id: string;
+      step_name: string;
+      sub_skill_name: string;
+      guide_sub_question: string;
+      guide_sub_answer?: string;
+      re_sub_question?: string;
+      re_sub_answer?: string;
+    }> },
+    preferredVersion: Record<string, 'original' | 'regenerated'>,
+    problemId: string | null
+  ) {
+    const finalSubQuestions = (guidelineData.guide_sub_questions || []).map((subQ) => {
+      const originalQ = (subQ.guide_sub_question || '').trim();
+      const originalA = (subQ.guide_sub_answer || '').trim();
+      const reQ = (subQ.re_sub_question || '').trim();
+      const reA = (subQ.re_sub_answer || '').trim();
+      const chosen = preferredVersion[subQ.sub_question_id];
+      const useRegenerated = chosen === 'regenerated' && reQ;
+      return {
+        sub_question_id: subQ.sub_question_id,
+        step_id: subQ.step_id,
+        sub_skill_id: subQ.sub_skill_id,
+        step_name: subQ.step_name,
+        sub_skill_name: subQ.sub_skill_name,
+        guide_sub_question: useRegenerated ? reQ : originalQ,
+        guide_sub_answer: useRegenerated ? (reA || originalA) : originalA,
+        re_sub_question: subQ.re_sub_question ?? null,
+        re_sub_answer: subQ.re_sub_answer ?? null,
+      };
+    });
+    const requestData = {
+      main_problem: cotData.problem || '',
+      main_answer: cotData.answer || '',
+      main_solution: cotData.main_solution || null,
+      grade: cotData.grade || '',
+      subject_area: guidelineData.subject_area || null,
+      guide_sub_questions: finalSubQuestions,
+    };
+    const response = await fetch(getApiUrl('/api/v1/guideline/export-word'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestData),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || '워드 파일 생성 중 오류가 발생했습니다.');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const nameFromProblem = getFilenameFromProblem(cotData.problem || '');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.download = nameFromProblem ? `학습지_${nameFromProblem}_${dateStr}.docx` : `학습지_${cotData.grade || ''}_${dateStr}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
 };
+
+/** 메인 문제 앞부분을 파일명에 쓸 수 있게 정제 (최대 30자, 파일명 불가 문자 제거) */
+function getFilenameFromProblem(problem: string, maxLen = 30): string {
+  if (!problem || typeof problem !== 'string') return '';
+  const invalid = /[/\\:*?"<>|\n\r]+/g;
+  const trimmed = problem.replace(invalid, ' ').replace(/\s+/g, ' ').trim();
+  const slice = trimmed.slice(0, maxLen).trim();
+  return slice || '';
+}

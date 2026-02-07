@@ -51,8 +51,8 @@ export interface AppContextType {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   reset: () => void;
-  preferredVersion?: Record<number, 'original' | 'regenerated'>;
-  setPreferredVersion?: (version: Record<number, 'original' | 'regenerated'>) => void;
+  preferredVersion?: Record<string, 'original' | 'regenerated'>;
+  setPreferredVersion?: (version: Record<string, 'original' | 'regenerated'>) => void;
 }
 
 // MathJax 타입 확장
