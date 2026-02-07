@@ -252,11 +252,31 @@
   background: var(--color-primary-hover);
 }
 
-/* Edit mode */
-.editMode {
+/* Per-level edit button */
+.levelEditBtn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.levelEditBtn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+/* Per-level edit actions (save/cancel inside each level card) */
+.levelEditActions {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .editTextarea {

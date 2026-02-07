@@ -22,6 +22,47 @@ interface RubricItem {
   raw_response?: any;
 }
 
+/**
+ * Wrap Korean characters inside $...$ or $$...$$ math delimiters with \text{}
+ * so MathJax can render them without errors.
+ */
+function preprocessLatex(text: string): string {
+  const koreanRegex = /([\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF]+)/g;
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < text.length) {
+    // Check for display math $$
+    if (text[i] === '$' && i + 1 < text.length && text[i + 1] === '$') {
+      const start = i + 2;
+      const end = text.indexOf('$$', start);
+      if (end !== -1) {
+        const content = text.substring(start, end);
+        result.push('$$', content.replace(koreanRegex, '\\text{$1}'), '$$');
+        i = end + 2;
+        continue;
+      }
+    }
+
+    // Check for inline math $
+    if (text[i] === '$') {
+      const start = i + 1;
+      const end = text.indexOf('$', start);
+      if (end !== -1 && end > start) {
+        const content = text.substring(start, end);
+        result.push('$', content.replace(koreanRegex, '\\text{$1}'), '$');
+        i = end + 1;
+        continue;
+      }
+    }
+
+    result.push(text[i]);
+    i++;
+  }
+
+  return result.join('');
+}
+
 function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricItem[] {
   const simulationRubrics = apiResponse?.simulation_rubrics || [];
   const subQuestions = guidelineData?.guide_sub_questions || [];
@@ -64,11 +105,12 @@ export const Rubrics = () => {
   const [generatingMessage, setGeneratingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
-  const [editingStates, setEditingStates] = useState<Record<string, boolean>>({});
+  // Per-level editing: { [sub_question_id]: { [level]: boolean } }
+  const [editingLevels, setEditingLevels] = useState<Record<string, Record<string, boolean>>>({});
   // Controlled edit drafts: { [sub_question_id]: { [level]: { title, description, bullets } } }
   const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { title: string; description: string; bullets: string }>>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
-  const containerRef = useMathJax([rubrics]);
+  const containerRef = useMathJax([rubrics, editingLevels]);
   const hasCalledRef = useRef(false);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -112,20 +154,26 @@ export const Rubrics = () => {
     setFeedbackStates((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const toggleEdit = (id: string) => {
-    const wasEditing = editingStates[id];
+  const toggleLevelEdit = (id: string, level: string) => {
+    const wasEditing = editingLevels[id]?.[level];
     if (!wasEditing) {
-      // Entering edit mode — initialize drafts from current rubric state
+      // Entering edit mode for this level — initialize draft
       const rubric = rubrics.find((r) => r.sub_question_id === id);
-      if (rubric) {
-        const draft: Record<string, { title: string; description: string; bullets: string }> = {};
-        for (const lv of rubric.levels) {
-          draft[lv.level] = { title: lv.title, description: lv.description, bullets: lv.bullets.join('\n') };
-        }
-        setEditDrafts((prev) => ({ ...prev, [id]: draft }));
+      const lv = rubric?.levels.find((l) => l.level === level);
+      if (lv) {
+        setEditDrafts((prev) => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            [level]: { title: lv.title, description: lv.description, bullets: lv.bullets.join('\n') },
+          },
+        }));
       }
     }
-    setEditingStates((prev) => ({ ...prev, [id]: !prev[id] }));
+    setEditingLevels((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [level]: !wasEditing },
+    }));
   };
 
   const updateDraft = (id: string, level: string, field: 'title' | 'description' | 'bullets', value: string) => {
@@ -138,8 +186,8 @@ export const Rubrics = () => {
     }));
   };
 
-  const handleSaveEdit = (id: string) => {
-    const draft = editDrafts[id];
+  const handleSaveLevelEdit = (id: string, level: string) => {
+    const draft = editDrafts[id]?.[level];
     if (!draft) return;
 
     setRubrics((prev) =>
@@ -148,19 +196,21 @@ export const Rubrics = () => {
         return {
           ...r,
           levels: r.levels.map((lv) => {
-            const d = draft[lv.level];
-            if (!d) return lv;
+            if (lv.level !== level) return lv;
             return {
               ...lv,
-              title: d.title.trim() || lv.title,
-              description: d.description.trim() || lv.description,
-              bullets: d.bullets.split('\n').filter((b) => b.trim()),
+              title: draft.title.trim() || lv.title,
+              description: draft.description.trim() || lv.description,
+              bullets: draft.bullets.split('\n').filter((b) => b.trim()),
             };
           }),
         };
       }),
     );
-    setEditingStates((prev) => ({ ...prev, [id]: false }));
+    setEditingLevels((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [level]: false },
+    }));
   };
 
   const buildCurrentRubric = (rubricItem: RubricItem) => {
@@ -302,7 +352,6 @@ export const Rubrics = () => {
       <div className={styles.rubricCards}>
         {rubrics.map((rubric) => {
           const isFeedbackOpen = feedbackStates[rubric.sub_question_id];
-          const isEditing = editingStates[rubric.sub_question_id];
           const isRegenerating = regeneratingIds.has(rubric.sub_question_id);
 
           return (
@@ -312,98 +361,91 @@ export const Rubrics = () => {
                 <span className={styles.rubricTitle}>
                   {rubric.step_name} - {rubric.sub_skill_name}
                 </span>
-                <span className={styles.rubricQuestionInline}>{rubric.question}</span>
+                <span className={styles.rubricQuestionInline}>{preprocessLatex(rubric.question)}</span>
               </div>
 
-              {isEditing ? (
-                <div className={styles.editMode}>
-                  {rubric.levels.map((lv) => {
-                    const draft = editDrafts[rubric.sub_question_id]?.[lv.level];
-                    const levelStyle =
-                      lv.level === '상' ? styles.levelHigh :
-                      lv.level === '중' ? styles.levelMid : styles.levelLow;
-                    const badgeStyle =
-                      lv.level === '상' ? styles.badgeHigh :
-                      lv.level === '중' ? styles.badgeMid : styles.badgeLow;
+              <div className={styles.levelCards}>
+                {rubric.levels.map((lv) => {
+                  const isLevelEditing = editingLevels[rubric.sub_question_id]?.[lv.level];
+                  const draft = editDrafts[rubric.sub_question_id]?.[lv.level];
+                  const levelStyle =
+                    lv.level === '상' ? styles.levelHigh :
+                    lv.level === '중' ? styles.levelMid : styles.levelLow;
+                  const badgeStyle =
+                    lv.level === '상' ? styles.badgeHigh :
+                    lv.level === '중' ? styles.badgeMid : styles.badgeLow;
 
-                    return (
-                      <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
-                        <div className={styles.levelHeader}>
-                          <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
-                        </div>
-                        <div className={styles.levelEditGroup}>
-                          <label>제목</label>
-                          <textarea
-                            className={styles.editTextarea}
-                            value={draft?.title ?? lv.title}
-                            onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'title', e.target.value)}
-                            rows={1}
-                          />
-                        </div>
-                        <div className={styles.levelEditGroup}>
-                          <label>설명</label>
-                          <textarea
-                            className={styles.editTextarea}
-                            value={draft?.description ?? lv.description}
-                            onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'description', e.target.value)}
-                            rows={2}
-                          />
-                        </div>
-                        <div className={styles.levelEditGroup}>
-                          <label>세부 기준 (줄바꿈으로 구분)</label>
-                          <textarea
-                            className={styles.editTextarea}
-                            value={draft?.bullets ?? lv.bullets.join('\n')}
-                            onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'bullets', e.target.value)}
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className={styles.editActions}>
-                    <button className={styles.cancelBtn} onClick={() => toggleEdit(rubric.sub_question_id)}>
-                      취소
-                    </button>
-                    <button className={styles.saveBtn} onClick={() => handleSaveEdit(rubric.sub_question_id)}>
-                      저장
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className={styles.levelCards}>
-                  {rubric.levels.map((lv) => {
-                    const levelStyle =
-                      lv.level === '상' ? styles.levelHigh :
-                      lv.level === '중' ? styles.levelMid : styles.levelLow;
-                    const badgeStyle =
-                      lv.level === '상' ? styles.badgeHigh :
-                      lv.level === '중' ? styles.badgeMid : styles.badgeLow;
-
-                    return (
-                      <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
-                        <div className={styles.levelHeader}>
-                          <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
-                          <span className={styles.levelLabel}>{lv.title}</span>
-                        </div>
-                        <div className={styles.levelDescription}>{lv.description}</div>
-                        {lv.bullets.length > 0 && (
-                          <ul className={styles.levelBullets}>
-                            {lv.bullets.map((bullet, i) => (
-                              <li key={i}>{bullet}</li>
-                            ))}
-                          </ul>
+                  return (
+                    <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
+                      <div className={styles.levelHeader}>
+                        <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
+                        {!isLevelEditing && <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>}
+                        {!isLevelEditing && (
+                          <button
+                            className={styles.levelEditBtn}
+                            onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}
+                          >
+                            편집
+                          </button>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+
+                      {isLevelEditing ? (
+                        <>
+                          <div className={styles.levelEditGroup}>
+                            <label>제목</label>
+                            <textarea
+                              className={styles.editTextarea}
+                              value={draft?.title ?? lv.title}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'title', e.target.value)}
+                              rows={1}
+                            />
+                          </div>
+                          <div className={styles.levelEditGroup}>
+                            <label>설명</label>
+                            <textarea
+                              className={styles.editTextarea}
+                              value={draft?.description ?? lv.description}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'description', e.target.value)}
+                              rows={2}
+                            />
+                          </div>
+                          <div className={styles.levelEditGroup}>
+                            <label>세부 기준 (줄바꿈으로 구분)</label>
+                            <textarea
+                              className={styles.editTextarea}
+                              value={draft?.bullets ?? lv.bullets.join('\n')}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'bullets', e.target.value)}
+                              rows={3}
+                            />
+                          </div>
+                          <div className={styles.levelEditActions}>
+                            <button className={styles.cancelBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
+                              취소
+                            </button>
+                            <button className={styles.saveBtn} onClick={() => handleSaveLevelEdit(rubric.sub_question_id, lv.level)}>
+                              저장
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className={styles.levelDescription}>{preprocessLatex(lv.description)}</div>
+                          {lv.bullets.length > 0 && (
+                            <ul className={styles.levelBullets}>
+                              {lv.bullets.map((bullet, i) => (
+                                <li key={i}>{preprocessLatex(bullet)}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               <div className={styles.actionButtons}>
-                <button className={styles.actionBtn} onClick={() => toggleEdit(rubric.sub_question_id)}>
-                  <span>{isEditing ? '취소' : '편집'}</span>
-                </button>
                 <button className={styles.actionBtn} onClick={() => toggleFeedback(rubric.sub_question_id)}>
                   <span>피드백</span>
                 </button>
