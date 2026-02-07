@@ -9,6 +9,24 @@ import example1Image from "../../../data/example1.png";
 import example2Data from "../../../data/example2.json";
 import example2Image from "../../../data/example2.png";
 
+const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
+
+/** 문제 ID를 입력하지 않았을 때 사용할 순차 번호 반환 (1, 2, 3, ...) */
+function getNextProblemSeq(): string {
+  try {
+    const raw = localStorage.getItem(PROBLEM_SEQ_KEY);
+    const next = (raw ? parseInt(raw, 10) : 0) + 1;
+    if (!Number.isFinite(next)) {
+      localStorage.setItem(PROBLEM_SEQ_KEY, "1");
+      return "1";
+    }
+    localStorage.setItem(PROBLEM_SEQ_KEY, String(next));
+    return String(next);
+  } catch {
+    return String(Date.now());
+  }
+}
+
 interface ProblemInputProps {
   onSubmit?: (data: any) => void;
 }
@@ -194,7 +212,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           ? "example1.json"
           : selectedProblem === "__example2_json__"
             ? "example2.json"
-            : selectedProblem || customProblemId.trim() || `manual_${Date.now()}`;
+            : selectedProblem || customProblemId.trim() || getNextProblemSeq();
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
