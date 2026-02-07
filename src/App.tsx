@@ -10,6 +10,7 @@ import { CoTSteps } from './components/CoTSteps/CoTSteps';
 import { SubQs } from './components/SubQs/SubQs';
 import { useMathJax } from './hooks/useMathJax';
 import { formatQuestion, formatAnswer } from './utils/formatting';
+import { Rubrics } from './components/Rubrics/Rubrics';
 import styles from './App.module.css';
 
 interface AppContentProps {
@@ -116,6 +117,11 @@ const AppContent = ({ onShowUserIdPage }: AppContentProps) => {
                   <SubQs />
                 </main>
               </div>
+            </div>
+          )}
+          {currentStep === 4 && (
+            <div className={styles.workflowPanel}>
+              <Rubrics />
             </div>
           )}
         </div>

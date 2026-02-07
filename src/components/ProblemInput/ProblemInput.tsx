@@ -35,23 +35,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   });
 
   const handleProblemSelect = async (filename: string) => {
-    if (!filename || filename === '__dummy_from_csv__') {
-      if (filename === '__dummy_from_csv__') {
-        try {
-          const dummyData = await api.getDummyData();
-          setFormData((prev) => ({
-            ...prev,
-            problem: dummyData.cotData?.problem || '',
-            answer: dummyData.cotData?.answer || '',
-            solution: dummyData.cotData?.main_solution || '',
-            grade: dummyData.cotData?.grade || '',
-          }));
-        } catch (err) {
-          console.error('더미 데이터 로드 중 오류:', err);
-        }
-      }
-      return;
-    }
+    if (!filename) return;
 
     try {
       const data = await api.getProblem(filename);
@@ -170,7 +154,6 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 {file.replace('.json', '')}
               </option>
             ))}
-            <option value="__dummy_from_csv__">[디자인 미리보기] dummy.csv</option>
           </select>
         </div>
 

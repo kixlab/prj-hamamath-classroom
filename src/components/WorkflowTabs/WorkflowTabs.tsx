@@ -2,7 +2,7 @@ import styles from './WorkflowTabs.module.css';
 import { useApp } from '../../contexts/AppContext';
 
 export const WorkflowTabs = () => {
-  const { currentStep, setCurrentStep, currentCotData } = useApp();
+  const { currentStep, setCurrentStep, currentCotData, currentGuidelineData } = useApp();
 
   const tabs = [
     { step: 1, label: '문제 입력' },
@@ -16,6 +16,7 @@ export const WorkflowTabs = () => {
     if (step === 1) return true;
     if (step === 2) return currentCotData !== null;
     if (step === 3) return currentCotData !== null;
+    if (step === 4) return currentGuidelineData !== null;
     return false;
   };
 
