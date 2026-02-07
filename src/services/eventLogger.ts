@@ -5,6 +5,8 @@ const MAX_STRING = 6000; // Firestore 문서 크기 제한 대비
 
 let currentUserId: string | null = null;
 let collectionId: string | null = null;
+let sessionId: string | null = null;
+let eventIndex = 0;
 let unsubscribe: (() => void) | null = null;
 
 function sanitizeCollectionId(userId: string): string {
@@ -56,8 +58,11 @@ function getTargetInfo(el: EventTarget | null): Record<string, unknown> {
 function handleClick(e: MouseEvent) {
   if (!collectionId || !db) return;
   const target = getTargetInfo(e.target);
+  const idx = eventIndex++;
   const doc = {
     userId: currentUserId,
+    sessionId,
+    eventIndex: idx,
     timestamp: serverTimestamp(),
     eventType: "click",
     pathname: window.location.pathname || "/",
@@ -77,11 +82,14 @@ export function initEventLogger(userId: string) {
   if (unsubscribe) return;
   currentUserId = userId;
   collectionId = sanitizeCollectionId(userId);
+  sessionId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  eventIndex = 0;
   document.addEventListener("click", handleClick, true);
   unsubscribe = () => {
     document.removeEventListener("click", handleClick, true);
     currentUserId = null;
     collectionId = null;
+    sessionId = null;
     unsubscribe = null;
   };
 }
@@ -98,8 +106,11 @@ export function stopEventLogger() {
  */
 export function logUserEvent(eventType: string, payload?: Record<string, unknown>) {
   if (!collectionId || !db) return;
+  const idx = eventIndex++;
   const doc = {
     userId: currentUserId,
+    sessionId,
+    eventIndex: idx,
     timestamp: serverTimestamp(),
     eventType,
     pathname: window.location.pathname || "/",
