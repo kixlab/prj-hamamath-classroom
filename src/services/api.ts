@@ -212,7 +212,7 @@ export const api = {
 
   // Word 파일 다운로드 (간단 스키마)
   async exportWord(data: ExportWordData) {
-    const response = await fetch(getApiUrl('/api/v1/guideline/export-word'), {
+    const response = await fetch(getApiUrl('/api/v1/word-export/'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -277,7 +277,7 @@ export const api = {
       subject_area: guidelineData.subject_area || null,
       guide_sub_questions: finalSubQuestions,
     };
-    const response = await fetch(getApiUrl('/api/v1/guideline/export-word'), {
+    const response = await fetch(getApiUrl('/api/v1/word-export/'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData),

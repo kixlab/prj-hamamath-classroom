@@ -31,15 +31,19 @@ export const useMathJax = (dependencies: unknown[] = []): RefObject<HTMLDivEleme
 
       await waitForMathJax();
 
-      // DOM이 완전히 반영된 뒤 수식 렌더링 (React 커밋 이후 실행 보장)
+      // DOM 반영 + React 커밋 대기 후 수식 렌더링 (동적 콘텐츠에서 $ ... $ 인식 보장)
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+      await new Promise((r) => setTimeout(r, 100));
 
-      if (window.MathJax && window.MathJax.typesetPromise && containerRef.current) {
-        try {
-          await window.MathJax.typesetPromise([containerRef.current]);
-        } catch (err) {
-          console.error('MathJax 렌더링 오류:', err);
-        }
+      const el = containerRef.current;
+      if (!el || !window.MathJax?.typesetPromise) return;
+      try {
+        await window.MathJax.typesetPromise([el]);
+        // 동적 삽입 직후 한 번 놓치는 경우 대비 한 번 더 시도
+        await new Promise((r) => setTimeout(r, 50));
+        if (window.MathJax.typesetPromise) await window.MathJax.typesetPromise([el]);
+      } catch (err) {
+        console.error('MathJax 렌더링 오류:', err);
       }
     };
 
