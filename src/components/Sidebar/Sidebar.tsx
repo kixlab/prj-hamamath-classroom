@@ -1,7 +1,6 @@
 import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult } from '../../hooks/useStorage';
-import { api } from '../../services/api';
 import styles from './Sidebar.module.css';
 
 interface SavedResultItem {
@@ -24,13 +23,16 @@ export const Sidebar = () => {
     setCurrentSubQData, 
     setCurrentGuidelineData, 
     setCurrentProblemId,
-    preferredVersion = {},
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
 
   useEffect(() => {
     updateSavedResultsList();
   }, []);
+
+  useEffect(() => {
+    if (sidebarOpen) updateSavedResultsList();
+  }, [sidebarOpen]);
 
   const updateSavedResultsList = async () => {
     const saved = getSavedResults();
@@ -158,23 +160,6 @@ export const Sidebar = () => {
     updateSavedResultsList();
   };
 
-  const handleExportWord = async () => {
-    if (!currentCotData || !currentGuidelineData) {
-      alert('다운로드할 Guideline 데이터가 없습니다. 먼저 3단계 Guideline 하위 문항을 생성해주세요.');
-      return;
-    }
-    try {
-      await api.exportWordFromGuideline(
-        currentCotData as any,
-        currentGuidelineData as any,
-        preferredVersion,
-        currentProblemId
-      );
-    } catch (err: any) {
-      alert(err.message || '워드 파일 생성 중 오류가 발생했습니다.');
-    }
-  };
-
   const handleLoadResult = async (problemId: string) => {
     try {
       const result = await loadResult(problemId);
@@ -243,11 +228,6 @@ export const Sidebar = () => {
             <button className={styles.btn} onClick={handleSaveCurrentResult} style={{ marginTop: '10px' }}>
               현재 결과 저장하기
             </button>
-            {currentGuidelineData && (
-              <button className={styles.btn} onClick={handleExportWord} style={{ marginTop: '10px' }}>
-                학습지 다운로드
-              </button>
-            )}
           </div>
           <div className={styles.sidebarSection}>
             <h3>저장된 결과</h3>
@@ -280,9 +260,6 @@ export const Sidebar = () => {
               )}
             </div>
             <div className={styles.sidebarActions}>
-              <button className={styles.btn} onClick={() => {}}>
-                CSV 다운로드
-              </button>
               <button className={styles.btn} onClick={handleClearAllResults} style={{ background: 'var(--color-error)' }}>
                 모든 결과 초기화
               </button>

@@ -1,5 +1,6 @@
 import { useState, ChangeEvent, FormEvent } from "react";
 import { useApp } from "../../contexts/AppContext";
+import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import styles from "./ProblemInput.module.css";
@@ -197,6 +198,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
+      saveResult(problemId, cotDataWithExtras, null, null);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
       setError(err.message || "오류가 발생했습니다.");
