@@ -17,11 +17,11 @@ interface AppContentProps {
 }
 
 const AppContent = ({ onShowUserIdPage }: AppContentProps) => {
-  const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error } = useApp();
+  const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error, reset } = useApp();
   const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
 
   const handleNewProblem = () => {
-    setCurrentStep(1);
+    reset();
   };
 
   const handleCoTSubmit = () => {

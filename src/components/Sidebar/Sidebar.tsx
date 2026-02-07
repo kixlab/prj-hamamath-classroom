@@ -23,6 +23,7 @@ export const Sidebar = () => {
     setCurrentSubQData, 
     setCurrentGuidelineData, 
     setCurrentProblemId,
+    reset,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
 
@@ -144,7 +145,7 @@ export const Sidebar = () => {
 
   const handleNewProblem = () => {
     setSidebarOpen(false);
-    setCurrentStep(1);
+    reset();
   };
 
   const handleSaveCurrentResult = () => {
