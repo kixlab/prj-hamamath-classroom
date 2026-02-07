@@ -33,13 +33,21 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
-.titleBtn {
+.titleWrap {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.titleBtn {
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
   color: inherit;
+  display: inline-block;
 }
 
 .titleBtn:hover .title {

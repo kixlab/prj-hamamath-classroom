@@ -24,14 +24,16 @@ export const Header = ({ onNewProblem, onShowUserIdPage }: HeaderProps) => {
       >
         ☰
       </button>
-      <button
-        type="button"
-        className={styles.titleBtn}
-        onClick={onShowUserIdPage}
-        aria-label="아이디 입력 페이지로 이동"
-      >
-        <h3 className={styles.title}>AI 기반 수학 사고 과정 진단</h3>
-      </button>
+      <div className={styles.titleWrap}>
+        <button
+          type="button"
+          className={styles.titleBtn}
+          onClick={onShowUserIdPage}
+          aria-label="아이디 입력 페이지로 이동"
+        >
+          <h3 className={styles.title}>AI 기반 수학 사고 과정 진단</h3>
+        </button>
+      </div>
       <button className={styles.newProblemBtn} onClick={onNewProblem}>
         문제 입력하기
       </button>

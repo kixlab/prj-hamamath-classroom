@@ -34,7 +34,9 @@ export const AppProvider = ({ children }: AppProviderProps) => {
     setCurrentGuidelineData(null);
     setLastGuidelineDataBeforeVerifyFix(null);
     setCurrentStep(1);
+    setLoading(false);
     setError(null);
+    setPreferredVersion({});
   }, []);
 
   const value: AppContextType = {

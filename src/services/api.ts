@@ -8,8 +8,11 @@ export function getApiUrl(path: string): string {
 }
 
 interface CoTCreateData {
-  problem_text: string;
-  image_url?: string;
+  main_problem: string;
+  main_answer: string;
+  main_solution?: string | null;
+  grade: string;
+  image_data?: string | null;
 }
 
 interface MatchSubjectAreaData {
@@ -335,21 +338,12 @@ export const api = {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const nameFromProblem = getFilenameFromProblem(cotData.problem || '');
+    const safeProblemId = problemId && typeof problemId === 'string' ? problemId.replace(/[/\\:*?"<>|\n\r]+/g, '_').trim() : '';
     const dateStr = new Date().toISOString().slice(0, 10);
-    link.download = nameFromProblem ? `학습지_${nameFromProblem}_${dateStr}.docx` : `학습지_${cotData.grade || ''}_${dateStr}.docx`;
+    link.download = safeProblemId ? `학습지_${safeProblemId}_${dateStr}.docx` : `학습지_${cotData.grade || '수학'}_${dateStr}.docx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   },
-};
-
-/** 메인 문제 앞부분을 파일명에 쓸 수 있게 정제 (최대 30자, 파일명 불가 문자 제거) */
-function getFilenameFromProblem(problem: string, maxLen = 30): string {
-  if (!problem || typeof problem !== 'string') return '';
-  const invalid = /[/\\:*?"<>|\n\r]+/g;
-  const trimmed = problem.replace(invalid, ' ').replace(/\s+/g, ' ').trim();
-  const slice = trimmed.slice(0, maxLen).trim();
-  return slice || '';
 }

@@ -24,6 +24,23 @@
   font-size: 0.875rem;
 }
 
+.problemIdRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.problemIdRow .select {
+  min-width: 180px;
+  flex: 0 0 auto;
+}
+
+.problemIdRow .input {
+  flex: 1;
+  min-width: 160px;
+}
+
 .select,
 .input,
 .textarea {
@@ -73,9 +90,11 @@
 }
 
 .imagePreview img {
-  max-width: 100%;
-  max-height: 400px;
+  max-width: 280px;
+  max-height: 240px;
+  width: auto;
   height: auto;
+  object-fit: contain;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   display: block;

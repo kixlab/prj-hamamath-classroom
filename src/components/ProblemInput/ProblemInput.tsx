@@ -1,8 +1,31 @@
-import { useState, ChangeEvent, FormEvent } from 'react';
-import { useApp } from '../../contexts/AppContext';
-import { api } from '../../services/api';
-import { logUserEvent } from '../../services/eventLogger';
-import styles from './ProblemInput.module.css';
+import { useState, ChangeEvent, FormEvent } from "react";
+import { useApp } from "../../contexts/AppContext";
+import { saveResult } from "../../hooks/useStorage";
+import { api } from "../../services/api";
+import { logUserEvent } from "../../services/eventLogger";
+import styles from "./ProblemInput.module.css";
+import example1Data from "../../../data/example1.json";
+import example1Image from "../../../data/example1.png";
+import example2Data from "../../../data/example2.json";
+import example2Image from "../../../data/example2.png";
+
+const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
+
+/** 문제 ID를 입력하지 않았을 때 사용할 순차 번호 반환 (1, 2, 3, ...) */
+function getNextProblemSeq(): string {
+  try {
+    const raw = localStorage.getItem(PROBLEM_SEQ_KEY);
+    const next = (raw ? parseInt(raw, 10) : 0) + 1;
+    if (!Number.isFinite(next)) {
+      localStorage.setItem(PROBLEM_SEQ_KEY, "1");
+      return "1";
+    }
+    localStorage.setItem(PROBLEM_SEQ_KEY, String(next));
+    return String(next);
+  } catch {
+    return String(Date.now());
+  }
+}
 
 interface ProblemInputProps {
   onSubmit?: (data: any) => void;
@@ -20,36 +43,87 @@ interface FormData {
 }
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError } = useApp();
+  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId } = useApp();
   const [problemList, setProblemList] = useState<string[]>([]);
-  const [selectedProblem, setSelectedProblem] = useState<string>('');
+  const [selectedProblem, setSelectedProblem] = useState<string>("");
+  /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
+  const [customProblemId, setCustomProblemId] = useState<string>("");
   const [formData, setFormData] = useState<FormData>({
-    problem: '어떤 수를 5로 나누었더니 몫이 15이고, 나머지가 4였습니다. 어떤 수는 얼마일까요?',
-    answer: '79',
-    solution: '',
-    grade: '3',
+    problem: "",
+    answer: "",
+    solution: "",
+    grade: "",
     image: null,
     imagePreview: null,
     imageData: null,
-    imgDescription: '',
+    imgDescription: "",
   });
 
+  /** 이미지 URL을 base64 data URL로 변환 (API는 base64만 허용) */
+  const urlToBase64 = (url: string): Promise<string> =>
+    fetch(url)
+      .then((r) => r.blob())
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          }),
+      );
+
   const handleProblemSelect = async (filename: string) => {
-    if (!filename) return;
+    if (!filename || filename === "__example1_json__" || filename === "__example2_json__") {
+      if (filename === "__example1_json__") {
+        const data = example1Data as { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string };
+        setFormData((prev) => ({
+          ...prev,
+          problem: data.main_problem || "",
+          answer: data.main_answer || "",
+          solution: data.main_solution || "",
+          grade: data.grade || "",
+          imagePreview: example1Image,
+          imageData: example1Image,
+        }));
+        urlToBase64(example1Image)
+          .then((dataUrl) => {
+            setFormData((prev) => (prev.imagePreview === example1Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
+          })
+          .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
+      } else if (filename === "__example2_json__") {
+        const data = example2Data as { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string };
+        setFormData((prev) => ({
+          ...prev,
+          problem: data.main_problem || "",
+          answer: data.main_answer || "",
+          solution: data.main_solution || "",
+          grade: data.grade || "",
+          imagePreview: example2Image,
+          imageData: example2Image,
+        }));
+        urlToBase64(example2Image)
+          .then((dataUrl) => {
+            setFormData((prev) => (prev.imagePreview === example2Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
+          })
+          .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
+      }
+      return;
+    }
 
     try {
       const data = await api.getProblem(filename);
       setFormData((prev) => ({
         ...prev,
-        problem: data.problem || '',
-        answer: data.answer || '',
-        solution: data.main_solution || '',
-        grade: data.grade || '',
+        problem: data.problem || "",
+        answer: data.answer || "",
+        solution: data.main_solution || "",
+        grade: data.grade || "",
         imageData: data.image_data || null,
         imagePreview: data.image_data || null,
       }));
     } catch (err) {
-      console.error('문제 데이터 로드 중 오류:', err);
+      console.error("문제 데이터 로드 중 오류:", err);
     }
   };
 
@@ -83,23 +157,32 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    // 문제 풀이 요청이 시작되면 바로 2단계로 이동해서 로딩 표시를 보여준다
     setCurrentStep(2);
 
     try {
+      let imageData = formData.imageData || null;
+      if (imageData && (imageData.startsWith("http") || imageData.startsWith("/"))) {
+        try {
+          imageData = await urlToBase64(imageData);
+        } catch (err) {
+          console.warn("이미지 base64 변환 실패, 이미지 없이 전송:", err);
+          imageData = null;
+        }
+      }
+
       const requestData = {
         main_problem: formData.problem,
         main_answer: formData.answer,
         main_solution: formData.solution || null,
         grade: formData.grade,
-        image_data: formData.imageData || null,
+        image_data: imageData,
       };
 
       const result = await api.createCoT(requestData);
       const cotDataWithExtras = {
         ...result,
         img_description: formData.imgDescription,
-        image_data: formData.imageData,
+        image_data: imageData ?? formData.imageData,
         main_solution: formData.solution,
       };
 
@@ -124,11 +207,19 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         })),
       });
 
+      const problemId =
+        selectedProblem === "__example1_json__"
+          ? "example1.json"
+          : selectedProblem === "__example2_json__"
+            ? "example2.json"
+            : selectedProblem || customProblemId.trim() || getNextProblemSeq();
+      setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
+      saveResult(problemId, cotDataWithExtras, null, null);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
-      setError(err.message || '오류가 발생했습니다.');
+      setError(err.message || "오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -139,22 +230,37 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.formGroup}>
           <label htmlFor="problemSelect">문제 ID</label>
-          <select
-            id="problemSelect"
-            value={selectedProblem}
-            onChange={(e) => {
-              setSelectedProblem(e.target.value);
-              handleProblemSelect(e.target.value);
-            }}
-            className={styles.select}
-          >
-            <option value="">직접 입력하기</option>
-            {problemList.map((file) => (
-              <option key={file} value={file}>
-                {file.replace('.json', '')}
-              </option>
-            ))}
-          </select>
+          <div className={styles.problemIdRow}>
+            <select
+              id="problemSelect"
+              value={selectedProblem}
+              onChange={(e) => {
+                setSelectedProblem(e.target.value);
+                handleProblemSelect(e.target.value);
+              }}
+              className={styles.select}
+            >
+              <option value="">직접 입력하기</option>
+              {problemList.map((file) => (
+                <option key={file} value={file}>
+                  {file.replace(".json", "")}
+                </option>
+              ))}
+              <option value="__example1_json__">example1.json</option>
+              <option value="__example2_json__">example2.json</option>
+            </select>
+            {selectedProblem === "" && (
+              <input
+                type="text"
+                id="customProblemId"
+                value={customProblemId}
+                onChange={(e) => setCustomProblemId(e.target.value)}
+                placeholder="문제 ID 입력 (예: myproblem.json)"
+                className={styles.input}
+                aria-label="직접 입력 문제 ID"
+              />
+            )}
+          </div>
         </div>
 
         <div className={styles.formGroup}>
@@ -194,25 +300,12 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
         <div className={styles.formGroup}>
           <label htmlFor="grade">학년</label>
-          <input
-            type="text"
-            id="grade"
-            value={formData.grade}
-            onChange={(e) => setFormData((prev) => ({ ...prev, grade: e.target.value }))}
-            placeholder="예: 3학년"
-            className={styles.input}
-          />
+          <input type="text" id="grade" value={formData.grade} onChange={(e) => setFormData((prev) => ({ ...prev, grade: e.target.value }))} placeholder="예: 3학년" className={styles.input} />
         </div>
 
         <div className={styles.formGroup}>
           <label htmlFor="imageUpload">문제 이미지 업로드</label>
-          <input
-            type="file"
-            id="imageUpload"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className={styles.fileInput}
-          />
+          <input type="file" id="imageUpload" accept="image/*" onChange={handleImageUpload} className={styles.fileInput} />
           {formData.imagePreview && (
             <div className={styles.imagePreview}>
               <img src={formData.imagePreview} alt="이미지 미리보기" />
