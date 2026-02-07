@@ -81,6 +81,26 @@
   gap: 20px;
 }
 
+/* 다음 문항이 생성될 자리(빈 영역)에 표시하는 로딩 플레이스홀더 */
+.loadingPlaceholderCard {
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  padding: 48px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 160px;
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.loadingPlaceholderCard .spinner {
+  margin-bottom: 0;
+}
+
 .subQuestionCard {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -255,6 +275,12 @@
   color: white;
 }
 
+.selectIcon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .cancelBtn {
   background: #f8f9fa;
   border: 1px solid #dee2e6;
@@ -318,7 +344,8 @@
   font-size: 1em;
 }
 
-.regenerateBtn {
+/* 피드백 버튼: primary 색상 */
+.actionBtnFeedback {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -332,8 +359,32 @@
   transition: background-color 0.2s;
 }
 
-.regenerateBtn:hover {
+.actionBtnFeedback:hover {
   background: var(--color-primary-hover);
+}
+
+.actionBtnFeedback span:first-child {
+  font-size: 1em;
+}
+
+/* 문항 비교하기/문항 숨기기/문항 재생성 버튼: 회색 */
+.regenerateBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #495057;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.regenerateBtn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
 }
 
 .regenerateBtn span:first-child {
