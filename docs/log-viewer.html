@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firestore 로깅 뷰어</title>
+    <style>
+      :root {
+        --bg: #1a1a2e;
+        --card: #16213e;
+        --border: #0f3460;
+        --accent: #e94560;
+        --text: #eaeaea;
+        --muted: #a0a0a0;
+        --success: #4ecca3;
+        --warning: #ffc93c;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 24px;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+        color: var(--accent);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 24px;
+        padding: 16px;
+        background: var(--card);
+        border-radius: 12px;
+        border: 1px solid var(--border);
+      }
+      .controls label {
+        font-weight: 600;
+        color: var(--muted);
+      }
+      input[type="text"] {
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 1rem;
+        min-width: 200px;
+      }
+      select {
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 0.95rem;
+      }
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.95rem;
+      }
+      button:hover {
+        opacity: 0.9;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .loading-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 32px;
+        color: var(--muted);
+        font-size: 1rem;
+      }
+      .loading-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .summary {
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background: var(--card);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .session-block {
+        margin-bottom: 32px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--card);
+      }
+      .session-header {
+        padding: 14px 20px;
+        background: var(--border);
+        font-weight: 600;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .session-header code {
+        font-size: 0.85rem;
+        color: var(--warning);
+        word-break: break-all;
+      }
+      .event-list {
+        padding: 8px;
+      }
+      .event {
+        margin: 8px 0;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        overflow: hidden;
+      }
+      .event-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 16px;
+        padding: 12px 16px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .event-head:hover {
+        background: rgba(233, 69, 96, 0.08);
+      }
+      .event-index {
+        font-weight: 700;
+        color: var(--muted);
+        min-width: 28px;
+      }
+      .event-type {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+      .event-type.click {
+        background: #2d2d44;
+        color: var(--muted);
+      }
+      .event-type.problem_input {
+        background: #1e3a5f;
+        color: #7eb8da;
+      }
+      .event-type.cot_output {
+        background: #1e4d3a;
+        color: var(--success);
+      }
+      .event-type.cot_edit {
+        background: #5f3a1e;
+        color: var(--warning);
+      }
+      .event-type.sub_question_generated {
+        background: #3a1e5f;
+        color: #c9a0ff;
+      }
+      .event-type.sub_question_verified {
+        background: #1e5f4d;
+        color: #7effd4;
+      }
+      .event-type.feedback_submitted {
+        background: #5f1e3a;
+        color: #ffa0c0;
+      }
+      .event-type.regenerated_output {
+        background: #3a5f1e;
+        color: #b8ff7e;
+      }
+      .event-type.edit_original,
+      .event-type.edit_regenerated {
+        background: #5f4d1e;
+        color: var(--warning);
+      }
+      .event-type.version_selected {
+        background: #1e5f5f;
+        color: #7effff;
+      }
+      .event-type.confirm_next_clicked,
+      .event-type.rest_auto_generate_clicked {
+        background: var(--accent);
+        color: white;
+      }
+      .event-type.verification_viewed {
+        background: #4d1e5f;
+        color: #e0a0ff;
+      }
+      .event-time {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .event-payload {
+        padding: 14px 16px;
+        border-top: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.2);
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .event-payload.hidden {
+        display: none;
+      }
+      .event-payload .key {
+        color: var(--warning);
+      }
+      .event-payload .string {
+        color: var(--success);
+      }
+      .event-payload .number {
+        color: #7eb8da;
+      }
+      .error-msg {
+        padding: 16px;
+        background: rgba(233, 69, 96, 0.15);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        margin-bottom: 20px;
+        color: #ff8a9e;
+      }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  </head>
+  <body>
+    <h1>📋 Firestore 로깅 뷰어</h1>
+
+    <div class="controls">
+      <label for="userId">유저 ID (컬렉션 이름)</label>
+      <input type="text" id="userId" placeholder="예: test, user01" />
+      <label for="eventFilter">이벤트 타입</label>
+      <select id="eventFilter">
+        <option value="">전체</option>
+        <option value="click">click</option>
+        <option value="problem_input">problem_input</option>
+        <option value="cot_output">cot_output</option>
+        <option value="cot_edit">cot_edit</option>
+        <option value="sub_question_generated">sub_question_generated</option>
+        <option value="sub_question_verified">sub_question_verified</option>
+        <option value="feedback_submitted">feedback_submitted</option>
+        <option value="regenerated_output">regenerated_output</option>
+        <option value="edit_original">edit_original</option>
+        <option value="edit_regenerated">edit_regenerated</option>
+        <option value="version_selected">version_selected</option>
+        <option value="confirm_next_clicked">confirm_next_clicked</option>
+        <option value="rest_auto_generate_clicked">rest_auto_generate_clicked</option>
+        <option value="verification_viewed">verification_viewed</option>
+      </select>
+      <button type="button" id="loadBtn">로그 불러오기</button>
+    </div>
+
+    <div id="error" class="error-msg hidden"></div>
+    <div id="summary" class="summary hidden"></div>
+    <div id="out"></div>
+
+    <script type="module">
+      const firebaseConfig = {
+        apiKey: "AIzaSyDyQXB01vE3aV7Ro88whM6xrWBjF94veD4",
+        authDomain: "hamamath-classroom.firebaseapp.com",
+        projectId: "hamamath-classroom",
+        storageBucket: "hamamath-classroom.firebasestorage.app",
+        messagingSenderId: "407551343352",
+        appId: "1:407551343352:web:eb30cef9705c9838b6990d",
+        measurementId: "G-XPQPE3NP9G",
+      };
+      let db = null;
+      if (typeof firebase !== "undefined") {
+        try {
+          firebase.initializeApp(firebaseConfig);
+          db = firebase.firestore();
+        } catch (_) {}
+      }
+
+      document.getElementById("loadBtn").addEventListener("click", loadLogs);
+
+      function showError(msg) {
+        const el = document.getElementById("error");
+        el.textContent = msg;
+        el.classList.toggle("hidden", !msg);
+      }
+
+      function formatPayload(obj) {
+        if (obj == null) return "";
+        const omit = ["userId", "sessionId", "eventIndex", "timestamp", "eventType", "pathname"];
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (omit.includes(k)) continue;
+          if (v && typeof v === "object" && v.toDate) out[k] = v.toDate().toLocaleString("ko-KR");
+          else out[k] = v;
+        }
+        return JSON.stringify(out, null, 2);
+      }
+
+      function formatTs(ts) {
+        if (!ts || !ts.toDate) return "-";
+        return ts.toDate().toLocaleString("ko-KR");
+      }
+
+      function getEventTypeClass(et) {
+        return (et || "").replace(/_/g, "-");
+      }
+
+      function renderEvent(doc, filter) {
+        const d = doc.data();
+        const eventType = d.eventType || "unknown";
+        if (filter && eventType !== filter) return "";
+        const payload = formatPayload(d);
+        const hasPayload = payload.length > 2;
+        const eventId = "ev-" + doc.id;
+        return `
+        <div class="event" data-doc-id="${doc.id}">
+          <div class="event-head" onclick="this.nextElementSibling.classList.toggle('hidden')">
+            <span class="event-index">#${d.eventIndex ?? "-"}</span>
+            <span class="event-type ${getEventTypeClass(eventType)}">${eventType}</span>
+            <span class="event-time">${formatTs(d.timestamp)}</span>
+            ${hasPayload ? '<span style="color:var(--muted);font-size:0.8rem">▼ 펼치기</span>' : ""}
+          </div>
+          ${hasPayload ? `<pre class="event-payload ${hasPayload ? "hidden" : ""}" id="${eventId}">${escapeHtml(payload)}</pre>` : ""}
+        </div>`;
+      }
+
+      function escapeHtml(s) {
+        const div = document.createElement("div");
+        div.textContent = s;
+        return div.innerHTML;
+      }
+
+      async function loadLogs() {
+        const userId = document.getElementById("userId").value.trim();
+        const filter = document.getElementById("eventFilter").value.trim();
+        if (!userId) {
+          showError("유저 ID를 입력해 주세요.");
+          return;
+        }
+
+        if (!db) {
+          showError("Firebase를 불러올 수 없습니다. 스크립트 로드 순서를 확인하세요.");
+          return;
+        }
+
+        document.getElementById("loadBtn").disabled = true;
+        showError("");
+        document.getElementById("out").innerHTML = '<div class="loading-indicator"><div class="loading-spinner"></div><span>불러오는 중…</span></div>';
+
+        try {
+          const col = db.collection(userId);
+          const snap = await col.get();
+          let docs = snap.docs;
+          docs = docs.slice().sort((a, b) => (a.data().eventIndex ?? 0) - (b.data().eventIndex ?? 0));
+
+          const bySession = {};
+          docs.forEach((doc) => {
+            const d = doc.data();
+            const sid = d.sessionId || "no-session";
+            if (!bySession[sid]) bySession[sid] = [];
+            bySession[sid].push({ doc, d });
+          });
+
+          const sessionOrder = Object.keys(bySession).sort((a, b) => {
+            const a0 = bySession[a][0]?.d?.eventIndex ?? 0;
+            const b0 = bySession[b][0]?.d?.eventIndex ?? 0;
+            return a0 - b0;
+          });
+
+          let html = "";
+          let totalEvents = 0;
+          let filteredCount = 0;
+          sessionOrder.forEach((sid) => {
+            const events = bySession[sid];
+            totalEvents += events.length;
+            let sessionHtml = "";
+            events.forEach(({ doc }) => {
+              const row = renderEvent(doc, filter || null);
+              if (row) filteredCount++;
+              sessionHtml += row;
+            });
+            if (!sessionHtml && filter) return;
+            const shortId = sid.length > 24 ? sid.slice(0, 20) + "…" : sid;
+            html += `
+            <div class="session-block">
+              <div class="session-header">세션 <code>${escapeHtml(shortId)}</code> <span style="color:var(--muted);font-weight:normal">(${events.length}건)</span></div>
+              <div class="event-list">${sessionHtml || '<p style="color:var(--muted);padding:12px">해당 타입 없음</p>'}</div>
+            </div>`;
+          });
+
+          document.getElementById("summary").textContent = `총 ${totalEvents}건 (유저: ${userId})${filter ? ` · 타입 "${filter}" ${filteredCount}건` : ""}`;
+          document.getElementById("summary").classList.remove("hidden");
+          if (totalEvents === 0) {
+            document.getElementById("out").innerHTML = '<p class="summary">이 컬렉션에 문서가 없습니다. Firebase 콘솔에서 컬렉션 이름(유저 ID)을 확인하세요. (앱 로그인 시 입력한 아이디와 동일, 예: doh, test)</p>';
+          } else if (!html) {
+            document.getElementById("out").innerHTML = '<p class="summary">선택한 이벤트 타입에 해당하는 로그가 없습니다.</p>';
+          } else {
+            document.getElementById("out").innerHTML = html;
+          }
+        } catch (e) {
+          let msg = "불러오기 실패: " + e.message;
+          if (e.message && (e.message.includes("permission") || e.message.includes("Permission"))) {
+            msg += " — Firestore 콘솔에서 규칙을 확인하세요. (규칙 탭에 read 허용 필요, docs/FIREBASE_LOGGING_확인.md 참고)";
+          }
+          if (e.message && e.message.includes("index")) {
+            msg += " — 인덱스 오류일 수 있습니다. 위 수정으로 해결되었을 수 있으니 다시 시도하세요.";
+          }
+          showError(msg);
+          document.getElementById("out").innerHTML = "";
+        }
+        document.getElementById("loadBtn").disabled = false;
+      }
+    </script>
+  </body>
+</html>

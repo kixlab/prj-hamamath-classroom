@@ -8,8 +8,11 @@ export function getApiUrl(path: string): string {
 }
 
 interface CoTCreateData {
-  problem_text: string;
-  image_url?: string;
+  main_problem: string;
+  main_answer: string;
+  main_solution?: string | null;
+  grade: string;
+  image_data?: string | null;
 }
 
 interface MatchSubjectAreaData {

@@ -13,15 +13,31 @@ function sanitizeCollectionId(userId: string): string {
   return userId.replace(/[/\\[\]#?]/g, "_").trim() || "anonymous";
 }
 
-/** payload 내 문자열/중첩 객체 정제 (문자열 길이 제한) */
+/** Firestore는 undefined를 허용하지 않음. 문서에서 undefined 필드를 제거한 객체 반환 */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue;
+    const isPlainObject =
+      typeof v === "object" &&
+      v !== null &&
+      !Array.isArray(v) &&
+      Object.getPrototypeOf(v) === Object.prototype;
+    out[k] = isPlainObject ? stripUndefined(v as Record<string, unknown>) : v;
+  }
+  return out;
+}
+
+/** payload 내 문자열/중첩 객체 정제 (문자열 길이 제한), undefined 제거 */
 function sanitizePayload(obj: unknown): unknown {
   if (obj == null) return obj;
   if (typeof obj === "string") return obj.length > MAX_STRING ? obj.slice(0, MAX_STRING) + "…" : obj;
-  if (Array.isArray(obj)) return obj.map(sanitizePayload).slice(0, 500);
+  if (Array.isArray(obj)) return obj.map(sanitizePayload).filter((v) => v !== undefined).slice(0, 500);
   if (typeof obj === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
       if (Object.keys(out).length >= 100) break;
+      if (v === undefined) continue;
       out[k] = sanitizePayload(v);
     }
     return out;
@@ -71,7 +87,7 @@ function handleClick(e: MouseEvent) {
     clientY: e.clientY,
   };
   const col = collection(db, collectionId);
-  addDoc(col, doc).catch((err) => console.warn("[eventLogger] Firestore write failed:", err));
+  addDoc(col, stripUndefined(doc)).catch((err) => console.warn("[eventLogger] Firestore write failed:", err));
 }
 
 /**
@@ -117,5 +133,5 @@ export function logUserEvent(eventType: string, payload?: Record<string, unknown
     ...(payload ? sanitizePayload(payload) as Record<string, unknown> : {}),
   };
   const col = collection(db, collectionId);
-  addDoc(col, doc).catch((err) => console.warn("[eventLogger] logUserEvent failed:", err));
+  addDoc(col, stripUndefined(doc)).catch((err) => console.warn("[eventLogger] logUserEvent failed:", err));
 }
