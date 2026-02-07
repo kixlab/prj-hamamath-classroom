@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { api } from "../../services/api";
+import { logUserEvent } from "../../services/eventLogger";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer, formatVerificationResult } from "../../utils/formatting";
 import styles from "./SubQs.module.css";
@@ -290,7 +291,15 @@ export const SubQs = () => {
         };
       });
 
-      // 해당 문항의 재생성 진행 상태 해제
+      logUserEvent("sub_question_verified", {
+        sub_question_id: enrichedSubQuestion.sub_question_id,
+        step_id: enrichedSubQuestion.step_id,
+        verification_result: enrichedSubQuestion.verification_result ?? null,
+        re_verification_result: enrichedSubQuestion.re_verification_result ?? null,
+        re_sub_question: enrichedSubQuestion.re_sub_question ?? null,
+        re_sub_answer: enrichedSubQuestion.re_sub_answer ?? null,
+      });
+
       setRegeneratingStates((prev) => ({
         ...prev,
         [enrichedSubQuestion.sub_question_id]: false,
@@ -308,8 +317,8 @@ export const SubQs = () => {
     }
   };
 
-  // 확정 버튼을 누를 때마다 다음 단계 한 개씩 생성
   const generateNextStepB = async () => {
+    logUserEvent("confirm_next_clicked", {});
     if (!currentCotData || !(currentCotData as any).steps) {
       setError("CoT 데이터가 없습니다.");
       return;
@@ -406,7 +415,16 @@ export const SubQs = () => {
 
       (setCurrentGuidelineData as any)(guidelineData);
 
-      // 새 단계를 바로 보이게 해서 원본 + "준비중"이 먼저 보이도록
+      logUserEvent("sub_question_generated", {
+        stepId,
+        sub_question_id: subQuestion.sub_question_id,
+        step_name: subQuestion.step_name,
+        sub_skill_name: subQuestion.sub_skill_name,
+        guide_sub_question: subQuestion.guide_sub_question,
+        guide_sub_answer: subQuestion.guide_sub_answer ?? null,
+        subject_area: subjectArea,
+      });
+
       setBCurrentIndex(index + 1);
       setBVisibleCount(index + 1);
 
@@ -428,8 +446,8 @@ export const SubQs = () => {
     }
   };
 
-  // 해당 단계 다음부터 나머지 단계를 자동 생성 (사용자 개입 없이 순차 생성)
   const generateRemainingStepsB = async () => {
+    logUserEvent("rest_auto_generate_clicked", {});
     if (!currentCotData || !(currentCotData as any).steps) {
       setError("CoT 데이터가 없습니다.");
       return;
@@ -500,6 +518,17 @@ export const SubQs = () => {
         const previousSubQuestions = guideSubQuestions.slice();
         guideSubQuestions.push(subQuestion);
 
+        logUserEvent("sub_question_generated", {
+          source: "rest_auto",
+          stepId: stepOrder[i],
+          sub_question_id: subQuestion.sub_question_id,
+          step_name: subQuestion.step_name,
+          sub_skill_name: subQuestion.sub_skill_name,
+          guide_sub_question: subQuestion.guide_sub_question,
+          guide_sub_answer: subQuestion.guide_sub_answer ?? null,
+          subject_area: subjectArea,
+        });
+
         (setCurrentGuidelineData as any)({
           ...currentGuidelineData,
           main_problem: (currentCotData as any).problem,
@@ -510,7 +539,6 @@ export const SubQs = () => {
           guide_sub_questions: [...guideSubQuestions],
         });
 
-        // 새 단계를 바로 보이게 해서 원본 + "준비중"이 먼저 보이도록
         setBCurrentIndex(i + 1);
         setBVisibleCount(i + 1);
 
@@ -569,9 +597,9 @@ export const SubQs = () => {
       ...prev,
       [subqId]: false,
     }));
+    logUserEvent("edit_original", { subqId, newQuestion, newAnswer });
   };
 
-  // 재생성 편집 저장: re_sub_question / re_sub_answer 업데이트
   const handleSaveRegeneratedEdit = (subqId: string) => {
     const questionEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="regenerated-question"]`) as HTMLTextAreaElement;
     const answerEl = document.querySelector(`input[data-subq-id="${subqId}"][data-type="regenerated-answer"]`) as HTMLInputElement;
@@ -600,6 +628,7 @@ export const SubQs = () => {
       ...prev,
       [subqId]: false,
     }));
+    logUserEvent("edit_regenerated", { subqId, newQuestion, newAnswer });
   };
 
   const toggleOriginalEdit = (subqId: string) => {
@@ -624,13 +653,25 @@ export const SubQs = () => {
   };
 
   const toggleVerification = (subqId: string) => {
+    const next = !verificationStates[subqId];
     setVerificationStates((prev) => ({
       ...prev,
       [subqId]: !prev[subqId],
     }));
+    if (next && (currentGuidelineData as any)?.guide_sub_questions) {
+      const subQ = (currentGuidelineData as any).guide_sub_questions.find((q: SubQuestion) => q.sub_question_id === subqId);
+      if (subQ) {
+        logUserEvent("verification_viewed", {
+          subqId,
+          verification_result: subQ.verification_result ?? null,
+          re_verification_result: subQ.re_verification_result ?? null,
+        });
+      }
+    }
   };
 
   const handleFeedbackRegenerate = async (subqId: string, userFeedback: string) => {
+    logUserEvent("feedback_submitted", { subqId, feedbackText: userFeedback });
     if (!currentCotData || !currentGuidelineData) return;
 
     const subQuestions: SubQuestion[] = (currentGuidelineData as any).guide_sub_questions || [];
@@ -690,7 +731,13 @@ export const SubQs = () => {
         guide_sub_questions: updatedSubQuestions,
       });
 
-      // 피드백 입력 모드 닫기
+      const updated = (regenerateResponse as any).sub_question;
+      logUserEvent("regenerated_output", {
+        subqId,
+        re_sub_question: updated?.re_sub_question ?? updated?.guide_sub_question,
+        re_sub_answer: updated?.re_sub_answer ?? updated?.guide_sub_answer,
+      });
+
       setFeedbackStates((prev) => ({
         ...prev,
         [subqId]: false,
@@ -841,6 +888,7 @@ export const SubQs = () => {
                                 className={`${styles.selectBtn} ${effectiveSelectedVersion === "original" ? styles.selectBtnActive : ""}`}
                                 onClick={() => {
                                   setPreferredVersion?.({ ...preferredVersion, [subQ.sub_question_id]: "original" });
+                                  logUserEvent("version_selected", { subqId: subQ.sub_question_id, version: "original" });
                                   setHideUnselectedStates((prev) => ({
                                     ...prev,
                                     [subQ.sub_question_id]: true,
@@ -906,6 +954,7 @@ export const SubQs = () => {
                                 className={`${styles.selectBtn} ${effectiveSelectedVersion === "regenerated" ? styles.selectBtnActive : ""}`}
                                 onClick={() => {
                                   setPreferredVersion?.({ ...preferredVersion, [subQ.sub_question_id]: "regenerated" });
+                                  logUserEvent("version_selected", { subqId: subQ.sub_question_id, version: "regenerated" });
                                   setHideUnselectedStates((prev) => ({
                                     ...prev,
                                     [subQ.sub_question_id]: true,

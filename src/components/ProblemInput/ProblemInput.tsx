@@ -1,6 +1,7 @@
 import { useState, ChangeEvent, FormEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
+import { logUserEvent } from '../../services/eventLogger';
 import styles from './ProblemInput.module.css';
 
 interface ProblemInputProps {
@@ -118,7 +119,27 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         main_solution: formData.solution,
       };
 
-      // 새로운 문제에 대한 CoT가 생성되면, 이전 문제의 하위문항(guideline) 정보는 초기화
+      logUserEvent("problem_input", {
+        problem: formData.problem,
+        answer: formData.answer,
+        solution: formData.solution || null,
+        grade: formData.grade,
+        hasImage: !!formData.imageData,
+        imgDescription: formData.imgDescription || null,
+      });
+      logUserEvent("cot_output", {
+        problem: result.problem,
+        answer: result.answer,
+        grade: result.grade,
+        main_solution: result.main_solution ?? formData.solution || null,
+        stepsCount: result.steps?.length ?? 0,
+        steps: result.steps?.map((s: any) => ({
+          step_number: s.step_number,
+          step_title: s.step_title,
+          step_content: s.step_content,
+        })),
+      });
+
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
       onSubmit?.(cotDataWithExtras);

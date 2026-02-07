@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import { logUserEvent } from '../../services/eventLogger';
 import { useMathJax } from '../../hooks/useMathJax';
 import styles from './CoTSteps.module.css';
 
@@ -30,10 +31,19 @@ export const CoTSteps = () => {
 
   const saveEdit = () => {
     if (!editingStepId || !currentCotData?.steps) return;
+    const step = currentCotData.steps.find((s: any) => s.sub_skill_id === editingStepId);
+    const originalContent = step?.step_content ?? '';
     const newSteps = currentCotData.steps.map((step: any) =>
       step.sub_skill_id === editingStepId ? { ...step, step_content: editingContent } : step
     );
     setCurrentCotData({ ...currentCotData, steps: newSteps });
+    logUserEvent('cot_edit', {
+      stepId: editingStepId,
+      step_name: step?.step_name,
+      sub_skill_name: step?.sub_skill_name,
+      originalContent,
+      newContent: editingContent,
+    });
     setEditingStepId(null);
     setEditingContent('');
   };
