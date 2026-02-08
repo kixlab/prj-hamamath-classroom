@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Generated config (contains keys from .env)
+docs/log-viewer-config.js
