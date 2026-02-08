@@ -24,5 +24,5 @@ dist-ssr
 *.sw?
 .env
 
-# 로그 뷰어 설정 (.env에서 생성됨)
+# Generated config (contains keys from .env)
 docs/log-viewer-config.js
