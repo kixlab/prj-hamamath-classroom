@@ -475,6 +475,52 @@
   cursor: not-allowed;
 }
 
+/* Per-level examples toggle */
+.examplesToggleWrap {
+  margin-top: 10px;
+  border-top: 1px dashed #d1d5db;
+  padding-top: 8px;
+}
+
+.examplesToggleBtn {
+  background: none;
+  border: none;
+  color: #6366f1;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 0;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.examplesToggleBtn:hover {
+  color: #4338ca;
+}
+
+.examplesList {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exampleItem {
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.825rem;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.examplesEmpty {
+  font-size: 0.825rem;
+  color: #9ca3af;
+  margin: 0;
+  padding: 4px 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .levelCards {

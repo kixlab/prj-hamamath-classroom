@@ -355,18 +355,15 @@
     <div id="summary" class="summary hidden"></div>
     <div id="out"></div>
 
+    <!-- .env 기반 설정: 프로젝트 루트에서 npm run log-viewer:config 실행 후 사용 -->
+    <script src="log-viewer-config.js"></script>
     <script type="module">
-      const firebaseConfig = {
-        apiKey: "AIzaSyDyQXB01vE3aV7Ro88whM6xrWBjF94veD4",
-        authDomain: "hamamath-classroom.firebaseapp.com",
-        projectId: "hamamath-classroom",
-        storageBucket: "hamamath-classroom.firebasestorage.app",
-        messagingSenderId: "407551343352",
-        appId: "1:407551343352:web:eb30cef9705c9838b6990d",
-        measurementId: "G-XPQPE3NP9G",
-      };
+      const firebaseConfig = window.__FIREBASE_CONFIG__;
+      if (!firebaseConfig || !firebaseConfig.apiKey) {
+        console.error("Firebase 설정이 없습니다. 프로젝트 루트에서 실행: npm run log-viewer:config");
+      }
       let db = null;
-      if (typeof firebase !== "undefined") {
+      if (typeof firebase !== "undefined" && firebaseConfig?.apiKey) {
         try {
           firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();

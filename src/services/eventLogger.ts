@@ -101,15 +101,14 @@ function getTargetInfo(el: EventTarget | null): Record<string, unknown> {
     typeof el.textContent === "string" ? el.textContent.replace(/\s+/g, " ").trim().slice(0, 200) : undefined;
   const role = el.getAttribute?.("role") ?? undefined;
   const ariaLabel = el.getAttribute?.("aria-label") ?? undefined;
-  return {
-    tag,
-    id,
-    className,
-    ...(Object.keys(dataAttrs).length ? { data: dataAttrs } : {}),
-    ...(textContent ? { text: textContent } : {}),
-    ...(role ? { role } : {}),
-    ...(ariaLabel ? { ariaLabel } : {}),
-  };
+  const info: Record<string, unknown> = { tag };
+  if (id) info.id = id;
+  if (className) info.className = className;
+  if (Object.keys(dataAttrs).length) info.data = dataAttrs;
+  if (textContent) info.text = textContent;
+  if (role) info.role = role;
+  if (ariaLabel) info.ariaLabel = ariaLabel;
+  return info;
 }
 
 function handleClick(e: MouseEvent) {
