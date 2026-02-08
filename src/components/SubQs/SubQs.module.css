@@ -73,9 +73,11 @@
   margin-bottom: 16px;
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
 }
 
-.exportWordBtn {
+.exportWordBtn,
+.exportPdfBtn {
   background: var(--color-primary);
   color: white;
   border: none;
@@ -86,7 +88,8 @@
   cursor: pointer;
 }
 
-.exportWordBtn:hover {
+.exportWordBtn:hover,
+.exportPdfBtn:hover {
   opacity: 0.9;
 }
 

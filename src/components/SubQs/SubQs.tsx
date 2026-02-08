@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
+import { exportPdfFromGuideline } from "../../utils/exportPdf";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer, formatVerificationResult } from "../../utils/formatting";
 import styles from "./SubQs.module.css";
@@ -810,6 +811,20 @@ export const SubQs = () => {
     }
   };
 
+  const handleExportPdf = async () => {
+    if (!currentCotData || !currentGuidelineData) return;
+    try {
+      await exportPdfFromGuideline(
+        currentCotData as any,
+        currentGuidelineData as any,
+        preferredVersion,
+        currentProblemId
+      );
+    } catch (err: any) {
+      alert(err.message || "PDF 생성 중 오류가 발생했습니다.");
+    }
+  };
+
   return (
     <div className={styles.guidelineContainer} ref={containerRef}>
       {loading && (
@@ -829,6 +844,9 @@ export const SubQs = () => {
         <div className={styles.exportWordRow}>
           <button type="button" className={styles.exportWordBtn} onClick={handleExportWord}>
             확정된 문제 Word 다운로드
+          </button>
+          <button type="button" className={styles.exportPdfBtn} onClick={handleExportPdf}>
+            PDF 다운로드
           </button>
         </div>
       )}
