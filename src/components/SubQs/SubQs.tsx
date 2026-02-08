@@ -799,7 +799,7 @@ export const SubQs = () => {
   const visibleCount = bMode ? Math.max(1, bVisibleCount || 1) : allSubQuestions.length;
   const visibleSubQuestions = allSubQuestions.slice(0, visibleCount);
   // 4-2 단계 마지막에만 "문제 확정하기" 버튼 노출
-  const isAtLastStep42 = allSubQuestions.length > 0 && allSubQuestions[allSubQuestions.length - 1]?.step_id === "4-2";
+  const isAtLastStep42 = allSubQuestions.length > 0 && allSubQuestions[allSubQuestions.length - 1]?.sub_question_id === "4-2";
 
   const handleExportWord = async () => {
     if (!currentCotData || !currentGuidelineData) return;
