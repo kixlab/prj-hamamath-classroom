@@ -10,6 +10,7 @@ interface RubricLevel {
   title: string;
   description: string;
   bullets: string[];
+  examples: string[];
 }
 
 interface RubricItem {
@@ -83,6 +84,7 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
           title: data.description || '',
           description: data.description || '',
           bullets: Array.isArray(data.criteria) ? data.criteria : [],
+          examples: Array.isArray(data.examples) ? data.examples : [],
         };
       });
 
@@ -107,10 +109,12 @@ export const Rubrics = () => {
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   // Per-level editing: { [sub_question_id]: { [level]: boolean } }
   const [editingLevels, setEditingLevels] = useState<Record<string, Record<string, boolean>>>({});
-  // Controlled edit drafts: { [sub_question_id]: { [level]: { title, description, bullets } } }
-  const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { title: string; description: string; bullets: string }>>>({});
+  // Controlled edit drafts: { [sub_question_id]: { [level]: { title, description, bullets, examples } } }
+  const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { title: string; description: string; bullets: string; examples: string }>>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
-  const containerRef = useMathJax([rubrics, editingLevels]);
+  // Per-level examples toggle: key = "sub_question_id::level"
+  const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
+  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
   const hasCalledRef = useRef(false);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -165,7 +169,7 @@ export const Rubrics = () => {
           ...prev,
           [id]: {
             ...prev[id],
-            [level]: { title: lv.title, description: lv.description, bullets: lv.bullets.join('\n') },
+            [level]: { title: lv.title, description: lv.description, bullets: lv.bullets.join('\n'), examples: lv.examples.join('\n') },
           },
         }));
       }
@@ -176,7 +180,7 @@ export const Rubrics = () => {
     }));
   };
 
-  const updateDraft = (id: string, level: string, field: 'title' | 'description' | 'bullets', value: string) => {
+  const updateDraft = (id: string, level: string, field: 'title' | 'description' | 'bullets' | 'examples', value: string) => {
     setEditDrafts((prev) => ({
       ...prev,
       [id]: {
@@ -202,6 +206,7 @@ export const Rubrics = () => {
               title: draft.title.trim() || lv.title,
               description: draft.description.trim() || lv.description,
               bullets: draft.bullets.split('\n').filter((b) => b.trim()),
+              examples: draft.examples.split('\n').filter((e) => e.trim()),
             };
           }),
         };
@@ -261,6 +266,7 @@ export const Rubrics = () => {
             title: data.description || '',
             description: data.description || '',
             bullets: Array.isArray(data.criteria) ? data.criteria : [],
+            examples: Array.isArray(data.examples) ? data.examples : [],
           };
         });
 
@@ -419,6 +425,15 @@ export const Rubrics = () => {
                               rows={3}
                             />
                           </div>
+                          <div className={styles.levelEditGroup}>
+                            <label>학생 답변 예시 (줄바꿈으로 구분)</label>
+                            <textarea
+                              className={styles.editTextarea}
+                              value={draft?.examples ?? lv.examples.join('\n')}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'examples', e.target.value)}
+                              rows={3}
+                            />
+                          </div>
                           <div className={styles.levelEditActions}>
                             <button className={styles.cancelBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
                               취소
@@ -438,6 +453,31 @@ export const Rubrics = () => {
                               ))}
                             </ul>
                           )}
+                          {(() => {
+                            const exKey = `${rubric.sub_question_id}::${lv.level}`;
+                            const isOpen = !!examplesOpen[exKey];
+                            return (
+                              <div className={styles.examplesToggleWrap}>
+                                <button
+                                  className={styles.examplesToggleBtn}
+                                  onClick={() => setExamplesOpen((prev) => ({ ...prev, [exKey]: !prev[exKey] }))}
+                                >
+                                  {isOpen ? '학생 답변 예시 닫기' : '학생 답변 예시 보기'}
+                                </button>
+                                {isOpen && (
+                                  <div className={styles.examplesList}>
+                                    {lv.examples.length > 0 ? (
+                                      lv.examples.map((ex, i) => (
+                                        <div key={i} className={styles.exampleItem}>{preprocessLatex(ex)}</div>
+                                      ))
+                                    ) : (
+                                      <p className={styles.examplesEmpty}>예시 없음</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </>
                       )}
                     </div>
@@ -482,6 +522,7 @@ export const Rubrics = () => {
                   </button>
                 </div>
               </div>
+
             </div>
           );
         })}
