@@ -115,14 +115,7 @@ export const Rubrics = () => {
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
-  const hasCalledRef = useRef(false);
-  const [retryCount, setRetryCount] = useState(0);
-
-  useEffect(() => {
-    if (!currentGuidelineData || !(currentGuidelineData as any).guide_sub_questions) return;
-    if (hasCalledRef.current) return;
-    hasCalledRef.current = true;
-
+  const runGenerateRubrics = async () => {
     const gd = currentGuidelineData as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
