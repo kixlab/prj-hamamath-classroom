@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -99,8 +99,8 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 }
 
 export const Rubrics = () => {
-  const { currentGuidelineData } = useApp();
-  const [rubrics, setRubrics] = useState<RubricItem[]>([]);
+  const { currentGuidelineData, currentRubrics, setCurrentRubrics } = useApp();
+  const rubrics = (currentRubrics ?? []) as RubricItem[];
   const [generating, setGenerating] = useState(false);
   const [generatingMessage, setGeneratingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -111,44 +111,32 @@ export const Rubrics = () => {
   const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { title: string; description: string; bullets: string }>>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const containerRef = useMathJax([rubrics, editingLevels]);
-  const hasCalledRef = useRef(false);
-  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    if (!currentGuidelineData || !(currentGuidelineData as any).guide_sub_questions) return;
-    if (hasCalledRef.current) return;
-    hasCalledRef.current = true;
-
+  const runGenerateRubrics = async () => {
     const gd = currentGuidelineData as any;
-
-    const generateRubrics = async () => {
-      setGenerating(true);
-      setGeneratingMessage('루브릭 생성 중... (시간이 다소 소요될 수 있습니다)');
-      setError(null);
-
-      try {
-        const response = await api.generateRubricPipeline({
-          main_problem: gd.main_problem,
-          main_answer: gd.main_answer,
-          grade: gd.grade,
-          subject_area: gd.subject_area,
-          sub_questions: gd.guide_sub_questions,
-          variant: 'with_error_types',
-        });
-
-        const mapped = mapApiResponseToRubrics(response, gd);
-        setRubrics(mapped);
-      } catch (err: any) {
-        console.error('루브릭 생성 오류:', err);
-        setError(err.message || '루브릭 생성 중 오류가 발생했습니다.');
-      } finally {
-        setGenerating(false);
-        setGeneratingMessage('');
-      }
-    };
-
-    generateRubrics();
-  }, [currentGuidelineData, retryCount]);
+    if (!gd?.guide_sub_questions?.length) return;
+    setGenerating(true);
+    setGeneratingMessage('루브릭 생성 중... (시간이 다소 소요될 수 있습니다)');
+    setError(null);
+    try {
+      const response = await api.generateRubricPipeline({
+        main_problem: gd.main_problem,
+        main_answer: gd.main_answer,
+        grade: gd.grade,
+        subject_area: gd.subject_area,
+        sub_questions: gd.guide_sub_questions,
+        variant: 'with_error_types',
+      });
+      const mapped = mapApiResponseToRubrics(response, gd);
+      setCurrentRubrics(mapped);
+    } catch (err: any) {
+      console.error('루브릭 생성 오류:', err);
+      setError(err.message || '루브릭 생성 중 오류가 발생했습니다.');
+    } finally {
+      setGenerating(false);
+      setGeneratingMessage('');
+    }
+  };
 
   const toggleFeedback = (id: string) => {
     setFeedbackStates((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -190,8 +178,8 @@ export const Rubrics = () => {
     const draft = editDrafts[id]?.[level];
     if (!draft) return;
 
-    setRubrics((prev) =>
-      prev.map((r) => {
+    setCurrentRubrics(
+      rubrics.map((r) => {
         if (r.sub_question_id !== id) return r;
         return {
           ...r,
@@ -264,8 +252,8 @@ export const Rubrics = () => {
           };
         });
 
-      setRubrics((prev) =>
-        prev.map((r) => r.sub_question_id === id ? { ...r, levels: newLevels } : r),
+      setCurrentRubrics(
+        rubrics.map((r) => (r.sub_question_id === id ? { ...r, levels: newLevels } : r)),
       );
     } catch (err: any) {
       console.error('루브릭 재생성 오류:', err);
@@ -325,9 +313,8 @@ export const Rubrics = () => {
           <button
             className={styles.retryBtn}
             onClick={() => {
-              hasCalledRef.current = false;
               setError(null);
-              setRetryCount((c) => c + 1);
+              runGenerateRubrics();
             }}
           >
             다시 시도
@@ -337,11 +324,25 @@ export const Rubrics = () => {
     );
   }
 
+  const hasGuideline = currentGuidelineData && (currentGuidelineData as any).guide_sub_questions?.length;
   if (!rubrics.length) {
     return (
       <div className={styles.rubricContainer}>
         <div className={styles.emptyState}>
-          <p>하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.</p>
+          {!hasGuideline ? (
+            <p>하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.</p>
+          ) : (
+            <>
+              <p>루브릭을 생성하려면 아래 버튼을 눌러주세요.</p>
+              <button
+                className={styles.generateBtn}
+                disabled={generating}
+                onClick={runGenerateRubrics}
+              >
+                {generating ? generatingMessage || '생성 중...' : '루브릭 생성'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

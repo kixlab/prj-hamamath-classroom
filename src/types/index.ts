@@ -53,6 +53,8 @@ export interface AppContextType {
   reset: () => void;
   preferredVersion?: Record<string, 'original' | 'regenerated'>;
   setPreferredVersion?: (version: Record<string, 'original' | 'regenerated'>) => void;
+  currentRubrics: any[] | null;
+  setCurrentRubrics: (rubrics: any[] | null) => void;
 }
 
 // MathJax 타입 확장
