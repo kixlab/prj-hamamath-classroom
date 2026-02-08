@@ -114,7 +114,7 @@ export const Rubrics = () => {
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
-  const containerRef = useMathJax([rubrics, editingLevels]);
+  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
   const hasCalledRef = useRef(false);
   const [retryCount, setRetryCount] = useState(0);
 
