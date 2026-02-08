@@ -1,9 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CoTData, GuidelineData } from '../types';
+import { USER_ID_STORAGE_KEY } from '../components/UserIdPage/UserIdPage';
 
-const STORAGE_KEY = 'hamamath_saved_results';
+const STORAGE_KEY_PREFIX = 'hamamath_saved_results';
+const LAST_PROBLEM_KEY_PREFIX = 'hamamath_last_problem_id';
 const MAX_SAVED_RESULTS = 50;
-const LAST_PROBLEM_KEY = 'hamamath_last_problem_id';
+
+/** 현재 로그인한 사용자 ID 기준 저장 키 (아이디별로 저장 결과 분리) */
+function getStorageKey(): string {
+  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
+  return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
+}
+
+function getLastProblemKey(): string {
+  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
+  return uid ? `${LAST_PROBLEM_KEY_PREFIX}_${uid}` : LAST_PROBLEM_KEY_PREFIX;
+}
 
 interface SavedResult {
   problemId: string;
@@ -17,10 +29,10 @@ interface SavedResults {
   [problemId: string]: SavedResult;
 }
 
-// 전역 함수로 export
+// 전역 함수로 export (현재 로그인한 사용자 ID 기준)
 export function getSavedResults(): SavedResults {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(getStorageKey());
     return stored ? JSON.parse(stored) : {};
   } catch (e) {
     console.error('저장된 결과 불러오기 실패:', e);
@@ -41,8 +53,8 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
         result = await response.json();
         // 서버에서 불러온 결과를 localStorage에도 저장
         savedResults[problemId] = result;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedResults));
-        localStorage.setItem(LAST_PROBLEM_KEY, problemId);
+        localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
+        localStorage.setItem(getLastProblemKey(), problemId);
       } else if (response.status === 404) {
         console.warn(`문제 ID '${problemId}'에 대한 저장된 결과를 찾을 수 없습니다.`);
         return null;
@@ -58,7 +70,7 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
 
   if (!result) return null;
   
-  localStorage.setItem(LAST_PROBLEM_KEY, problemId);
+  localStorage.setItem(getLastProblemKey(), problemId);
   return result;
 }
 
@@ -66,7 +78,7 @@ export async function deleteResult(problemId: string): Promise<void> {
   // localStorage에서 삭제
   const savedResults = getSavedResults();
   delete savedResults[problemId];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(savedResults));
+  localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
 
   // 서버에서도 삭제
   try {
@@ -82,8 +94,8 @@ export async function deleteResult(problemId: string): Promise<void> {
 }
 
 export function clearAllResults(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(LAST_PROBLEM_KEY);
+  localStorage.removeItem(getStorageKey());
+  localStorage.removeItem(getLastProblemKey());
 }
 
 export function saveResult(
@@ -120,8 +132,8 @@ export function saveResult(
   }
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedResults));
-    localStorage.setItem(LAST_PROBLEM_KEY, problemId);
+    localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
+    localStorage.setItem(getLastProblemKey(), problemId);
     
     // 서버에도 비동기로 저장
     fetch('/api/v1/history/save', {
@@ -150,8 +162,8 @@ export function saveResult(
       newSavedResults[problemId] = resultData;
 
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newSavedResults));
-        localStorage.setItem(LAST_PROBLEM_KEY, problemId);
+        localStorage.setItem(getStorageKey(), JSON.stringify(newSavedResults));
+        localStorage.setItem(getLastProblemKey(), problemId);
         alert(`저장 공간이 부족하여 오래된 결과 ${resultKeys.length - keysToKeep.length}개가 삭제되었습니다.`);
       } catch (e2) {
         console.error('localStorage 저장 실패:', e2);
@@ -170,7 +182,7 @@ export const useStorage = () => {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(getStorageKey());
       if (stored) {
         setSavedResults(JSON.parse(stored));
       }
@@ -192,7 +204,7 @@ export const useStorage = () => {
   const loadResultHook = useCallback((problemId: string): SavedResult | null => {
     const result = savedResults[problemId];
     if (result) {
-      localStorage.setItem(LAST_PROBLEM_KEY, problemId);
+      localStorage.setItem(getLastProblemKey(), problemId);
       return result;
     }
     return null;

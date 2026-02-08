@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react';
+import { isUserIdAllowed } from '../../services/accessControl';
 import styles from './UserIdPage.module.css';
 
 export const USER_ID_STORAGE_KEY = 'hamamath_user_id';
@@ -10,8 +11,9 @@ interface UserIdPageProps {
 export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const trimmed = value.trim();
     if (!trimmed) {
@@ -19,7 +21,20 @@ export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
       return;
     }
     setError('');
-    onSuccess(trimmed);
+    setChecking(true);
+    try {
+      const allowed = await isUserIdAllowed(trimmed);
+      if (allowed) {
+        onSuccess(trimmed);
+      } else {
+        setError('허용된 사용자가 아닙니다. 관리자에게 문의하세요.');
+      }
+    } catch (err) {
+      console.error('허용 목록 확인 실패:', err);
+      setError('접속 권한 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setChecking(false);
+    }
   };
 
   return (
@@ -44,8 +59,8 @@ export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
             autoComplete="username"
           />
           {error && <p className={styles.error}>{error}</p>}
-          <button type="submit" className={styles.submitBtn} disabled={!value.trim()}>
-            입장
+          <button type="submit" className={styles.submitBtn} disabled={!value.trim() || checking}>
+            {checking ? '확인 중...' : '입장'}
           </button>
         </form>
       </div>
