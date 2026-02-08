@@ -26,6 +26,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
+  const [currentRubrics, setCurrentRubrics] = useState<any[] | null>(null);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -37,6 +38,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
     setLoading(false);
     setError(null);
     setPreferredVersion({});
+    setCurrentRubrics(null);
   }, []);
 
   const value: AppContextType = {
@@ -61,6 +63,8 @@ export const AppProvider = ({ children }: AppProviderProps) => {
     reset,
     preferredVersion,
     setPreferredVersion,
+    currentRubrics,
+    setCurrentRubrics,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
