@@ -49,6 +49,7 @@ export const SubQs = () => {
     setPreferredVersion,
     currentProblemId,
     setFinalizedGuidelineForRubric,
+    finalizedGuidelineForRubric,
   } = useApp();
 
   useEffect(() => {
@@ -109,8 +110,10 @@ export const SubQs = () => {
     };
   };
 
-  // 3단계 확정: 선택 반영된 하위문항 JSON을 4단계로 넘기고 4번째 탭으로 이동
+  // 3단계 확정: 컨펌 후 선택 반영된 하위문항 JSON 저장 → Word/PDF/루브릭 생성하기 버튼 노출
   const handleFinalize = () => {
+    const confirmed = window.confirm("하위문항을 확정하시겠습니까? 확정 후 Word·PDF 다운로드와 루브릭 생성이 가능합니다.");
+    if (!confirmed) return;
     try {
       const gd = currentGuidelineData as any;
       if (gd?.guide_sub_questions?.length) {
@@ -137,6 +140,9 @@ export const SubQs = () => {
     } catch (err) {
       console.error("하위문항 확정 처리 중 오류:", err);
     }
+  };
+
+  const handleGoToRubric = () => {
     setCurrentStep(4);
   };
 
@@ -842,21 +848,20 @@ export const SubQs = () => {
   const visibleSubQuestions = allSubQuestions.slice(0, visibleCount);
   // 하위문항이 있으면 맨 아래 "하위문항 확정하기" 버튼 노출 (마지막이 4-2가 아니어도 진입 가능)
   const showFinalizeButton = allSubQuestions.length > 0;
-  const isAtLastStep42 = showFinalizeButton; // 호환용 별칭 (기존 참조 대비)
 
   const handleExportWord = async () => {
-    if (!currentCotData || !currentGuidelineData) return;
+    if (!currentCotData || !finalizedGuidelineForRubric) return;
     try {
-      await api.exportWordFromGuideline(currentCotData as any, currentGuidelineData as any, preferredVersion, currentProblemId);
+      await api.exportWordFromGuideline(currentCotData as any, finalizedGuidelineForRubric, {}, currentProblemId);
     } catch (err: any) {
       alert(err.message || "워드 파일 생성 중 오류가 발생했습니다.");
     }
   };
 
   const handleExportPdf = async () => {
-    if (!currentCotData || !currentGuidelineData) return;
+    if (!currentCotData || !finalizedGuidelineForRubric) return;
     try {
-      await exportPdfFromGuideline(currentCotData as any, currentGuidelineData as any, preferredVersion, currentProblemId);
+      await exportPdfFromGuideline(currentCotData as any, finalizedGuidelineForRubric, {}, currentProblemId);
     } catch (err: any) {
       alert(err.message || "PDF 생성 중 오류가 발생했습니다.");
     }
@@ -876,17 +881,6 @@ export const SubQs = () => {
         </div>
       )}
       {error && <div className={styles.error}>{error}</div>}
-
-      {visibleSubQuestions.length > 0 && (
-        <div className={styles.exportWordRow}>
-          <button type="button" className={styles.exportWordBtn} onClick={handleExportWord}>
-            확정된 문제 Word 다운로드
-          </button>
-          <button type="button" className={styles.exportPdfBtn} onClick={handleExportPdf}>
-            PDF 다운로드
-          </button>
-        </div>
-      )}
 
       <div className={styles.guidelineSubQuestions}>
         {visibleSubQuestions.map((subQ: SubQuestion, index: number) => {
@@ -1310,6 +1304,19 @@ export const SubQs = () => {
 
           <button type="button" className={styles.finalizeBtn} onClick={handleFinalize}>
             하위문항 확정하기
+          </button>
+        </div>
+      )}
+      {showFinalizeButton && finalizedGuidelineForRubric != null && (
+        <div className={styles.exportWordRow}>
+          <button type="button" className={styles.exportWordBtn} onClick={handleExportWord}>
+            Word 다운로드
+          </button>
+          <button type="button" className={styles.exportPdfBtn} onClick={handleExportPdf}>
+            PDF 다운로드
+          </button>
+          <button type="button" className={styles.rubricGoBtn} onClick={handleGoToRubric}>
+            루브릭 생성하기
           </button>
         </div>
       )}
