@@ -1,3 +1,5 @@
+import { getHistoryHeaders } from "../hooks/useStorage";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 export function getApiUrl(path: string): string {
@@ -203,7 +205,7 @@ export const api = {
   async saveResult(data: any) {
     const response = await fetch(getApiUrl("/api/v1/history/save"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -214,7 +216,9 @@ export const api = {
 
   // 결과 불러오기
   async getResult(problemId: string) {
-    const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`));
+    const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
+      headers: getHistoryHeaders(),
+    });
     if (!response.ok) {
       if (response.status === 404) {
         return null;

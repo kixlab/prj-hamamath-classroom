@@ -12,6 +12,12 @@ function getStorageKey(): string {
   return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
 }
 
+/** history API 호출 시 서버에 유저별 저장을 위해 X-User-Id 헤더 반환 */
+export function getHistoryHeaders(): Record<string, string> {
+  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
+  return uid ? { 'X-User-Id': uid } : {};
+}
+
 function getLastProblemKey(): string {
   const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
   return uid ? `${LAST_PROBLEM_KEY_PREFIX}_${uid}` : LAST_PROBLEM_KEY_PREFIX;
@@ -50,7 +56,9 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
   // localStorage에 없으면 서버에서 불러오기
   if (!result) {
     try {
-      const response = await fetch(`/api/v1/history/${encodeURIComponent(problemId)}`);
+      const response = await fetch(`/api/v1/history/${encodeURIComponent(problemId)}`, {
+        headers: getHistoryHeaders(),
+      });
       if (response.ok) {
         result = await response.json();
         // 서버에서 불러온 결과를 localStorage에도 저장
@@ -86,6 +94,7 @@ export async function deleteResult(problemId: string): Promise<void> {
   try {
     const response = await fetch(`/api/v1/history/${encodeURIComponent(problemId)}`, {
       method: 'DELETE',
+      headers: getHistoryHeaders(),
     });
     if (!response.ok && response.status !== 404) {
       console.error(`서버에서 결과를 삭제하는 중 오류 발생: ${response.status}`);
@@ -146,10 +155,10 @@ export function saveResult(
     localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
     localStorage.setItem(getLastProblemKey(), problemId);
     
-    // 서버에도 비동기로 저장
+    // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리)
     fetch('/api/v1/history/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getHistoryHeaders() },
       body: JSON.stringify(resultData),
     }).catch((err) => {
       console.error('서버 저장 실패:', err);
