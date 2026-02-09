@@ -145,6 +145,16 @@ export const Rubrics = () => {
         logUserEvent("rubric_generated", {
           sub_question_count: mapped.length,
           problem_id: (gd as any).problem_id ?? null,
+          output: mapped.map((r) => ({
+            sub_question_id: r.sub_question_id,
+            question: (r.question || "").slice(0, 500),
+            levels: (r.levels || []).map((lv) => ({
+              level: lv.level,
+              description: (lv.description || "").slice(0, 300),
+              bullets_count: (lv.bullets || []).length,
+              examples_count: (lv.examples || []).length,
+            })),
+          })),
         });
       } catch {
         // 로깅 실패는 무시
@@ -303,6 +313,13 @@ export const Rubrics = () => {
         logUserEvent("rubric_regenerated", {
           sub_question_id: id,
           has_feedback: !!feedback,
+          feedback_text: feedback ? feedback.slice(0, 2000) : null,
+          output: newLevels.map((lv) => ({
+            level: lv.level,
+            description: (lv.description || "").slice(0, 300),
+            bullets_count: (lv.bullets || []).length,
+            examples_count: (lv.examples || []).length,
+          })),
         });
       } catch {
         // 로깅 실패는 무시
@@ -326,6 +343,7 @@ export const Rubrics = () => {
       logUserEvent("rubric_feedback_submitted", {
         sub_question_id: id,
         has_text: !!feedbackText,
+        feedback_text: feedbackText ? feedbackText.slice(0, 2000) : null,
       });
     } catch {
       // 로깅 실패는 무시
