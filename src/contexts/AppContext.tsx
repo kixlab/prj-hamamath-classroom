@@ -27,6 +27,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
   const [currentRubrics, setCurrentRubrics] = useState<any[] | null>(null);
+  const [finalizedGuidelineForRubric, setFinalizedGuidelineForRubric] = useState<any | null>(null);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -39,6 +40,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
     setError(null);
     setPreferredVersion({});
     setCurrentRubrics(null);
+    setFinalizedGuidelineForRubric(null);
   }, []);
 
   const value: AppContextType = {
@@ -65,6 +67,8 @@ export const AppProvider = ({ children }: AppProviderProps) => {
     setPreferredVersion,
     currentRubrics,
     setCurrentRubrics,
+    finalizedGuidelineForRubric,
+    setFinalizedGuidelineForRubric,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

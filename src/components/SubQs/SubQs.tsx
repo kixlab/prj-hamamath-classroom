@@ -48,6 +48,7 @@ export const SubQs = () => {
     preferredVersion = {},
     setPreferredVersion,
     currentProblemId,
+    setFinalizedGuidelineForRubric,
   } = useApp();
 
   useEffect(() => {
@@ -108,8 +109,34 @@ export const SubQs = () => {
     };
   };
 
-  // 전체 문제에 대한 최종 문항/정답을 한 번에 JSON으로 다운로드
+  // 3단계 확정: 선택 반영된 하위문항 JSON을 4단계로 넘기고 4번째 탭으로 이동
   const handleFinalize = () => {
+    try {
+      const gd = currentGuidelineData as any;
+      if (gd?.guide_sub_questions?.length) {
+        const cot = currentCotData as any;
+        const finalizedSubs = gd.guide_sub_questions.map((subQ: any) => {
+          const { finalQuestion, finalAnswer } = getFinalQA(subQ);
+          return {
+            ...subQ,
+            guide_sub_question: finalQuestion,
+            guide_sub_answer: finalAnswer,
+          };
+        });
+        setFinalizedGuidelineForRubric({
+          problem_id: gd.problem_id ?? currentProblemId,
+          main_problem: gd.main_problem ?? cot?.problem ?? null,
+          main_answer: gd.main_answer ?? cot?.answer ?? null,
+          grade: gd.grade ?? cot?.grade ?? null,
+          subject_area: gd.subject_area ?? cot?.subject_area ?? null,
+          guide_sub_questions: finalizedSubs,
+        });
+      } else {
+        setFinalizedGuidelineForRubric(null);
+      }
+    } catch (err) {
+      console.error("하위문항 확정 처리 중 오류:", err);
+    }
     setCurrentStep(4);
   };
 
@@ -813,8 +840,9 @@ export const SubQs = () => {
   const allSubQuestions = ((currentGuidelineData as any).guide_sub_questions || []) as SubQuestion[];
   const visibleCount = bMode ? Math.max(1, bVisibleCount || 1) : allSubQuestions.length;
   const visibleSubQuestions = allSubQuestions.slice(0, visibleCount);
-  // 4-2 단계 마지막에만 "문제 확정하기" 버튼 노출
-  const isAtLastStep42 = allSubQuestions.length > 0 && allSubQuestions[allSubQuestions.length - 1]?.sub_question_id === "4-2";
+  // 하위문항이 있으면 맨 아래 "하위문항 확정하기" 버튼 노출 (마지막이 4-2가 아니어도 진입 가능)
+  const showFinalizeButton = allSubQuestions.length > 0;
+  const isAtLastStep42 = showFinalizeButton; // 호환용 별칭 (기존 참조 대비)
 
   const handleExportWord = async () => {
     if (!currentCotData || !currentGuidelineData) return;
@@ -1274,13 +1302,13 @@ export const SubQs = () => {
           </div>
         )}
       </div>
-      {isAtLastStep42 && (
+      {showFinalizeButton && (
         <div className={styles.finalizeRow}>
-          <button className={styles.downloadBtn} onClick={handleDownloadJson}>
+          <button type="button" className={styles.downloadBtn} onClick={handleDownloadJson}>
             JSON 다운로드
           </button>
 
-          <button className={styles.finalizeBtn} onClick={handleFinalize}>
+          <button type="button" className={styles.finalizeBtn} onClick={handleFinalize}>
             하위문항 확정하기
           </button>
         </div>

@@ -102,7 +102,9 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 }
 
 export const Rubrics = () => {
-  const { currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId } = useApp();
+  const { currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId, finalizedGuidelineForRubric } = useApp();
+  /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 guideline */
+  const guidelineForStep4 = finalizedGuidelineForRubric ?? currentGuidelineData;
   const rubrics = (currentRubrics ?? []) as RubricItem[];
   const [generating, setGenerating] = useState(false);
 
@@ -122,7 +124,7 @@ export const Rubrics = () => {
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
   const runGenerateRubrics = async () => {
-    const gd = currentGuidelineData as any;
+    const gd = guidelineForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
     setGeneratingMessage("루브릭 생성 중... (시간이 다소 소요될 수 있습니다)");
@@ -220,12 +222,12 @@ export const Rubrics = () => {
   };
 
   const findSubQuestion = (id: string) => {
-    const gd = currentGuidelineData as any;
+    const gd = guidelineForStep4 as any;
     return (gd?.guide_sub_questions || []).find((sq: any) => sq.sub_question_id === id);
   };
 
   const handleRegenerateSingle = async (id: string, feedback?: string | null) => {
-    const gd = currentGuidelineData as any;
+    const gd = guidelineForStep4 as any;
     const rubricItem = rubrics.find((r) => r.sub_question_id === id);
     const subQuestion = findSubQuestion(id);
     if (!rubricItem || !subQuestion || !gd) return;
@@ -333,7 +335,7 @@ export const Rubrics = () => {
     );
   }
 
-  const hasGuideline = currentGuidelineData && (currentGuidelineData as any).guide_sub_questions?.length;
+  const hasGuideline = guidelineForStep4 && (guidelineForStep4 as any).guide_sub_questions?.length;
   if (!rubrics.length) {
     return (
       <div className={styles.rubricContainer}>
