@@ -14,10 +14,11 @@ import { Rubrics } from './components/Rubrics/Rubrics';
 import styles from './App.module.css';
 
 interface AppContentProps {
+  userId: string;
   onShowUserIdPage?: () => void;
 }
 
-const AppContent = ({ onShowUserIdPage }: AppContentProps) => {
+const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error, reset } = useApp();
   const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
 
@@ -38,7 +39,7 @@ const AppContent = ({ onShowUserIdPage }: AppContentProps) => {
 
   return (
     <div className={styles.app}>
-      <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} />
+      <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} userId={userId} />
       <Sidebar />
       <div className={styles.container}>
         <WorkflowTabs />
@@ -154,7 +155,7 @@ function App() {
   return (
     <AppWithClickLogger userId={userId}>
       <AppProvider>
-        <AppContent onShowUserIdPage={showUserIdPage} />
+        <AppContent userId={userId} onShowUserIdPage={showUserIdPage} />
       </AppProvider>
     </AppWithClickLogger>
   );
