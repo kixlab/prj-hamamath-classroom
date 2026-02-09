@@ -1,6 +1,6 @@
 import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult } from '../../hooks/useStorage';
+import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult, getHistoryHeaders } from '../../hooks/useStorage';
 import styles from './Sidebar.module.css';
 
 interface SavedResultItem {
@@ -50,7 +50,8 @@ export const Sidebar = () => {
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
       
       const resp = await fetch('/api/v1/history/list', {
-        signal: controller.signal
+        signal: controller.signal,
+        headers: getHistoryHeaders(),
       });
       clearTimeout(timeoutId);
       
