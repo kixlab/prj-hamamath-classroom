@@ -349,6 +349,10 @@
         <option value="verification_viewed">verification_viewed</option>
       </select>
       <button type="button" id="loadBtn">로그 불러오기</button>
+
+      <label for="workflowId" style="margin-left:16px;">워크플로우 ID</label>
+      <input type="text" id="workflowId" placeholder="예: wf_1770537493749_bx5on3o4" style="min-width:260px;" />
+      <button type="button" id="downloadWfBtn">JSON 다운로드</button>
     </div>
 
     <div id="error" class="error-msg hidden"></div>
@@ -371,6 +375,7 @@
       }
 
       document.getElementById("loadBtn").addEventListener("click", loadLogs);
+      document.getElementById("downloadWfBtn").addEventListener("click", downloadWorkflowJson);
 
       function showError(msg) {
         const el = document.getElementById("error");
@@ -397,6 +402,64 @@
 
       function getEventTypeClass(et) {
         return (et || "").replace(/_/g, "-");
+      }
+
+      async function downloadWorkflowJson() {
+        const userId = document.getElementById("userId").value.trim();
+        const workflowId = document.getElementById("workflowId").value.trim();
+        if (!userId) {
+          showError("유저 ID를 먼저 입력해 주세요.");
+          return;
+        }
+        if (!workflowId) {
+          showError("다운로드할 워크플로우 ID를 입력해 주세요.");
+          return;
+        }
+        if (!db) {
+          showError("Firebase를 불러올 수 없습니다. 스크립트 로드 순서를 확인하세요.");
+          return;
+        }
+        showError("");
+
+        try {
+          const col = db.collection(userId);
+          const snap = await col.get();
+          const events = [];
+          snap.docs.forEach((doc) => {
+            const d = doc.data();
+            const wid = d.workflowId || "";
+            if (wid === workflowId) {
+              const out = { id: doc.id, ...d };
+              if (d.timestamp && d.timestamp.toDate) {
+                out.timestamp = d.timestamp.toDate().toISOString();
+              }
+              events.push(out);
+            }
+          });
+
+          if (events.length === 0) {
+            showError(`워크플로우 ID "${workflowId}" 에 대한 로그가 없습니다.`);
+            return;
+          }
+
+          const payload = {
+            userId,
+            workflowId,
+            count: events.length,
+            events,
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `workflow_${workflowId}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          showError("워크플로우 JSON 다운로드 중 오류가 발생했습니다: " + e.message);
+        }
       }
 
       function renderEvent(doc, filter, options) {
@@ -435,6 +498,7 @@
       async function loadLogs() {
         const userId = document.getElementById("userId").value.trim();
         const filter = document.getElementById("eventFilter").value.trim();
+        const workflowFilter = document.getElementById("workflowId")?.value.trim() || "";
         if (!userId) {
           showError("유저 ID를 입력해 주세요.");
           return;
@@ -460,6 +524,14 @@
           let totalEvents = docs.length;
           let filteredCount = 0;
 
+          if (workflowFilter) {
+            // 특정 워크플로우만 보고 싶은 경우 우선 필터링
+            docs = docs.filter((doc) => {
+              const d = doc.data();
+              return (d.workflowId || "") === workflowFilter;
+            });
+          }
+
           if (viewMode === "workflow") {
             const byWorkflow = {};
             docs.forEach((doc) => {
@@ -477,11 +549,16 @@
               subq_review: "하위 문항 검토 (subq_review)",
             };
 
-            const workflowIds = Object.keys(byWorkflow).filter((k) => k !== "\0no-workflow").sort((a, b) => {
+            let workflowIds = Object.keys(byWorkflow).filter((k) => k !== "\0no-workflow").sort((a, b) => {
               const a0 = byWorkflow[a][0]?.d?.eventIndex ?? 0;
               const b0 = byWorkflow[b][0]?.d?.eventIndex ?? 0;
               return a0 - b0;
             });
+
+            // 워크플로우 ID로 한 번 더 필터링 (보호적 코드: 위에서 docs를 이미 필터링했지만 안전하게 한 번 더)
+            if (workflowFilter) {
+              workflowIds = workflowIds.filter((wid) => wid === workflowFilter);
+            }
 
             workflowIds.forEach((wid) => {
               const events = byWorkflow[wid];
@@ -556,6 +633,9 @@
                 <div class="session-header">워크플로우 없음 (세션별) <span style="color:var(--muted);font-weight:normal">(${noWf.length}건)</span></div>
                 <div class="event-list">${noWfHtml || '<p style="color:var(--muted);padding:12px">해당 타입 없음</p>'}</div>
               </div>`;
+            }
+            if (workflowFilter && workflowIds.length === 0) {
+              showError(`워크플로우 ID "${workflowFilter}" 에 대한 로그가 없습니다.`);
             }
           } else {
             const bySession = {};
