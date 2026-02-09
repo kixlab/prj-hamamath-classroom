@@ -62,6 +62,38 @@
   letter-spacing: -0.02em;
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.userIdLabel {
+  font-size: 0.8125rem;
+  opacity: 0.95;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  background: #dc2626;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logoutBtn:hover {
+  background: #b91c1c;
+}
+
 .newProblemBtn {
   background: rgba(255, 255, 255, 0.2);
   color: white;
