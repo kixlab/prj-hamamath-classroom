@@ -216,7 +216,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
-      saveResult(problemId, cotDataWithExtras, null, null);
+      saveResult(problemId, cotDataWithExtras, null, null, null, null);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
       setError(err.message || "오류가 발생했습니다.");

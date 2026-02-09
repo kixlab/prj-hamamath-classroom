@@ -55,6 +55,9 @@ export interface AppContextType {
   setPreferredVersion?: (version: Record<string, 'original' | 'regenerated'>) => void;
   currentRubrics: any[] | null;
   setCurrentRubrics: (rubrics: any[] | null) => void;
+  /** 3단계에서 확정 시 4단계로 넘기는 JSON (원본/재생성 선택 반영된 guide_sub_questions) */
+  finalizedGuidelineForRubric: any | null;
+  setFinalizedGuidelineForRubric: (data: any | null) => void;
 }
 
 // MathJax 타입 확장

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { logUserEvent } from '../../services/eventLogger';
+import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
 import styles from './CoTSteps.module.css';
 
 export const CoTSteps = () => {
-  const { currentCotData, setCurrentCotData, setCurrentStep } = useApp();
+  const { currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
   const containerRef = useMathJax([currentCotData?.steps]);
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
@@ -36,7 +37,9 @@ export const CoTSteps = () => {
     const newSteps = currentCotData.steps.map((step: any) =>
       step.sub_skill_id === editingStepId ? { ...step, step_content: editingContent } : step
     );
-    setCurrentCotData({ ...currentCotData, steps: newSteps });
+    const updated = { ...currentCotData, steps: newSteps };
+    setCurrentCotData(updated);
+    if (currentProblemId) saveResult(currentProblemId, updated, undefined, undefined, undefined, undefined);
     logUserEvent('cot_edit', {
       stepId: editingStepId,
       step_name: step?.step_name,

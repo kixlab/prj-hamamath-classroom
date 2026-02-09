@@ -17,12 +17,14 @@ function getLastProblemKey(): string {
   return uid ? `${LAST_PROBLEM_KEY_PREFIX}_${uid}` : LAST_PROBLEM_KEY_PREFIX;
 }
 
-interface SavedResult {
+export interface SavedResult {
   problemId: string;
   timestamp: string;
   cotData: CoTData | null;
   subQData: any | null;
   guidelineData: GuidelineData | null;
+  preferredVersion?: Record<string, 'original' | 'regenerated'>;
+  rubrics?: any[] | null;
 }
 
 interface SavedResults {
@@ -98,19 +100,28 @@ export function clearAllResults(): void {
   localStorage.removeItem(getLastProblemKey());
 }
 
+/**
+ * 결과 저장. 전달한 필드만 갱신하고, undefined인 필드는 기존 값 유지(병합).
+ * (null을 넘기면 해당 필드를 비움)
+ */
 export function saveResult(
   problemId: string,
-  cotData: CoTData | null,
-  subQData: any | null,
-  guidelineData: GuidelineData | null
+  cotData?: CoTData | null,
+  subQData?: any | null,
+  guidelineData?: GuidelineData | null,
+  preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
+  rubrics?: any[] | null
 ): void {
   const savedResults = getSavedResults();
+  const existing = savedResults[problemId];
   const resultData: SavedResult = {
-    problemId: problemId,
+    problemId,
     timestamp: new Date().toISOString(),
-    cotData: cotData,
-    subQData: subQData,
-    guidelineData: guidelineData,
+    cotData: cotData !== undefined ? cotData : (existing?.cotData ?? null),
+    subQData: subQData !== undefined ? subQData : (existing?.subQData ?? null),
+    guidelineData: guidelineData !== undefined ? guidelineData : (existing?.guidelineData ?? null),
+    preferredVersion: preferredVersion !== undefined ? (preferredVersion ?? undefined) : (existing?.preferredVersion),
+    rubrics: rubrics !== undefined ? (rubrics ?? null) : (existing?.rubrics ?? null),
   };
   savedResults[problemId] = resultData;
 
