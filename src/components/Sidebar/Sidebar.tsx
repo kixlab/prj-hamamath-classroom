@@ -23,6 +23,8 @@ export const Sidebar = () => {
     setCurrentSubQData, 
     setCurrentGuidelineData, 
     setCurrentProblemId,
+    setPreferredVersion,
+    setCurrentRubrics,
     reset,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
@@ -84,10 +86,12 @@ export const Sidebar = () => {
         const hasCot = !!result.cotData;
         const hasSubQ = !!result.subQData;
         const hasGuideline = !!result.guidelineData;
+        const hasRubrics = !!(result as any).rubrics?.length;
         const status: string[] = [];
         if (hasCot) status.push('CoT');
         if (hasSubQ) status.push('하위문항');
         if (hasGuideline) status.push('Guideline');
+        if (hasRubrics) status.push('루브릭');
 
         allResults.push({
           problemId: problemId,
@@ -169,6 +173,8 @@ export const Sidebar = () => {
         setCurrentCotData(result.cotData);
         setCurrentSubQData(result.subQData);
         setCurrentGuidelineData(result.guidelineData);
+        if (setPreferredVersion) setPreferredVersion(result.preferredVersion || {});
+        if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
         
         if (result.guidelineData && result.cotData) {
           setCurrentStep(3);

@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { useApp } from '../../contexts/AppContext';
-import { api } from '../../services/api';
-import { useMathJax } from '../../hooks/useMathJax';
-import styles from './Rubrics.module.css';
+import { useState, useEffect } from "react";
+import { useApp } from "../../contexts/AppContext";
+import { api } from "../../services/api";
+import { saveResult } from "../../hooks/useStorage";
+import { useMathJax } from "../../hooks/useMathJax";
+import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
-  level: '상' | '중' | '하';
+  level: "상" | "중" | "하";
   score: number;
   title: string;
   description: string;
@@ -34,24 +35,24 @@ function preprocessLatex(text: string): string {
 
   while (i < text.length) {
     // Check for display math $$
-    if (text[i] === '$' && i + 1 < text.length && text[i + 1] === '$') {
+    if (text[i] === "$" && i + 1 < text.length && text[i + 1] === "$") {
       const start = i + 2;
-      const end = text.indexOf('$$', start);
+      const end = text.indexOf("$$", start);
       if (end !== -1) {
         const content = text.substring(start, end);
-        result.push('$$', content.replace(koreanRegex, '\\text{$1}'), '$$');
+        result.push("$$", content.replace(koreanRegex, "\\text{$1}"), "$$");
         i = end + 2;
         continue;
       }
     }
 
     // Check for inline math $
-    if (text[i] === '$') {
+    if (text[i] === "$") {
       const start = i + 1;
-      const end = text.indexOf('$', start);
+      const end = text.indexOf("$", start);
       if (end !== -1 && end > start) {
         const content = text.substring(start, end);
-        result.push('$', content.replace(koreanRegex, '\\text{$1}'), '$');
+        result.push("$", content.replace(koreanRegex, "\\text{$1}"), "$");
         i = end + 1;
         continue;
       }
@@ -61,7 +62,7 @@ function preprocessLatex(text: string): string {
     i++;
   }
 
-  return result.join('');
+  return result.join("");
 }
 
 function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricItem[] {
@@ -71,8 +72,8 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
   return simulationRubrics.map((sr: any, idx: number) => {
     const sq = subQuestions[idx] || {};
     const rubric = sr.rubric || {};
-    const levelKeys: Array<'상' | '중' | '하'> = ['상', '중', '하'];
-    const scoreMap: Record<string, number> = { '상': 2, '중': 1, '하': 0 };
+    const levelKeys: Array<"상" | "중" | "하"> = ["상", "중", "하"];
+    const scoreMap: Record<string, number> = { 상: 2, 중: 1, 하: 0 };
 
     const levels: RubricLevel[] = levelKeys
       .filter((key) => rubric[key])
@@ -81,8 +82,8 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
         return {
           level: key,
           score: data.score ?? scoreMap[key],
-          title: data.description || '',
-          description: data.description || '',
+          title: data.description || "",
+          description: data.description || "",
           bullets: Array.isArray(data.criteria) ? data.criteria : [],
           examples: Array.isArray(data.examples) ? data.examples : [],
         };
@@ -90,9 +91,9 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 
     return {
       sub_question_id: sr.sub_question_id || sq.sub_question_id || `sq-${idx + 1}`,
-      step_name: sq.step_name || '',
-      sub_skill_name: sq.sub_skill_name || '',
-      question: sq.guide_sub_question || '',
+      step_name: sq.step_name || "",
+      sub_skill_name: sq.sub_skill_name || "",
+      question: sq.guide_sub_question || "",
       levels,
       level_analysis: sr.level_analysis,
       raw_response: sr,
@@ -101,10 +102,15 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 }
 
 export const Rubrics = () => {
-  const { currentGuidelineData, currentRubrics, setCurrentRubrics } = useApp();
+  const { currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId } = useApp();
   const rubrics = (currentRubrics ?? []) as RubricItem[];
   const [generating, setGenerating] = useState(false);
-  const [generatingMessage, setGeneratingMessage] = useState('');
+
+  useEffect(() => {
+    if (!currentProblemId || !currentRubrics?.length) return;
+    saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics);
+  }, [currentProblemId, currentRubrics]);
+  const [generatingMessage, setGeneratingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   // Per-level editing: { [sub_question_id]: { [level]: boolean } }
@@ -119,7 +125,7 @@ export const Rubrics = () => {
     const gd = currentGuidelineData as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
-    setGeneratingMessage('루브릭 생성 중... (시간이 다소 소요될 수 있습니다)');
+    setGeneratingMessage("루브릭 생성 중... (시간이 다소 소요될 수 있습니다)");
     setError(null);
     try {
       const response = await api.generateRubricPipeline({
@@ -128,16 +134,16 @@ export const Rubrics = () => {
         grade: gd.grade,
         subject_area: gd.subject_area,
         sub_questions: gd.guide_sub_questions,
-        variant: 'with_error_types',
+        variant: "with_error_types",
       });
       const mapped = mapApiResponseToRubrics(response, gd);
       setCurrentRubrics(mapped);
     } catch (err: any) {
-      console.error('루브릭 생성 오류:', err);
-      setError(err.message || '루브릭 생성 중 오류가 발생했습니다.');
+      console.error("루브릭 생성 오류:", err);
+      setError(err.message || "루브릭 생성 중 오류가 발생했습니다.");
     } finally {
       setGenerating(false);
-      setGeneratingMessage('');
+      setGeneratingMessage("");
     }
   };
 
@@ -156,7 +162,7 @@ export const Rubrics = () => {
           ...prev,
           [id]: {
             ...prev[id],
-            [level]: { title: lv.title, description: lv.description, bullets: lv.bullets.join('\n'), examples: lv.examples.join('\n') },
+            [level]: { title: lv.title, description: lv.description, bullets: lv.bullets.join("\n"), examples: lv.examples.join("\n") },
           },
         }));
       }
@@ -167,7 +173,7 @@ export const Rubrics = () => {
     }));
   };
 
-  const updateDraft = (id: string, level: string, field: 'title' | 'description' | 'bullets' | 'examples', value: string) => {
+  const updateDraft = (id: string, level: string, field: "title" | "description" | "bullets" | "examples", value: string) => {
     setEditDrafts((prev) => ({
       ...prev,
       [id]: {
@@ -192,8 +198,8 @@ export const Rubrics = () => {
               ...lv,
               title: draft.title.trim() || lv.title,
               description: draft.description.trim() || lv.description,
-              bullets: draft.bullets.split('\n').filter((b) => b.trim()),
-              examples: draft.examples.split('\n').filter((e) => e.trim()),
+              bullets: draft.bullets.split("\n").filter((b) => b.trim()),
+              examples: draft.examples.split("\n").filter((e) => e.trim()),
             };
           }),
         };
@@ -236,12 +242,12 @@ export const Rubrics = () => {
         sub_question: subQuestion,
         current_rubric: buildCurrentRubric(rubricItem),
         feedback: feedback || null,
-        variant: 'with_error_types',
+        variant: "with_error_types",
       });
 
       const rubricData = response.rubric || {};
-      const levelKeys: Array<'상' | '중' | '하'> = ['상', '중', '하'];
-      const scoreMap: Record<string, number> = { '상': 2, '중': 1, '하': 0 };
+      const levelKeys: Array<"상" | "중" | "하"> = ["상", "중", "하"];
+      const scoreMap: Record<string, number> = { 상: 2, 중: 1, 하: 0 };
 
       const newLevels: RubricLevel[] = levelKeys
         .filter((key) => rubricData[key])
@@ -250,19 +256,17 @@ export const Rubrics = () => {
           return {
             level: key,
             score: data.score ?? scoreMap[key],
-            title: data.description || '',
-            description: data.description || '',
+            title: data.description || "",
+            description: data.description || "",
             bullets: Array.isArray(data.criteria) ? data.criteria : [],
             examples: Array.isArray(data.examples) ? data.examples : [],
           };
         });
 
-      setCurrentRubrics(
-        rubrics.map((r) => (r.sub_question_id === id ? { ...r, levels: newLevels } : r)),
-      );
+      setCurrentRubrics(rubrics.map((r) => (r.sub_question_id === id ? { ...r, levels: newLevels } : r)));
     } catch (err: any) {
-      console.error('루브릭 재생성 오류:', err);
-      alert(err.message || '루브릭 재생성 중 오류가 발생했습니다.');
+      console.error("루브릭 재생성 오류:", err);
+      alert(err.message || "루브릭 재생성 중 오류가 발생했습니다.");
     } finally {
       setRegeneratingIds((prev) => {
         const next = new Set(prev);
@@ -288,11 +292,11 @@ export const Rubrics = () => {
         levels: r.levels,
       })),
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'rubrics.json';
+    a.download = "rubrics.json";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -339,12 +343,8 @@ export const Rubrics = () => {
           ) : (
             <>
               <p>루브릭을 생성하려면 아래 버튼을 눌러주세요.</p>
-              <button
-                className={styles.generateBtn}
-                disabled={generating}
-                onClick={runGenerateRubrics}
-              >
-                {generating ? generatingMessage || '생성 중...' : '루브릭 생성'}
+              <button className={styles.generateBtn} disabled={generating} onClick={runGenerateRubrics}>
+                {generating ? generatingMessage || "생성 중..." : "루브릭 생성"}
               </button>
             </>
           )}
@@ -361,7 +361,7 @@ export const Rubrics = () => {
           const isRegenerating = regeneratingIds.has(rubric.sub_question_id);
 
           return (
-            <div key={rubric.sub_question_id} className={`${styles.rubricCard} ${isRegenerating ? styles.rubricCardRegenerating : ''}`}>
+            <div key={rubric.sub_question_id} className={`${styles.rubricCard} ${isRegenerating ? styles.rubricCardRegenerating : ""}`}>
               <div className={styles.rubricHeader}>
                 <span className={styles.rubricId}>{rubric.sub_question_id}</span>
                 <span className={styles.rubricTitle}>
@@ -374,12 +374,8 @@ export const Rubrics = () => {
                 {rubric.levels.map((lv) => {
                   const isLevelEditing = editingLevels[rubric.sub_question_id]?.[lv.level];
                   const draft = editDrafts[rubric.sub_question_id]?.[lv.level];
-                  const levelStyle =
-                    lv.level === '상' ? styles.levelHigh :
-                    lv.level === '중' ? styles.levelMid : styles.levelLow;
-                  const badgeStyle =
-                    lv.level === '상' ? styles.badgeHigh :
-                    lv.level === '중' ? styles.badgeMid : styles.badgeLow;
+                  const levelStyle = lv.level === "상" ? styles.levelHigh : lv.level === "중" ? styles.levelMid : styles.levelLow;
+                  const badgeStyle = lv.level === "상" ? styles.badgeHigh : lv.level === "중" ? styles.badgeMid : styles.badgeLow;
 
                   return (
                     <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
@@ -387,10 +383,7 @@ export const Rubrics = () => {
                         <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
                         {!isLevelEditing && <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>}
                         {!isLevelEditing && (
-                          <button
-                            className={styles.levelEditBtn}
-                            onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}
-                          >
+                          <button className={styles.levelEditBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
                             편집
                           </button>
                         )}
@@ -403,7 +396,7 @@ export const Rubrics = () => {
                             <textarea
                               className={styles.editTextarea}
                               value={draft?.title ?? lv.title}
-                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'title', e.target.value)}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, "title", e.target.value)}
                               rows={1}
                             />
                           </div>
@@ -412,7 +405,7 @@ export const Rubrics = () => {
                             <textarea
                               className={styles.editTextarea}
                               value={draft?.description ?? lv.description}
-                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'description', e.target.value)}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, "description", e.target.value)}
                               rows={2}
                             />
                           </div>
@@ -420,8 +413,8 @@ export const Rubrics = () => {
                             <label>세부 기준 (줄바꿈으로 구분)</label>
                             <textarea
                               className={styles.editTextarea}
-                              value={draft?.bullets ?? lv.bullets.join('\n')}
-                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'bullets', e.target.value)}
+                              value={draft?.bullets ?? lv.bullets.join("\n")}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, "bullets", e.target.value)}
                               rows={3}
                             />
                           </div>
@@ -429,8 +422,8 @@ export const Rubrics = () => {
                             <label>학생 답변 예시 (줄바꿈으로 구분)</label>
                             <textarea
                               className={styles.editTextarea}
-                              value={draft?.examples ?? lv.examples.join('\n')}
-                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, 'examples', e.target.value)}
+                              value={draft?.examples ?? lv.examples.join("\n")}
+                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, "examples", e.target.value)}
                               rows={3}
                             />
                           </div>
@@ -458,17 +451,16 @@ export const Rubrics = () => {
                             const isOpen = !!examplesOpen[exKey];
                             return (
                               <div className={styles.examplesToggleWrap}>
-                                <button
-                                  className={styles.examplesToggleBtn}
-                                  onClick={() => setExamplesOpen((prev) => ({ ...prev, [exKey]: !prev[exKey] }))}
-                                >
-                                  {isOpen ? '학생 답변 예시 닫기' : '학생 답변 예시 보기'}
+                                <button className={styles.examplesToggleBtn} onClick={() => setExamplesOpen((prev) => ({ ...prev, [exKey]: !prev[exKey] }))}>
+                                  {isOpen ? "학생 답변 예시 닫기" : "학생 답변 예시 보기"}
                                 </button>
                                 {isOpen && (
                                   <div className={styles.examplesList}>
                                     {lv.examples.length > 0 ? (
                                       lv.examples.map((ex, i) => (
-                                        <div key={i} className={styles.exampleItem}>{preprocessLatex(ex)}</div>
+                                        <div key={i} className={styles.exampleItem}>
+                                          {preprocessLatex(ex)}
+                                        </div>
                                       ))
                                     ) : (
                                       <p className={styles.examplesEmpty}>예시 없음</p>
@@ -500,41 +492,24 @@ export const Rubrics = () => {
                     }
                   }}
                 >
-                  <span>{regeneratingIds.has(rubric.sub_question_id) ? '생성 중...' : '재생성'}</span>
+                  <span>{regeneratingIds.has(rubric.sub_question_id) ? "생성 중..." : "재생성"}</span>
                 </button>
               </div>
 
-              <div className={styles.feedbackInput} style={{ display: isFeedbackOpen ? 'block' : 'none' }}>
-                <textarea
-                  className={`${styles.feedbackTextarea} feedback-rubric-${rubric.sub_question_id}`}
-                  rows={3}
-                  placeholder="루브릭 수정 요청사항을 입력하세요."
-                />
+              <div className={styles.feedbackInput} style={{ display: isFeedbackOpen ? "block" : "none" }}>
+                <textarea className={`${styles.feedbackTextarea} feedback-rubric-${rubric.sub_question_id}`} rows={3} placeholder="루브릭 수정 요청사항을 입력하세요." />
                 <div className={styles.feedbackActions}>
                   <button className={styles.cancelBtn} onClick={() => toggleFeedback(rubric.sub_question_id)}>
                     취소
                   </button>
-                  <button
-                    className={styles.submitBtn}
-                    onClick={() => handleFeedbackRegenerate(rubric.sub_question_id)}
-                  >
+                  <button className={styles.submitBtn} onClick={() => handleFeedbackRegenerate(rubric.sub_question_id)}>
                     입력
                   </button>
                 </div>
               </div>
-
             </div>
           );
         })}
-      </div>
-
-      <div className={styles.finalizeRow}>
-        <button className={styles.downloadBtn} onClick={handleDownloadJson}>
-          JSON 다운로드
-        </button>
-        <button className={styles.finalizeBtn} onClick={() => {/* TODO: finalize */}}>
-          루브릭 확정하기
-        </button>
       </div>
     </div>
   );
