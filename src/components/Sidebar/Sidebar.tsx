@@ -1,6 +1,7 @@
 import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult, getHistoryHeaders } from '../../hooks/useStorage';
+import { isAdmin } from '../../utils/admin';
 import styles from './Sidebar.module.css';
 
 interface SavedResultItem {
@@ -11,7 +12,12 @@ interface SavedResultItem {
   source: 'local' | 'server';
 }
 
-export const Sidebar = () => {
+interface SidebarProps {
+  userId?: string | null;
+  onOpenAdminDb?: () => void;
+}
+
+export const Sidebar = ({ userId, onOpenAdminDb }: SidebarProps) => {
   const { 
     sidebarOpen, 
     setSidebarOpen, 
@@ -211,6 +217,10 @@ export const Sidebar = () => {
     }
   };
 
+  const handleOpenDbViewer = () => {
+    onOpenAdminDb?.();
+  };
+
   return (
     <>
       {/* 사이드바 오버레이 */}
@@ -273,6 +283,15 @@ export const Sidebar = () => {
               </button>
             </div>
           </div>
+          {isAdmin(userId) && (
+            <div className={styles.sidebarSection}>
+              <h3>관리자</h3>
+              <button type="button" className={styles.btn} onClick={handleOpenDbViewer} style={{ background: 'var(--color-primary)' }}>
+                DB 보기 (저장 결과)
+              </button>
+              <p className={styles.adminHint}>사용자별 완성된 하위문항·루브릭 데이터를 조회할 수 있습니다.</p>
+            </div>
+          )}
         </div>
       </div>
     </>

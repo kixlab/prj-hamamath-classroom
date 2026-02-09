@@ -166,6 +166,13 @@
   gap: 10px;
 }
 
+.adminHint {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 /* 사이드바 오버레이 */
 .sidebarOverlay {
   position: fixed;

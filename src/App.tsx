@@ -11,6 +11,7 @@ import { SubQs } from './components/SubQs/SubQs';
 import { useMathJax } from './hooks/useMathJax';
 import { formatQuestion, formatAnswer } from './utils/formatting';
 import { Rubrics } from './components/Rubrics/Rubrics';
+import { AdminDbView } from './components/AdminDbView/AdminDbView';
 import styles from './App.module.css';
 
 interface AppContentProps {
@@ -19,6 +20,7 @@ interface AppContentProps {
 }
 
 const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
+  const [showAdminDbView, setShowAdminDbView] = useState(false);
   const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error, reset } = useApp();
   const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
 
@@ -37,10 +39,14 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const grade = (currentCotData as any)?.grade;
   const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
 
+  if (showAdminDbView) {
+    return <AdminDbView onClose={() => setShowAdminDbView(false)} />;
+  }
+
   return (
     <div className={styles.app}>
       <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} userId={userId} />
-      <Sidebar />
+      <Sidebar userId={userId} onOpenAdminDb={() => setShowAdminDbView(true)} />
       <div className={styles.container}>
         <WorkflowTabs />
         <div className={styles.workflowContent}>

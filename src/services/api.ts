@@ -228,6 +228,40 @@ export const api = {
     return response.json();
   },
 
+  /** 관리자: 사용자 ID 목록 (X-User-Id가 관리자일 때만) */
+  async getAdminUsers(): Promise<{ user_ids: string[] }> {
+    const response = await fetch(getApiUrl("/api/v1/admin/users"), {
+      headers: getHistoryHeaders(),
+    });
+    if (!response.ok) {
+      if (response.status === 403) throw new Error("관리자만 조회할 수 있습니다.");
+      throw new Error("사용자 목록을 불러올 수 없습니다.");
+    }
+    return response.json();
+  },
+
+  /** 관리자: 지정한 유저의 저장 결과 목록 */
+  async getHistoryListForUser(viewUserId: string): Promise<any[]> {
+    const response = await fetch(getApiUrl("/api/v1/history/list"), {
+      headers: { ...getHistoryHeaders(), "X-Admin-View-User": viewUserId },
+    });
+    if (!response.ok) throw new Error("저장 결과 목록을 불러올 수 없습니다.");
+    return response.json();
+  },
+
+  /** 관리자: 지정한 유저의 저장 결과 상세 (하위문항·루브릭 포함) */
+  async getResultForUser(problemId: string, viewUserId: string): Promise<any> {
+    const response = await fetch(
+      getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`),
+      { headers: { ...getHistoryHeaders(), "X-Admin-View-User": viewUserId } }
+    );
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error("저장 결과를 불러올 수 없습니다.");
+    }
+    return response.json();
+  },
+
   // 루브릭 파이프라인 생성 (simulation-based)
   async generateRubricPipeline(data: GenerateRubricPipelineData) {
     const response = await fetch(getApiUrl("/api/v1/rubric/pipeline"), {
