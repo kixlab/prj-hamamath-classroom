@@ -208,11 +208,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       });
 
       const problemId =
-        selectedProblem === "__example1_json__"
-          ? "example1.json"
-          : selectedProblem === "__example2_json__"
-            ? "example2.json"
-            : selectedProblem || customProblemId.trim() || getNextProblemSeq();
+        selectedProblem === "__example1_json__" ? "example1.json" : selectedProblem === "__example2_json__" ? "example2.json" : selectedProblem || customProblemId.trim() || getNextProblemSeq();
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
@@ -255,7 +251,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 id="customProblemId"
                 value={customProblemId}
                 onChange={(e) => setCustomProblemId(e.target.value)}
-                placeholder="문제 ID 입력 (예: myproblem.json)"
+                placeholder="문제 ID 입력 (예: 초3 1번)"
                 className={styles.input}
                 aria-label="직접 입력 문제 ID"
               />
