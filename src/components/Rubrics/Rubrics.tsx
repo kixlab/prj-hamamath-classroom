@@ -3,6 +3,7 @@ import { useApp } from "../../contexts/AppContext";
 import { api } from "../../services/api";
 import { saveResult } from "../../hooks/useStorage";
 import { useMathJax } from "../../hooks/useMathJax";
+import { logUserEvent } from "../../services/eventLogger";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -140,6 +141,14 @@ export const Rubrics = () => {
       });
       const mapped = mapApiResponseToRubrics(response, gd);
       setCurrentRubrics(mapped);
+      try {
+        logUserEvent("rubric_generated", {
+          sub_question_count: mapped.length,
+          problem_id: (gd as any).problem_id ?? null,
+        });
+      } catch {
+        // 로깅 실패는 무시
+      }
     } catch (err: any) {
       console.error("루브릭 생성 오류:", err);
       setError(err.message || "루브릭 생성 중 오류가 발생했습니다.");
@@ -189,6 +198,8 @@ export const Rubrics = () => {
     const draft = editDrafts[id]?.[level];
     if (!draft) return;
 
+    const before = rubrics.find((r) => r.sub_question_id === id)?.levels.find((lv) => lv.level === level);
+
     setCurrentRubrics(
       rubrics.map((r) => {
         if (r.sub_question_id !== id) return r;
@@ -211,6 +222,28 @@ export const Rubrics = () => {
       ...prev,
       [id]: { ...prev[id], [level]: false },
     }));
+    try {
+      logUserEvent("rubric_level_edited", {
+        sub_question_id: id,
+        level,
+        before: before
+          ? {
+              title: before.title,
+              description: before.description,
+              bullets: before.bullets,
+              examples: before.examples,
+            }
+          : null,
+        after: {
+          title: draft.title.trim() || before?.title || "",
+          description: draft.description.trim() || before?.description || "",
+          bullets: draft.bullets.split("\n").filter((b) => b.trim()),
+          examples: draft.examples.split("\n").filter((e) => e.trim()),
+        },
+      });
+    } catch {
+      // 로깅 실패는 무시
+    }
   };
 
   const buildCurrentRubric = (rubricItem: RubricItem) => {
@@ -266,6 +299,14 @@ export const Rubrics = () => {
         });
 
       setCurrentRubrics(rubrics.map((r) => (r.sub_question_id === id ? { ...r, levels: newLevels } : r)));
+      try {
+        logUserEvent("rubric_regenerated", {
+          sub_question_id: id,
+          has_feedback: !!feedback,
+        });
+      } catch {
+        // 로깅 실패는 무시
+      }
     } catch (err: any) {
       console.error("루브릭 재생성 오류:", err);
       alert(err.message || "루브릭 재생성 중 오류가 발생했습니다.");
@@ -281,6 +322,14 @@ export const Rubrics = () => {
   const handleFeedbackRegenerate = (id: string) => {
     const feedbackEl = document.querySelector(`.feedback-rubric-${id}`) as HTMLTextAreaElement;
     const feedbackText = feedbackEl?.value?.trim();
+    try {
+      logUserEvent("rubric_feedback_submitted", {
+        sub_question_id: id,
+        has_text: !!feedbackText,
+      });
+    } catch {
+      // 로깅 실패는 무시
+    }
     handleRegenerateSingle(id, feedbackText || null);
   };
 
@@ -303,6 +352,13 @@ export const Rubrics = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    try {
+      logUserEvent("rubric_json_downloaded", {
+        count: rubrics.length,
+      });
+    } catch {
+      // 로깅 실패는 무시
+    }
   };
 
   if (generating) {
