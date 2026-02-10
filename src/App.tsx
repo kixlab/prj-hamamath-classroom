@@ -12,6 +12,7 @@ import { useMathJax } from './hooks/useMathJax';
 import { formatQuestion, formatAnswer } from './utils/formatting';
 import { Rubrics } from './components/Rubrics/Rubrics';
 import { AdminDbView } from './components/AdminDbView/AdminDbView';
+import { StudentDiagnosis } from './components/StudentDiagnosis/StudentDiagnosis';
 import styles from './App.module.css';
 
 interface AppContentProps {
@@ -21,6 +22,7 @@ interface AppContentProps {
 
 const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const [showAdminDbView, setShowAdminDbView] = useState(false);
+  const [showStudentDiagnosis, setShowStudentDiagnosis] = useState(false);
   const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error, reset } = useApp();
   const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
 
@@ -39,6 +41,22 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const grade = (currentCotData as any)?.grade;
   const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
 
+  if (showStudentDiagnosis) {
+    return (
+      <div className={styles.app}>
+        <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} userId={userId} />
+        <Sidebar
+          userId={userId}
+          onOpenAdminDb={() => setShowAdminDbView(true)}
+          onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
+        />
+        <div className={styles.container}>
+          <StudentDiagnosis userId={userId} onClose={() => setShowStudentDiagnosis(false)} />
+        </div>
+      </div>
+    );
+  }
+
   if (showAdminDbView) {
     return <AdminDbView onClose={() => setShowAdminDbView(false)} />;
   }
@@ -46,7 +64,11 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   return (
     <div className={styles.app}>
       <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} userId={userId} />
-      <Sidebar userId={userId} onOpenAdminDb={() => setShowAdminDbView(true)} />
+      <Sidebar
+        userId={userId}
+        onOpenAdminDb={() => setShowAdminDbView(true)}
+        onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
+      />
       <div className={styles.container}>
         <WorkflowTabs />
         <div className={styles.workflowContent}>

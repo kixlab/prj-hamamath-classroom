@@ -15,9 +15,10 @@ interface SavedResultItem {
 interface SidebarProps {
   userId?: string | null;
   onOpenAdminDb?: () => void;
+  onOpenStudentDiagnosis?: () => void;
 }
 
-export const Sidebar = ({ userId, onOpenAdminDb }: SidebarProps) => {
+export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: SidebarProps) => {
   const { 
     sidebarOpen, 
     setSidebarOpen, 
@@ -221,6 +222,11 @@ export const Sidebar = ({ userId, onOpenAdminDb }: SidebarProps) => {
     onOpenAdminDb?.();
   };
 
+  const handleOpenStudentDiagnosis = () => {
+    setSidebarOpen(false);
+    onOpenStudentDiagnosis?.();
+  };
+
   return (
     <>
       {/* 사이드바 오버레이 */}
@@ -245,6 +251,9 @@ export const Sidebar = ({ userId, onOpenAdminDb }: SidebarProps) => {
             </button>
             <button className={styles.btn} onClick={handleSaveCurrentResult} style={{ marginTop: '10px' }}>
               현재 결과 저장하기
+            </button>
+            <button className={styles.btn} onClick={handleOpenStudentDiagnosis} style={{ marginTop: '10px', background: '#111827' }}>
+              학생 진단하기
             </button>
           </div>
           <div className={styles.sidebarSection}>

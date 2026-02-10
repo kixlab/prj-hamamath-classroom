@@ -214,6 +214,36 @@ export const api = {
     return response.json();
   },
 
+  /**
+   * 학생 진단용: 학생 답안 저장
+   * payload 예시:
+   * {
+   *   problem_id: string;
+   *   user_id: string;        // 교사/연구 참여자 ID (X-User-Id와 동일하게 사용)
+   *   student_id: string;     // 화면에서 선택한 학생 ID
+   *   answers: { [sub_question_id: string]: string };
+   * }
+   */
+  async saveStudentAnswers(payload: {
+    problem_id: string;
+    user_id: string;
+    student_id: string;
+    answers: Record<string, string>;
+  }) {
+    const response = await fetch(getApiUrl("/api/v1/student-answers/save"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "학생 답안을 저장하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
   // 결과 불러오기
   async getResult(problemId: string) {
     const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
@@ -258,6 +288,29 @@ export const api = {
     if (!response.ok) {
       if (response.status === 404) return null;
       throw new Error("저장 결과를 불러올 수 없습니다.");
+    }
+    return response.json();
+  },
+
+  // 학생 진단: 학생 답안 상/중/하 채점
+  async diagnoseStudentAnswer(payload: {
+    problem_id: string;
+    sub_question_id: string;
+    question: string;
+    correct_answer?: string | null;
+    rubric: any;
+    student_answer: string;
+  }): Promise<{ level: "상" | "중" | "하"; reason: string }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/grade-answer"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "학생 진단 중 오류가 발생했습니다."
+      );
     }
     return response.json();
   },

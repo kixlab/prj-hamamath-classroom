@@ -124,6 +124,20 @@ export const Rubrics = () => {
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
+
+  const handleFinalizeRubrics = () => {
+    const confirmed = window.confirm("루브릭을 확정하시겠습니까? 확정 후에는 현재 상태를 기준으로 활용하게 됩니다.");
+    if (!confirmed) return;
+    try {
+      logUserEvent("rubric_finalized", {
+        count: rubrics.length,
+      });
+    } catch {
+      // 로깅 실패는 무시
+    }
+    window.alert("루브릭이 확정되었습니다. 필요한 경우 JSON을 다운로드하여 보관해 주세요.");
+  };
+
   const runGenerateRubrics = async () => {
     const gd = guidelineForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
@@ -457,7 +471,9 @@ export const Rubrics = () => {
                     <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
                       <div className={styles.levelHeader}>
                         <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
-                        {!isLevelEditing && <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>}
+                        {!isLevelEditing && (
+                          <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>
+                        )}
                         {!isLevelEditing && (
                           <button className={styles.levelEditBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
                             편집
@@ -586,6 +602,14 @@ export const Rubrics = () => {
             </div>
           );
         })}
+      </div>
+      <div className={styles.finalizeRow}>
+        <button type="button" className={styles.downloadBtn} onClick={handleDownloadJson}>
+          JSON 다운로드
+        </button>
+        <button type="button" className={styles.finalizeBtn} onClick={handleFinalizeRubrics}>
+          루브릭 확정하기
+        </button>
       </div>
     </div>
   );

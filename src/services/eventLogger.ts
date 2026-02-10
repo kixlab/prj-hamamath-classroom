@@ -50,6 +50,7 @@ function getWorkflowHierarchy(
     case "rubric_regenerated":
     case "rubric_feedback_submitted":
     case "rubric_json_downloaded":
+    case "rubric_finalized":
       return {
         phase: "rubric",
         stepId:
