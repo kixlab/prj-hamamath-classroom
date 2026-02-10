@@ -279,6 +279,15 @@ export const api = {
     return response.json();
   },
 
+  /** 현재 로그인한 사용자 자신의 저장 결과 목록 */
+  async getMyHistoryList(): Promise<any[]> {
+    const response = await fetch(getApiUrl("/api/v1/history/list"), {
+      headers: getHistoryHeaders(),
+    });
+    if (!response.ok) throw new Error("저장 결과 목록을 불러올 수 없습니다.");
+    return response.json();
+  },
+
   /** 관리자: 지정한 유저의 저장 결과 상세 (하위문항·루브릭 포함) */
   async getResultForUser(problemId: string, viewUserId: string): Promise<any> {
     const response = await fetch(
