@@ -231,6 +231,7 @@
       .phase-badge.cot { background: #1e4d3a; color: var(--success); }
       .phase-badge.subq_generate { background: #3a1e5f; color: #c9a0ff; }
       .phase-badge.subq_review { background: #1e5f4d; color: #7effd4; }
+      .phase-badge.rubric { background: #5f3a1e; color: #ffd4a0; }
       .step-id {
         font-size: 0.8rem;
         color: var(--warning);
@@ -547,12 +548,13 @@
               byWorkflow[wid].push({ doc, d });
             });
 
-            const phaseOrder = ["problem_input", "cot", "subq_generate", "subq_review"];
+            const phaseOrder = ["problem_input", "cot", "subq_generate", "subq_review", "rubric"];
             const phaseLabels = {
               problem_input: "문제 입력 (problem_input)",
               cot: "CoT (8단계 풀이)",
               subq_generate: "하위 문항 생성 (subq_generate)",
               subq_review: "하위 문항 검토 (subq_review)",
+              rubric: "루브릭 (rubric)",
             };
 
             let workflowIds = Object.keys(byWorkflow).filter((k) => k !== "\0no-workflow").sort((a, b) => {
@@ -572,7 +574,14 @@
               let workflowBody = "";
 
               phaseOrder.forEach((phase) => {
-                const phaseEvents = events.filter(({ d }) => d.phase === phase);
+                const isRubricPhase = phase === "rubric";
+                const phaseEvents = events.filter(({ d }) => {
+                  const et = d.eventType || "";
+                  const isRubricEvent = et.startsWith("rubric_");
+                  if (isRubricPhase) return d.phase === phase || isRubricEvent;
+                  if (isRubricEvent) return false;
+                  return d.phase === phase;
+                });
                 if (phaseEvents.length === 0) return;
                 const withStep = phaseEvents.some(({ d }) => d.stepId);
                 let phaseHtml = "";
@@ -609,7 +618,11 @@
                 </div>`;
               });
 
-              const otherEvents = events.filter(({ d }) => !phaseOrder.includes(d.phase));
+              const otherEvents = events.filter(({ d }) => {
+                const et = d.eventType || "";
+                if (et.startsWith("rubric_")) return false;
+                return !phaseOrder.includes(d.phase);
+              });
               if (otherEvents.length > 0) {
                 let otherHtml = "";
                 otherEvents.forEach(({ doc }) => {
