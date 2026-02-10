@@ -15,7 +15,7 @@ let unsubscribe: (() => void) | null = null;
 function getWorkflowHierarchy(
   eventType: string,
   payload?: Record<string, unknown>
-): { phase: "problem_input" | "cot" | "subq_generate" | "subq_review"; stepId?: string } {
+): { phase: "problem_input" | "cot" | "subq_generate" | "subq_review" | "rubric"; stepId?: string } {
   switch (eventType) {
     case "problem_input":
       return { phase: "problem_input" };
@@ -44,6 +44,16 @@ function getWorkflowHierarchy(
             : typeof payload?.sub_question_id === "string"
               ? payload.sub_question_id
               : undefined,
+      };
+    case "rubric_generated":
+    case "rubric_level_edited":
+    case "rubric_regenerated":
+    case "rubric_feedback_submitted":
+    case "rubric_json_downloaded":
+      return {
+        phase: "rubric",
+        stepId:
+          typeof payload?.sub_question_id === "string" ? payload.sub_question_id : undefined,
       };
     default:
       return { phase: "cot" };
