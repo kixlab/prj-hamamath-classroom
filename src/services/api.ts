@@ -324,6 +324,43 @@ export const api = {
     return response.json();
   },
 
+  /** 학생 진단 리포트(문제별/단계별 요약) 생성 */
+  async generateStudentDiagnosisReport(payload: {
+    student_id: string;
+    problem_summaries: Array<{
+      problem_id: string;
+      levels_by_display_code: Record<string, "상" | "중" | "하">;
+    }>;
+  }): Promise<{
+    problem_rows: Array<{
+      problem_id: string;
+      step_count: number;
+      high_count: number;
+      mid_count: number;
+      low_count: number;
+      average_level: "상" | "중" | "하" | "-";
+    }>;
+    step_rows: Array<{
+      display_code: string;
+      problem_count: number;
+      final_level: "상" | "중" | "하";
+    }>;
+  }> {
+    const response = await fetch(getApiUrl("/api/v1/reports/student-diagnosis"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail ||
+          "학생 진단 리포트를 생성하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
   // 루브릭 파이프라인 생성 (simulation-based)
   async generateRubricPipeline(data: GenerateRubricPipelineData) {
     const response = await fetch(getApiUrl("/api/v1/rubric/pipeline"), {
