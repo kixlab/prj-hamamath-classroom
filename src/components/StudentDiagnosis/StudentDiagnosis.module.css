@@ -56,7 +56,9 @@
   color: var(--color-text);
   font-size: 0.875rem;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
 }
 
 .backBtn:hover {
@@ -233,7 +235,11 @@
   background: var(--color-bg);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.05s;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    transform 0.05s;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -993,4 +999,3 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-

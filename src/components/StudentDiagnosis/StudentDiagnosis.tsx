@@ -30,6 +30,10 @@ interface ProblemStepSummary {
   levelsByDisplayCode: Record<string, "상" | "중" | "하">;
 }
 
+// 학생 답안을 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
+const getStudentAnswersStorageKey = (userId: string) =>
+  `hamamath_student_answers_${userId}`;
+
 export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => {
   const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
 
@@ -55,6 +59,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   }, [currentProblemId]);
 
   const problemIdForDiagnosis = selectedProblemId;
+  const isCurrentProblemSelected =
+    !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
 
   useEffect(() => {
     const fetchRubrics = async () => {
@@ -99,10 +105,26 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     fetchRubrics();
   }, [problemIdForDiagnosis]);
 
-  const rubrics = (apiRubrics ?? currentRubrics ?? []) as any[];
+  // 현재 워크플로우에서 작업 중인 문제를 선택한 경우에는,
+  // 3·4단계에서 수정된 최신 문항/루브릭(컨텍스트 값)을 우선 사용하고,
+  // 그 외(이전에 저장만 된 다른 문제)는 서버에 저장된 값(API 응답)을 사용한다.
+  const rubrics = (
+    isCurrentProblemSelected
+      ? (currentRubrics ?? apiRubrics ?? [])
+      : (apiRubrics ?? [])
+  ) as any[];
 
-  // 하위문항 소스 우선순위: API 저장값 → 3단계 확정 JSON → 현재 가이드라인
-  const guideSubQuestions: any[] = apiGuideSubQuestions ?? (finalizedGuidelineForRubric as any)?.guide_sub_questions ?? ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ?? [];
+  // 하위문항 소스 우선순위:
+  // - 현재 문제를 진단하는 경우: 3단계 확정 JSON → API 저장값 → 현재 가이드라인
+  // - 과거 문제를 진단하는 경우: API 저장값만 사용
+  const guideSubQuestions: any[] = isCurrentProblemSelected
+    ? (finalizedGuidelineForRubric as any)?.guide_sub_questions ??
+      apiGuideSubQuestions ??
+      ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ??
+      []
+    : apiGuideSubQuestions ??
+      ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ??
+      [];
 
   // 메인 문제/정답/학년/수학 영역은
   // - 진단용 problemId가 선택된 경우: 해당 저장 결과의 cotData를 우선 사용
@@ -200,6 +222,34 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<
     Record<string, Record<string, ProblemStepSummary>>
   >({});
+
+  // 브라우저 로컬 스토리지에서 기존 학생 답안 복원
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(
+        getStudentAnswersStorageKey(userId),
+      );
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        setStudentAnswers(parsed);
+      }
+    } catch (err) {
+      console.error("저장된 학생 답안을 불러오는 중 오류:", err);
+    }
+  }, [userId]);
+
+  // 학생 답안이 변경될 때마다 로컬 스토리지에 자동 저장
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        getStudentAnswersStorageKey(userId),
+        JSON.stringify(studentAnswers),
+      );
+    } catch (err) {
+      console.error("학생 답안을 저장하는 중 오류:", err);
+    }
+  }, [userId, studentAnswers]);
 
   const handleChangeStudent = (id: string) => {
     setCurrentStudentId(id);
@@ -734,6 +784,21 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 value={value}
                                 onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
                               />
+                              {result?.reason && (
+                                <div className={styles.studentFeedbackPanel}>
+                                  <div className={styles.studentFeedbackHeader}>
+                                    <span className={styles.studentFeedbackTitle}>
+                                      진단 피드백 ({item.displayCode})
+                                    </span>
+                                    <span className={styles.studentFeedbackLevel}>
+                                      진단: {result.level}
+                                    </span>
+                                  </div>
+                                  <p className={styles.studentFeedbackBody}>
+                                    {result.reason}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -789,32 +854,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                     );
                   })}
                 </div>
-
-                {activeItem &&
-                  diagnosisResults[currentStudentId]?.[currentProblemKey]?.[
-                    activeItem.id
-                  ]?.reason && (
-                  <div className={styles.studentFeedbackPanel}>
-                    <div className={styles.studentFeedbackHeader}>
-                      <span className={styles.studentFeedbackTitle}>선택된 문항 진단 피드백 ({activeItem.displayCode})</span>
-                      <span className={styles.studentFeedbackLevel}>
-                        진단:{" "}
-                        {
-                          diagnosisResults[currentStudentId]?.[currentProblemKey]?.[
-                            activeItem.id
-                          ]?.level
-                        }
-                      </span>
-                    </div>
-                    <p className={styles.studentFeedbackBody}>
-                      {
-                        diagnosisResults[currentStudentId]?.[currentProblemKey]?.[
-                          activeItem.id
-                        ]?.reason
-                      }
-                    </p>
-                  </div>
-                )}
               </section>
             )}
 

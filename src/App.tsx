@@ -44,7 +44,14 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   if (showStudentDiagnosis) {
     return (
       <div className={styles.app}>
-        <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} userId={userId} />
+        <Header
+          onNewProblem={handleNewProblem}
+          onShowUserIdPage={onShowUserIdPage}
+          userId={userId}
+          mode="diagnosis"
+          onSelectWorkflow={() => setShowStudentDiagnosis(false)}
+          onSelectDiagnosis={() => setShowStudentDiagnosis(true)}
+        />
         <Sidebar
           userId={userId}
           onOpenAdminDb={() => setShowAdminDbView(true)}
@@ -63,7 +70,14 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
 
   return (
     <div className={styles.app}>
-      <Header onNewProblem={handleNewProblem} onShowUserIdPage={onShowUserIdPage} userId={userId} />
+      <Header
+        onNewProblem={handleNewProblem}
+        onShowUserIdPage={onShowUserIdPage}
+        userId={userId}
+        mode="workflow"
+        onSelectWorkflow={() => setShowStudentDiagnosis(false)}
+        onSelectDiagnosis={() => setShowStudentDiagnosis(true)}
+      />
       <Sidebar
         userId={userId}
         onOpenAdminDb={() => setShowAdminDbView(true)}
