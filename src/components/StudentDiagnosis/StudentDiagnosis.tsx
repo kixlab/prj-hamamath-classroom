@@ -4,6 +4,7 @@ import { useApp } from "../../contexts/AppContext";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { api } from "../../services/api";
+import { getSavedResults } from "../../hooks/useStorage";
 
 interface StudentDiagnosisProps {
   userId: string;
@@ -30,8 +31,9 @@ interface ProblemStepSummary {
   levelsByDisplayCode: Record<string, "상" | "중" | "하">;
 }
 
-// 학생 답안을 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
-const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`;
+// 학생 진단 상태를 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
+const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`; // 구버전 호환용
+const getStudentDiagnosisStateKey = (userId: string) => `hamamath_student_diagnosis_state_${userId}`;
 
 export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => {
   const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
@@ -63,28 +65,39 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       if (!problemIdForDiagnosis) return;
       try {
         const result = await api.getResult(problemIdForDiagnosis);
+        const saved = getSavedResults();
+        const local = saved[problemIdForDiagnosis] || null;
         if (result) {
           // 메인 문제/정답/학년/수학 영역 등도 함께 저장된 CoT 데이터에서 가져온다.
-          if (result.cotData) {
-            setDiagnosisCotData(result.cotData);
-          } else {
-            setDiagnosisCotData(null);
-          }
+          const cot = result.cotData || local?.cotData || null;
+          setDiagnosisCotData(cot);
 
-          if (Array.isArray(result.rubrics)) {
-            setApiRubrics(result.rubrics);
-          } else {
-            setApiRubrics(null);
-          }
-          if (result.guidelineData?.guide_sub_questions && Array.isArray(result.guidelineData.guide_sub_questions)) {
-            setApiGuideSubQuestions(result.guidelineData.guide_sub_questions);
+          const rubricsFromServer = Array.isArray((result as any).rubrics) ? (result as any).rubrics : null;
+          const rubricsFromLocal = Array.isArray((local as any)?.rubrics) ? (local as any).rubrics : null;
+          setApiRubrics(rubricsFromServer ?? rubricsFromLocal ?? null);
+
+          const gd = (result as any).guidelineData || (local as any)?.guidelineData || null;
+          if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
+            setApiGuideSubQuestions(gd.guide_sub_questions);
           } else {
             setApiGuideSubQuestions(null);
           }
         } else {
-          setDiagnosisCotData(null);
-          setApiRubrics(null);
-          setApiGuideSubQuestions(null);
+          // 서버에 결과가 없으면 로컬 저장 결과라도 최대한 사용
+          if (local) {
+            setDiagnosisCotData(local.cotData ?? null);
+            setApiRubrics((local as any).rubrics ?? null);
+            const gd = (local as any).guidelineData;
+            if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
+              setApiGuideSubQuestions(gd.guide_sub_questions);
+            } else {
+              setApiGuideSubQuestions(null);
+            }
+          } else {
+            setDiagnosisCotData(null);
+            setApiRubrics(null);
+            setApiGuideSubQuestions(null);
+          }
         }
       } catch (err: any) {
         console.error("루브릭 불러오기 오류:", err);
@@ -201,28 +214,63 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
 
-  // 브라우저 로컬 스토리지에서 기존 학생 답안 복원
+  // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        setStudentAnswers(parsed);
+      const raw = window.localStorage.getItem(getStudentDiagnosisStateKey(userId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          if (parsed.studentAnswers && typeof parsed.studentAnswers === "object") {
+            setStudentAnswers(parsed.studentAnswers);
+          }
+          if (parsed.diagnosisResults && typeof parsed.diagnosisResults === "object") {
+            setDiagnosisResults(parsed.diagnosisResults);
+          }
+          if (parsed.canDiagnose && typeof parsed.canDiagnose === "object") {
+            setCanDiagnose(parsed.canDiagnose);
+          }
+          if (parsed.studentProblemSummaries && typeof parsed.studentProblemSummaries === "object") {
+            setStudentProblemSummaries(parsed.studentProblemSummaries);
+          }
+          if (parsed.currentStudentId && typeof parsed.currentStudentId === "string") {
+            setCurrentStudentId(parsed.currentStudentId);
+          }
+          if (parsed.selectedProblemId && typeof parsed.selectedProblemId === "string") {
+            setSelectedProblemId(parsed.selectedProblemId);
+          }
+          return;
+        }
+      }
+
+      // 구버전(답안만 저장)과의 호환: 예전 키에 저장된 값이 있다면 최소한 답안만이라도 복원
+      const legacyRaw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
+      if (!legacyRaw) return;
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (legacyParsed && typeof legacyParsed === "object") {
+        setStudentAnswers(legacyParsed);
       }
     } catch (err) {
-      console.error("저장된 학생 답안을 불러오는 중 오류:", err);
+      console.error("저장된 학생 진단 상태를 불러오는 중 오류:", err);
     }
   }, [userId]);
 
-  // 학생 답안이 변경될 때마다 로컬 스토리지에 자동 저장
+  // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장
   useEffect(() => {
     try {
-      window.localStorage.setItem(getStudentAnswersStorageKey(userId), JSON.stringify(studentAnswers));
+      const stateToSave = {
+        studentAnswers,
+        diagnosisResults,
+        canDiagnose,
+        studentProblemSummaries,
+        currentStudentId,
+        selectedProblemId,
+      };
+      window.localStorage.setItem(getStudentDiagnosisStateKey(userId), JSON.stringify(stateToSave));
     } catch (err) {
-      console.error("학생 답안을 저장하는 중 오류:", err);
+      console.error("학생 진단 상태를 저장하는 중 오류:", err);
     }
-  }, [userId, studentAnswers]);
+  }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId]);
 
   const handleChangeStudent = (id: string) => {
     setCurrentStudentId(id);
@@ -407,6 +455,19 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     if (score >= 2.5) return "상";
     if (score >= 1.5) return "중";
     return "하";
+  };
+
+  // 단계 코드(예: 1-1, 2-1)를 역량/큰 단계 이름으로 매핑
+  const STEP_GROUP_LABELS: Record<string, string> = {
+    "1": "정보이해력",
+    "2": "분석력",
+    "3": "지식연계능력",
+    "4": "논리적사고·표현력",
+  };
+  const getStepGroupInfo = (displayCode: string) => {
+    const [group] = displayCode.split("-");
+    const label = STEP_GROUP_LABELS[group] || `${group}단계`;
+    return { group, label };
   };
 
   const openReport = async () => {
@@ -861,30 +922,67 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                 {reportLoading && <p className={styles.problemSummaryEmpty}>리포트를 불러오는 중입니다...</p>}
                 {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
                 {!reportLoading && !reportError && reportData && (
-                  <table className={styles.problemSummaryTable}>
-                    <thead>
-                      <tr>
-                        <th>문제 ID</th>
-                        <th>진단한 단계 수</th>
-                        <th>상</th>
-                        <th>중</th>
-                        <th>하</th>
-                        <th>평균 수준</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.problem_rows.map((row) => (
-                        <tr key={row.problem_id}>
-                          <td>{row.problem_id}</td>
-                          <td>{row.step_count}</td>
-                          <td>{row.high_count}</td>
-                          <td>{row.mid_count}</td>
-                          <td>{row.low_count}</td>
-                          <td>{row.average_level}</td>
+                  <>
+                    <table className={styles.problemSummaryTable}>
+                      <thead>
+                        <tr>
+                          <th>문제 ID</th>
+                          <th>진단한 단계 수</th>
+                          <th>상</th>
+                          <th>중</th>
+                          <th>하</th>
+                          <th>평균 수준</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {reportData.problem_rows.map((row) => (
+                          <tr key={row.problem_id}>
+                            <td>{row.problem_id}</td>
+                            <td>{row.step_count}</td>
+                            <td>{row.high_count}</td>
+                            <td>{row.mid_count}</td>
+                            <td>{row.low_count}</td>
+                            <td>{row.average_level}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className={styles.reportGraphList}>
+                      {reportData.problem_rows.map((row) => {
+                        const total = row.high_count + row.mid_count + row.low_count || 1;
+                        const highPct = (row.high_count / total) * 100;
+                        const midPct = (row.mid_count / total) * 100;
+                        const lowPct = (row.low_count / total) * 100;
+                        return (
+                          <div key={`graph-${row.problem_id}`} className={styles.reportGraphItem}>
+                            <div className={styles.reportGraphHeader}>
+                              <span className={styles.reportGraphTitle}>{row.problem_id}</span>
+                              <span className={styles.reportGraphLevelBadge}>{row.average_level}</span>
+                            </div>
+                            <div className={styles.reportGraphBar}>
+                              <div
+                                className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`}
+                                style={{ width: `${highPct}%` }}
+                              />
+                              <div
+                                className={`${styles.reportGraphSegment} ${styles.reportGraphMid}`}
+                                style={{ width: `${midPct}%` }}
+                              />
+                              <div
+                                className={`${styles.reportGraphSegment} ${styles.reportGraphLow}`}
+                                style={{ width: `${lowPct}%` }}
+                              />
+                            </div>
+                            <div className={styles.reportGraphLegend}>
+                              <span>상 {row.high_count}</span>
+                              <span>중 {row.mid_count}</span>
+                              <span>하 {row.low_count}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -897,24 +995,66 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                     {reportData.step_rows.length === 0 ? (
                       <p className={styles.problemSummaryEmpty}>아직 요약할 단계 진단 결과가 없습니다.</p>
                     ) : (
-                      <table className={styles.problemSummaryTable}>
-                        <thead>
-                          <tr>
-                            <th>단계 코드</th>
-                            <th>진단한 문제 수</th>
-                            <th>최종 수준</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportData.step_rows.map((row) => (
-                            <tr key={row.display_code}>
-                              <td>{row.display_code}</td>
-                              <td>{row.problem_count}</td>
-                              <td>{row.final_level}</td>
+                      <>
+                        <table className={styles.problemSummaryTable}>
+                          <thead>
+                            <tr>
+                              <th>단계(역량)</th>
+                              <th>진단한 문제 수</th>
+                              <th>최종 수준</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {reportData.step_rows.map((row) => {
+                              const info = getStepGroupInfo(row.display_code);
+                              return (
+                                <tr key={row.display_code}>
+                                  <td>
+                                    <span className={styles.stepCodeText}>{row.display_code}</span>
+                                    <span className={styles.stepAbilityText}>{info.label}</span>
+                                  </td>
+                                  <td>{row.problem_count}</td>
+                                  <td>{row.final_level}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        <div className={styles.reportGraphList}>
+                          {reportData.step_rows.map((row) => {
+                            const info = getStepGroupInfo(row.display_code);
+                            const groupClass =
+                              info.group === "1"
+                                ? styles.reportStepGroup1
+                                : info.group === "2"
+                                ? styles.reportStepGroup2
+                                : info.group === "3"
+                                ? styles.reportStepGroup3
+                                : styles.reportStepGroup4;
+                            return (
+                              <div key={`step-graph-${row.display_code}`} className={styles.reportGraphItem}>
+                                <div className={styles.reportGraphHeader}>
+                                  <span className={styles.reportGraphTitle}>
+                                    {row.display_code} · {info.label}
+                                  </span>
+                                  <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>
+                                    {row.final_level}
+                                  </span>
+                                </div>
+                                <div className={styles.reportGraphBar}>
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`}
+                                    style={{ width: "100%" }}
+                                  />
+                                </div>
+                                <div className={styles.reportGraphLegend}>
+                                  <span>진단한 문제 수 {row.problem_count}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
                   </>
                 )}
