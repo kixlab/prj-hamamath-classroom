@@ -127,9 +127,7 @@ export const Rubrics = () => {
 
   // 3단계에서 문항이 수정된 뒤, 전체 루브릭을 다시 생성하고 싶을 때 사용하는 헬퍼
   const handleRegenerateAllRubrics = () => {
-    const confirmed = window.confirm(
-      "현재 하위문항 내용을 기준으로 루브릭을 다시 생성하시겠습니까?\n기존에 편집한 루브릭 내용은 덮어쓰여질 수 있습니다."
-    );
+    const confirmed = window.confirm("현재 하위문항 내용을 기준으로 루브릭을 다시 생성하시겠습니까?\n기존에 편집한 루브릭 내용은 덮어쓰여질 수 있습니다.");
     if (!confirmed) return;
     runGenerateRubrics();
   };
@@ -455,15 +453,8 @@ export const Rubrics = () => {
     <div className={styles.rubricContainer} ref={containerRef}>
       {(guidelineForStep4 as any)?.guide_sub_questions?.length ? (
         <div className={styles.regenerateAllRow}>
-          <div className={styles.regenerateAllText}>
-            3단계에서 하위문항을 수정했다면, 아래 루브릭은 이전 문항 기준일 수 있습니다.
-          </div>
-          <button
-            type="button"
-            className={styles.generateBtn}
-            onClick={handleRegenerateAllRubrics}
-            disabled={generating}
-          >
+          <div className={styles.regenerateAllText}>3단계에서 하위문항을 수정했다면, 아래 루브릭은 이전 문항 기준일 수 있습니다.</div>
+          <button type="button" className={styles.generateBtn} onClick={handleRegenerateAllRubrics} disabled={generating}>
             루브릭 새로 생성하기
           </button>
         </div>
@@ -495,9 +486,7 @@ export const Rubrics = () => {
                     <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
                       <div className={styles.levelHeader}>
                         <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
-                        {!isLevelEditing && (
-                          <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>
-                        )}
+                        {!isLevelEditing && <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>}
                         {!isLevelEditing && (
                           <button className={styles.levelEditBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
                             편집

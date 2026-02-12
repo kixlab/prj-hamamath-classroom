@@ -31,8 +31,7 @@ interface ProblemStepSummary {
 }
 
 // 학생 답안을 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
-const getStudentAnswersStorageKey = (userId: string) =>
-  `hamamath_student_answers_${userId}`;
+const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`;
 
 export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => {
   const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
@@ -59,8 +58,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   }, [currentProblemId]);
 
   const problemIdForDiagnosis = selectedProblemId;
-  const isCurrentProblemSelected =
-    !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
+  const isCurrentProblemSelected = !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
 
   useEffect(() => {
     const fetchRubrics = async () => {
@@ -108,23 +106,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   // 현재 워크플로우에서 작업 중인 문제를 선택한 경우에는,
   // 3·4단계에서 수정된 최신 문항/루브릭(컨텍스트 값)을 우선 사용하고,
   // 그 외(이전에 저장만 된 다른 문제)는 서버에 저장된 값(API 응답)을 사용한다.
-  const rubrics = (
-    isCurrentProblemSelected
-      ? (currentRubrics ?? apiRubrics ?? [])
-      : (apiRubrics ?? [])
-  ) as any[];
+  const rubrics = (isCurrentProblemSelected ? (currentRubrics ?? apiRubrics ?? []) : (apiRubrics ?? [])) as any[];
 
   // 하위문항 소스 우선순위:
   // - 현재 문제를 진단하는 경우: 3단계 확정 JSON → API 저장값 → 현재 가이드라인
   // - 과거 문제를 진단하는 경우: API 저장값만 사용
   const guideSubQuestions: any[] = isCurrentProblemSelected
-    ? (finalizedGuidelineForRubric as any)?.guide_sub_questions ??
-      apiGuideSubQuestions ??
-      ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ??
-      []
-    : apiGuideSubQuestions ??
-      ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ??
-      [];
+    ? ((finalizedGuidelineForRubric as any)?.guide_sub_questions ?? apiGuideSubQuestions ?? ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ?? [])
+    : (apiGuideSubQuestions ?? ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ?? []);
 
   // 메인 문제/정답/학년/수학 영역은
   // - 진단용 problemId가 선택된 경우: 해당 저장 결과의 cotData를 우선 사용
@@ -187,18 +176,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [students, setStudents] = useState<StudentInfo[]>([{ id: "student-1", name: "학생 1" }]);
   const [currentStudentId, setCurrentStudentId] = useState<string>("student-1");
   // studentAnswers[studentId][problemKey][subQuestionId] = answer
-  const [studentAnswers, setStudentAnswers] = useState<
-    Record<string, Record<string, Record<string, string>>>
-  >({});
+  const [studentAnswers, setStudentAnswers] = useState<Record<string, Record<string, Record<string, string>>>>({});
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   // 학생별·문제별로 최소 한 번 이상 저장이 완료되었는지 여부
   const [canDiagnose, setCanDiagnose] = useState<Record<string, Record<string, boolean>>>({});
   const [bulkDiagnosing, setBulkDiagnosing] = useState(false);
   // diagnosisResults[studentId][problemKey][subQuestionId] = { level, reason }
-  const [diagnosisResults, setDiagnosisResults] = useState<
-    Record<string, Record<string, Record<string, { level: string; reason: string }>>>
-  >({});
+  const [diagnosisResults, setDiagnosisResults] = useState<Record<string, Record<string, Record<string, { level: string; reason: string }>>>>({});
   const [showGuidePanel, setShowGuidePanel] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
@@ -219,16 +204,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }>;
   } | null>(null);
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
-  const [studentProblemSummaries, setStudentProblemSummaries] = useState<
-    Record<string, Record<string, ProblemStepSummary>>
-  >({});
+  const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
 
   // 브라우저 로컬 스토리지에서 기존 학생 답안 복원
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(
-        getStudentAnswersStorageKey(userId),
-      );
+      const raw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
@@ -242,10 +223,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   // 학생 답안이 변경될 때마다 로컬 스토리지에 자동 저장
   useEffect(() => {
     try {
-      window.localStorage.setItem(
-        getStudentAnswersStorageKey(userId),
-        JSON.stringify(studentAnswers),
-      );
+      window.localStorage.setItem(getStudentAnswersStorageKey(userId), JSON.stringify(studentAnswers));
     } catch (err) {
       console.error("학생 답안을 저장하는 중 오류:", err);
     }
@@ -295,8 +273,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       return;
     }
 
-    const answersForStudent =
-      studentAnswers[currentStudentId]?.[currentProblemKey] || {};
+    const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
     const targetItems = diagnosisItems.filter((item) => item.rubric && item.rubric.levels?.length && (answersForStudent[item.id] ?? "").trim().length > 0);
 
     if (!targetItems.length) {
@@ -389,8 +366,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       alert("학생 정보가 없습니다.");
       return;
     }
-    const answersForStudent =
-      studentAnswers[currentStudentId]?.[currentProblemKey] || {};
+    const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
     if (!Object.keys(answersForStudent).length) {
       alert("저장할 학생 답안이 없습니다.");
       return;
@@ -422,14 +398,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   };
 
-  const containerRef = useMathJax([
-    activeId,
-    activeItem,
-    finalizedGuidelineForRubric,
-    currentRubrics,
-    currentStudentId,
-    studentAnswers,
-  ]);
+  const containerRef = useMathJax([activeId, activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
   // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산
   const summariesForCurrentStudent = studentProblemSummaries[currentStudentId] ?? {};
@@ -551,13 +520,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             <h3 className={styles.studentListTitle}>학생 목록</h3>
             <div className={styles.studentList}>
               {students.map((s, idx) => {
-                const answersForProblem =
-                  studentAnswers[s.id]?.[currentProblemKey] ?? {};
-                const answeredCount = Object.values(answersForProblem).filter(
-                  (v) => !!v?.trim(),
-                ).length;
-                const diagnosedForProblem =
-                  diagnosisResults[s.id]?.[currentProblemKey] ?? {};
+                const answersForProblem = studentAnswers[s.id]?.[currentProblemKey] ?? {};
+                const answeredCount = Object.values(answersForProblem).filter((v) => !!v?.trim()).length;
+                const diagnosedForProblem = diagnosisResults[s.id]?.[currentProblemKey] ?? {};
                 const diagnosedCount = Object.keys(diagnosedForProblem).length;
                 const total = diagnosisItems.length || 0;
                 const isActiveStudent = currentStudentId === s.id;
@@ -566,11 +531,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                     <div className={styles.studentListName}>
                       {idx + 1}. {s.name}
                     </div>
-                    <div className={styles.studentListMeta}>
-                      {total > 0
-                        ? `답안 ${answeredCount} · 진단 ${diagnosedCount}/${total}`
-                        : "문항 없음"}
-                    </div>
+                    <div className={styles.studentListMeta}>{total > 0 ? `답안 ${answeredCount} · 진단 ${diagnosedCount}/${total}` : "문항 없음"}</div>
                   </button>
                 );
               })}
@@ -579,11 +540,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               + 학생 추가
             </button>
             {summaryProblemIds.length > 0 && (
-              <button
-                type="button"
-                className={styles.reportBtn}
-                onClick={openReport}
-              >
+              <button type="button" className={styles.reportBtn} onClick={openReport}>
                 학생 진단 리포트
               </button>
             )}
@@ -751,14 +708,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                       <p className={styles.studentAllDesc}>아래에서 모든 하위문항에 대한 학생 답안을 한 번에 입력할 수 있습니다. 왼쪽 탭은 참고용으로만 사용해 주세요.</p>
                       <div className={styles.studentAllList}>
                         {diagnosisItems.map((item) => {
-                          const value =
-                            studentAnswers[currentStudentId]?.[currentProblemKey]?.[
-                              item.id
-                            ] ?? "";
-                          const result =
-                            diagnosisResults[currentStudentId]?.[currentProblemKey]?.[
-                              item.id
-                            ];
+                          const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
+                          const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
                           const isActive = activeItem?.id === item.id;
                           return (
                             <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
@@ -787,16 +738,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                               {result?.reason && (
                                 <div className={styles.studentFeedbackPanel}>
                                   <div className={styles.studentFeedbackHeader}>
-                                    <span className={styles.studentFeedbackTitle}>
-                                      진단 피드백 ({item.displayCode})
-                                    </span>
-                                    <span className={styles.studentFeedbackLevel}>
-                                      진단: {result.level}
-                                    </span>
+                                    <span className={styles.studentFeedbackTitle}>진단 피드백 ({item.displayCode})</span>
+                                    <span className={styles.studentFeedbackLevel}>진단: {result.level}</span>
                                   </div>
-                                  <p className={styles.studentFeedbackBody}>
-                                    {result.reason}
-                                  </p>
+                                  <p className={styles.studentFeedbackBody}>{result.reason}</p>
                                 </div>
                               )}
                             </div>
@@ -813,9 +758,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                             {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
                           </button>
                         )}
-                        {canDiagnose[currentStudentId]?.[currentProblemKey] &&
-                          diagnosisItems.length > 0 &&
-                          false && (
+                        {canDiagnose[currentStudentId]?.[currentProblemKey] && diagnosisItems.length > 0 && false && (
                           <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
                             {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
                           </button>
@@ -837,14 +780,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               <section className={styles.studentSummary}>
                 <h3 className={styles.studentSummaryTitle}>현재 학생 문항 요약</h3>
                 <div className={styles.studentSummaryRow}>
-                    {diagnosisItems.map((item) => {
-                    const result =
-                      diagnosisResults[currentStudentId]?.[currentProblemKey]?.[
-                        item.id
-                      ];
-                    const hasAnswer = !!studentAnswers[currentStudentId]?.[
-                      currentProblemKey
-                    ]?.[item.id]?.trim();
+                  {diagnosisItems.map((item) => {
+                    const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
+                    const hasAnswer = !!studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id]?.trim();
                     const isActive = activeItem?.id === item.id;
                     return (
                       <button key={item.id} type="button" className={`${styles.studentSummaryChip} ${isActive ? styles.studentSummaryChipActive : ""}`} onClick={() => setActiveId(item.id)}>
@@ -883,10 +821,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                           const high = levels.filter((l) => l === "상").length;
                           const mid = levels.filter((l) => l === "중").length;
                           const low = levels.filter((l) => l === "하").length;
-                          const avgScore =
-                            total > 0
-                              ? levels.reduce((acc, lv) => acc + LEVEL_SCORE[lv as LevelType], 0) / total
-                              : 0;
+                          const avgScore = total > 0 ? levels.reduce((acc, lv) => acc + LEVEL_SCORE[lv as LevelType], 0) / total : 0;
                           const avgLevel = total > 0 ? scoreToLevel(avgScore) : "-";
                           return (
                             <tr key={pid}>
@@ -975,15 +910,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               <div>
                 <h2 className={styles.reportTitle}>학생 진단 리포트</h2>
                 <p className={styles.reportSubtitle}>
-                  {students.find((s) => s.id === currentStudentId)?.name} · 진단한 문제 수{" "}
-                  {summaryProblemIds.length}개
+                  {students.find((s) => s.id === currentStudentId)?.name} · 진단한 문제 수 {summaryProblemIds.length}개
                 </p>
               </div>
-              <button
-                type="button"
-                className={styles.reportCloseBtn}
-                onClick={() => setReportOpen(false)}
-              >
+              <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
                 닫기
               </button>
             </header>
@@ -992,9 +922,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               <div className={styles.problemSummaryBlock}>
                 <h4 className={styles.problemSummarySubTitle}>문제별 수준 요약</h4>
                 {reportLoading && <p className={styles.problemSummaryEmpty}>리포트를 불러오는 중입니다...</p>}
-                {reportError && !reportLoading && (
-                  <p className={styles.problemSummaryEmpty}>{reportError}</p>
-                )}
+                {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
                 {!reportLoading && !reportError && reportData && (
                   <table className={styles.problemSummaryTable}>
                     <thead>
@@ -1026,15 +954,11 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               <div className={styles.problemSummaryBlock}>
                 <h4 className={styles.problemSummarySubTitle}>단계별 최종 수준 (여러 문제 기준)</h4>
                 {reportLoading && <p className={styles.problemSummaryEmpty}>리포트를 불러오는 중입니다...</p>}
-                {reportError && !reportLoading && (
-                  <p className={styles.problemSummaryEmpty}>{reportError}</p>
-                )}
+                {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
                 {!reportLoading && !reportError && reportData && (
                   <>
                     {reportData.step_rows.length === 0 ? (
-                      <p className={styles.problemSummaryEmpty}>
-                        아직 요약할 단계 진단 결과가 없습니다.
-                      </p>
+                      <p className={styles.problemSummaryEmpty}>아직 요약할 단계 진단 결과가 없습니다.</p>
                     ) : (
                       <table className={styles.problemSummaryTable}>
                         <thead>
