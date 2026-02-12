@@ -39,8 +39,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [diagnosisCotData, setDiagnosisCotData] = useState<any | null>(null);
-  const [rubricLoading, setRubricLoading] = useState(false);
-  const [rubricError, setRubricError] = useState<string | null>(null);
   const [apiRubrics, setApiRubrics] = useState<any[] | null>(null);
   const [apiGuideSubQuestions, setApiGuideSubQuestions] = useState<any[] | null>(null);
 
@@ -63,8 +61,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   useEffect(() => {
     const fetchRubrics = async () => {
       if (!problemIdForDiagnosis) return;
-      setRubricLoading(true);
-      setRubricError(null);
       try {
         const result = await api.getResult(problemIdForDiagnosis);
         if (result) {
@@ -92,12 +88,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         }
       } catch (err: any) {
         console.error("루브릭 불러오기 오류:", err);
-        setRubricError(err.message || "확정된 루브릭을 불러오지 못했습니다.");
         setDiagnosisCotData(null);
         setApiRubrics(null);
         setApiGuideSubQuestions(null);
-      } finally {
-        setRubricLoading(false);
       }
     };
     fetchRubrics();
@@ -184,7 +177,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [bulkDiagnosing, setBulkDiagnosing] = useState(false);
   // diagnosisResults[studentId][problemKey][subQuestionId] = { level, reason }
   const [diagnosisResults, setDiagnosisResults] = useState<Record<string, Record<string, Record<string, { level: string; reason: string }>>>>({});
-  const [showGuidePanel, setShowGuidePanel] = useState(true);
+  // 하위문항 카드별 정답/루브릭 보기 토글 상태
+  const [showAnswerById, setShowAnswerById] = useState<Record<string, boolean>>({});
+  const [showRubricById, setShowRubricById] = useState<Record<string, boolean>>({});
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -546,147 +541,15 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             )}
           </aside>
 
-          {/* 우측: 문항 탭 + 문항/루브릭 + 학생 답안/진단 */}
+          {/* 우측: 학생 답안/진단 */}
           <section className={styles.mainColumn}>
-            <div className={`${styles.contentSplit} ${showGuidePanel ? "" : styles.contentSplitSingle}`}>
-              {showGuidePanel && (
-                <section className={styles.leftColumn}>
-                  <div className={styles.leftHeaderRow}>
-                    <nav className={styles.tabs}>
-                      {diagnosisItems.length === 0 ? (
-                        <span className={styles.tabsEmpty}>확정된 하위문항이 없습니다.</span>
-                      ) : (
-                        diagnosisItems.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={`${styles.tab} ${activeItem?.id === item.id ? styles.tabActive : ""}`}
-                            onClick={() => setActiveId(item.id)}
-                            aria-label={`${item.displayCode}단계 (${item.stepName} - ${item.subSkillName})`}
-                          >
-                            <span className={styles.tabIndex}>{item.displayCode}</span>
-                          </button>
-                        ))
-                      )}
-                    </nav>
-                    <button type="button" className={styles.toggleGuideBtn} onClick={() => setShowGuidePanel(false)} aria-label="하위문항 및 루브릭 패널 숨기기" title="하위문항·루브릭 패널 숨기기">
-                      <span className={styles.toggleGuideIcon}>
-                        {/* eye-off 스타일 */}
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path
-                            d="M3 3l18 18M10.58 10.58A3 3 0 0012 15a3 3 0 002.42-4.58M9.88 5.09A8.25 8.25 0 0112 5c4.5 0 8.27 2.94 9.5 7-0.46 1.55-1.3 2.93-2.4 4.06M6.1 6.1C4.24 7.36 2.9 9.27 2.5 12c1.23 4.06 5 7 9.5 7 1.08 0 2.12-0.16 3.1-0.46"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                    </button>
-                  </div>
-
-                  <section className={styles.tabPanel}>
-                    {activeItem ? (
-                      <article className={styles.card}>
-                        <header className={styles.cardHeader}>
-                          <span className={styles.badge}>{activeItem.id}</span>
-                          <div className={styles.cardHeaderText}>
-                            <span className={styles.cardTitle}>
-                              {activeItem.stepName} - {activeItem.subSkillName}
-                            </span>
-                          </div>
-                        </header>
-
-                        <section className={styles.qaSection}>
-                          <div className={styles.qaBlock}>
-                            <div className={styles.qaLabel}>문항</div>
-                            <div className={styles.qaContent} dangerouslySetInnerHTML={{ __html: formatQuestion(activeItem.question) }} />
-                          </div>
-                          <div className={styles.qaBlock}>
-                            <div className={styles.qaLabel}>정답</div>
-                            <div className={styles.qaContent} dangerouslySetInnerHTML={{ __html: formatAnswer(activeItem.answer) }} />
-                          </div>
-                        </section>
-
-                        <div className={styles.rubricSection}>
-                          <h4 className={styles.rubricSectionTitle}>루브릭</h4>
-                          {rubricLoading && <p className={styles.empty}>루브릭을 불러오는 중입니다...</p>}
-                          {rubricError && !rubricLoading && <p className={styles.empty}>{rubricError}</p>}
-                          {!rubricLoading && !rubricError && (!activeItem.rubric || !activeItem.rubric.levels?.length) && (
-                            <p className={styles.empty}>해당 하위문항에 대한 루브릭이 없습니다. 4단계에서 루브릭을 생성해 주세요.</p>
-                          )}
-                          {!rubricLoading && !rubricError && activeItem.rubric && activeItem.rubric.levels?.length > 0 && (
-                            <div className={styles.rubricLevels}>
-                              {activeItem.rubric.levels.map((lv: any) => {
-                                const showTitle = typeof lv.title === "string" && lv.title.trim().length > 0 && lv.title.trim() !== (lv.description ?? "").trim();
-
-                                return (
-                                  <div key={lv.level} className={styles.rubricLevel}>
-                                    <div className={styles.rubricLevelHeader}>
-                                      <span className={styles.rubricLevelBadge}>{lv.level}</span>
-                                      {showTitle && <span className={styles.rubricLevelTitle}>{lv.title}</span>}
-                                    </div>
-                                    <p className={styles.rubricLevelDesc}>{lv.description}</p>
-
-                                    {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
-                                      <div className={styles.rubricBulletsSection}>
-                                        <div className={styles.rubricSubLabel}>세부 기준</div>
-                                        <ul className={styles.rubricBullets}>
-                                          {lv.bullets.map((b: string, i: number) => (
-                                            <li key={i}>{b}</li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
-
-                                    {Array.isArray(lv.examples) && lv.examples.length > 0 && (
-                                      <div className={styles.rubricExamplesSection}>
-                                        <div className={styles.rubricSubLabel}>학생 답안 예시</div>
-                                        <ul className={styles.rubricExamples}>
-                                          {lv.examples.map((ex: string, i: number) => (
-                                            <li key={i}>{ex}</li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </article>
-                    ) : (
-                      <p className={styles.empty}>표시할 하위문항이 없습니다.</p>
-                    )}
-                  </section>
-                </section>
-              )}
-
+            <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
                   <header className={styles.studentHeader}>
                     <div className={styles.studentHeaderTop}>
                       <h3 className={styles.studentTitle}>학생 답안 입력</h3>
                       <div className={styles.studentControls}>
-                        {!showGuidePanel && (
-                          <button
-                            type="button"
-                            className={styles.toggleGuideBtn}
-                            onClick={() => setShowGuidePanel(true)}
-                            aria-label="하위문항 및 루브릭 패널 보이기"
-                            title="하위문항·루브릭 패널 보이기"
-                          >
-                            <span className={styles.toggleGuideIcon}>
-                              {/* eye 스타일 */}
-                              <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M2.5 12C3.73 7.94 7.5 5 12 5s8.27 2.94 9.5 7c-1.23 4.06-5 7-9.5 7s-8.27-2.94-9.5-7z" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                                <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                              </svg>
-                            </span>
-                          </button>
-                        )}
                         <select className={styles.studentSelect} value={currentStudentId} onChange={(e) => handleChangeStudent(e.target.value)}>
                           {students.map((s) => (
                             <option key={s.id} value={s.id}>
@@ -705,12 +568,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
                   {diagnosisItems.length > 0 ? (
                     <>
-                      <p className={styles.studentAllDesc}>아래에서 모든 하위문항에 대한 학생 답안을 한 번에 입력할 수 있습니다. 왼쪽 탭은 참고용으로만 사용해 주세요.</p>
+                      <p className={styles.studentAllDesc}>아래에서 모든 하위문항에 대한 학생 답안을 한 번에 입력할 수 있습니다.</p>
                       <div className={styles.studentAllList}>
                         {diagnosisItems.map((item) => {
                           const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
                           const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
                           const isActive = activeItem?.id === item.id;
+                          const showAnswer = !!showAnswerById[item.id];
+                          const showRubric = !!showRubricById[item.id];
                           return (
                             <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
                               <div className={styles.studentAnswerHeader}>
@@ -735,6 +600,78 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 value={value}
                                 onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
                               />
+                              <div className={styles.studentAnswerToggles}>
+                                {item.answer && (
+                                  <button
+                                    type="button"
+                                    className={`${styles.studentToggleBtn} ${
+                                      showAnswer ? styles.studentToggleBtnActive : ""
+                                    }`}
+                                    onClick={() =>
+                                      setShowAnswerById((prev) => ({
+                                        ...prev,
+                                        [item.id]: !prev[item.id],
+                                      }))
+                                    }
+                                  >
+                                    정답 보기
+                                  </button>
+                                )}
+                                {item.rubric && item.rubric.levels?.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className={`${styles.studentToggleBtn} ${
+                                      showRubric ? styles.studentToggleBtnActive : ""
+                                    }`}
+                                    onClick={() =>
+                                      setShowRubricById((prev) => ({
+                                        ...prev,
+                                        [item.id]: !prev[item.id],
+                                      }))
+                                    }
+                                  >
+                                    루브릭 보기
+                                  </button>
+                                )}
+                              </div>
+                              {showAnswer && item.answer && (
+                                <div className={styles.studentAnswerSolution}>
+                                  <span className={styles.studentAnswerSolutionLabel}>정답</span>
+                                  <span
+                                    className={styles.studentAnswerSolutionText}
+                                    dangerouslySetInnerHTML={{
+                                      __html: formatAnswer(item.answer),
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              {showRubric && item.rubric && item.rubric.levels?.length > 0 && (
+                                <div className={styles.studentRubricInline}>
+                                  {item.rubric.levels.map((lv: any) => {
+                                    const showTitle =
+                                      typeof lv.title === "string" &&
+                                      lv.title.trim().length > 0 &&
+                                      lv.title.trim() !== (lv.description ?? "").trim();
+                                    return (
+                                      <div key={lv.level} className={styles.studentRubricLevel}>
+                                        <div className={styles.studentRubricLevelHeader}>
+                                          <span className={styles.studentRubricBadge}>{lv.level}</span>
+                                          {showTitle && (
+                                            <span className={styles.studentRubricTitle}>{lv.title}</span>
+                                          )}
+                                        </div>
+                                        {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
+                                          <ul className={styles.studentRubricBullets}>
+                                            {lv.bullets.map((b: string, i: number) => (
+                                              <li key={i}>{b}</li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               {result?.reason && (
                                 <div className={styles.studentFeedbackPanel}>
                                   <div className={styles.studentFeedbackHeader}>
