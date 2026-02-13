@@ -848,6 +848,36 @@
   border-left: 3px solid var(--color-border);
 }
 
+.reportGraphFeedbackEdit {
+  margin-top: 6px;
+}
+
+.reportGraphFeedbackLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.reportGraphFeedbackTextarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.reportGraphFeedbackTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
 .reportStepGroup1 {
   background: #2563eb;
   border-color: #2563eb;

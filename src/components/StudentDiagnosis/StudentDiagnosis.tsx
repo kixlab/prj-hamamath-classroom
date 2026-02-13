@@ -217,6 +217,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       feedback_summary?: string | null;
     }>;
   } | null>(null);
+  // 리포트 단계별 피드백(요약)을 사용자가 수정할 수 있도록 display_code 기준 편집 상태
+  const [reportFeedbackEdits, setReportFeedbackEdits] = useState<Record<string, string>>({});
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
   // 마운트 후 저장 effect 첫 실행 시 localStorage 덮어쓰기 방지 (복원이 적용된 뒤에만 저장)
@@ -362,7 +364,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         const problemKey = problemIdForDiagnosis;
         setStudentAnswers((prev) => {
           const existing = prev[currentStudentId]?.[problemKey] ?? {};
-          const fromServer = (item?.answers && typeof item.answers === "object") ? item.answers : {};
+          const fromServer = item?.answers && typeof item.answers === "object" ? item.answers : {};
           // 서버 값으로 채우되, 이미 입력된 값(현재 세션)은 유지해 덮어쓰지 않음
           const merged = { ...fromServer, ...existing };
           return {
@@ -683,6 +685,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       };
       const data = await api.generateStudentDiagnosisReport(payload);
       setReportData(data);
+      // 단계(display_code)별 LLM 요약 피드백을 편집 상태로 초기화
+      const initialEdits: Record<string, string> = {};
+      (data.step_rows || []).forEach((row) => {
+        if (row.feedback_summary && typeof row.feedback_summary === "string") {
+          initialEdits[row.display_code] = row.feedback_summary;
+        }
+      });
+      setReportFeedbackEdits(initialEdits);
     } catch (err: any) {
       console.error("학생 진단 리포트 생성 오류:", err);
       setReportError(err.message || "학생 진단 리포트를 불러오는 중 오류가 발생했습니다.");
@@ -826,9 +836,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                       {(() => {
                         const currentAnswers = studentAnswers[currentStudentId]?.[currentProblemKey] ?? {};
                         const hasSaved = Object.values(currentAnswers).some((v) => !!v?.trim());
-                        return hasSaved ? (
-                          <p className={styles.studentSavedHint}>저장된 답안이 불러와졌습니다. 수정 후 다시 저장할 수 있습니다.</p>
-                        ) : null;
+                        return hasSaved ? <p className={styles.studentSavedHint}>저장된 답안이 불러와졌습니다. 수정 후 다시 저장할 수 있습니다.</p> : null;
                       })()}
                       <div className={styles.studentAllList}>
                         {diagnosisItems.map((item) => {
@@ -959,19 +967,28 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         <div style={{ marginTop: 12, padding: 12, background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 8 }}>
                           <div style={{ fontWeight: 600, marginBottom: 8 }}>답안 없음 원인 (확인 후 닫기)</div>
                           <div style={{ fontSize: 12 }}>
-                            <p><strong>저장된 답안 키:</strong> {debugNoAnswerReason.answersKeys.length ? debugNoAnswerReason.answersKeys.join(", ") : "(비어 있음)"}</p>
-                            <p><strong>문제 키:</strong> {debugNoAnswerReason.currentProblemKey}</p>
-                            <p><strong>문항별 매칭:</strong></p>
+                            <p>
+                              <strong>저장된 답안 키:</strong> {debugNoAnswerReason.answersKeys.length ? debugNoAnswerReason.answersKeys.join(", ") : "(비어 있음)"}
+                            </p>
+                            <p>
+                              <strong>문제 키:</strong> {debugNoAnswerReason.currentProblemKey}
+                            </p>
+                            <p>
+                              <strong>문항별 매칭:</strong>
+                            </p>
                             <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
                               {debugNoAnswerReason.itemsDetail.map((row, i) => (
                                 <li key={i}>
-                                  id={row.id}, displayCode={row.displayCode}, rubric={row.hasRubric ? "O" : "X"} · displayCode값={String(row.valueByDisplayCode).slice(0, 20)} · id값={String(row.valueById).slice(0, 20)}
+                                  id={row.id}, displayCode={row.displayCode}, rubric={row.hasRubric ? "O" : "X"} · displayCode값={String(row.valueByDisplayCode).slice(0, 20)} · id값=
+                                  {String(row.valueById).slice(0, 20)}
                                 </li>
                               ))}
                             </ul>
                             <p style={{ marginTop: 8 }}>키가 다르면(예: 저장은 SQ-1, 문항은 1-1) 매칭이 안 됩니다. 입력 후 저장하고 다시 진단해 보세요.</p>
                           </div>
-                          <button type="button" onClick={() => setDebugNoAnswerReason(null)} style={{ marginTop: 8 }}>닫기</button>
+                          <button type="button" onClick={() => setDebugNoAnswerReason(null)} style={{ marginTop: 8 }}>
+                            닫기
+                          </button>
                         </div>
                       )}
 
@@ -1131,12 +1148,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                     if (!reportData) return;
                     const perStudent = studentProblemSummaries[currentStudentId] ?? {};
                     try {
-                      await exportDiagnosisReportPdf(
-                        reportData,
-                        students.find((s) => s.id === currentStudentId)?.name ?? "학생",
-                        currentStudentId,
-                        perStudent
-                      );
+                      await exportDiagnosisReportPdf(reportData, students.find((s) => s.id === currentStudentId)?.name ?? "학생", currentStudentId, perStudent);
                     } catch (err: any) {
                       console.error("진단 리포트 PDF 내보내기 오류:", err);
                       alert(err?.message ?? "PDF 저장 중 오류가 발생했습니다.");
@@ -1291,9 +1303,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         </table>
                         <div className={styles.reportGraphList}>
                           {(() => {
-                            const sorted = [...reportData.step_rows].sort((a, b) =>
-                              a.display_code.localeCompare(b.display_code, undefined, { numeric: true })
-                            );
+                            const sorted = [...reportData.step_rows].sort((a, b) => a.display_code.localeCompare(b.display_code, undefined, { numeric: true }));
                             const byGroup: Record<string, typeof sorted> = {};
                             sorted.forEach((row) => {
                               const g = getStepGroupInfo(row.display_code).group;
@@ -1305,8 +1315,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                               const rows = byGroup[g] || [];
                               if (rows.length === 0) return null;
                               const stageLabel = STEP_GROUP_LABELS[g] || `${g}단계`;
-                              const groupClass =
-                                g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
+                              const groupClass = g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
                               return (
                                 <div key={`graph-group-${g}`} className={styles.reportGraphGroup}>
                                   <div className={`${styles.reportGraphGroupTitle} ${groupClass}`}>{stageLabel}</div>
@@ -1326,6 +1335,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                       });
                                       const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
                                       const grade = stepCount > 0 ? scoreToGradeFrom100(score_100) : "-";
+                                      const feedbackValue =
+                                        reportFeedbackEdits[row.display_code] ??
+                                        row.feedback_summary ??
+                                        "";
                                       return (
                                         <div key={`step-graph-${row.display_code}`} className={styles.reportGraphItem}>
                                           <div className={styles.reportGraphHeader}>
@@ -1338,16 +1351,38 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                             </div>
                                           </div>
                                           <div className={styles.reportGraphBar}>
-                                            <div
-                                              className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`}
-                                              style={{ width: `${score_100}%` }}
+                                            <div className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`} style={{ width: `${score_100}%` }} />
+                                          </div>
+                                          <div className={styles.reportGraphFeedbackEdit}>
+                                            <label className={styles.reportGraphFeedbackLabel}>
+                                              리포트용 단계별 피드백
+                                            </label>
+                                            <textarea
+                                              className={styles.reportGraphFeedbackTextarea}
+                                              rows={3}
+                                              value={feedbackValue}
+                                              placeholder="이 단계에 대한 학생의 강점·보완점 등을 간단히 적어 주세요."
+                                              onChange={(e) => {
+                                                const value = e.target.value;
+                                                setReportFeedbackEdits((prev) => ({
+                                                  ...prev,
+                                                  [row.display_code]: value,
+                                                }));
+                                                setReportData((prev) =>
+                                                  prev
+                                                    ? {
+                                                        ...prev,
+                                                        step_rows: prev.step_rows.map((r) =>
+                                                          r.display_code === row.display_code
+                                                            ? { ...r, feedback_summary: value || null }
+                                                            : r,
+                                                        ),
+                                                      }
+                                                    : prev,
+                                                );
+                                              }}
                                             />
                                           </div>
-                                          {row.feedback_summary && (
-                                            <p className={styles.reportGraphFeedbackSummary}>
-                                              {row.feedback_summary}
-                                            </p>
-                                          )}
                                         </div>
                                       );
                                     })}
