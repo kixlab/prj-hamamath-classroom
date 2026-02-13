@@ -219,8 +219,9 @@ export const api = {
    * payload 예시:
    * {
    *   problem_id: string;
-   *   user_id: string;        // 교사/연구 참여자 ID (X-User-Id와 동일하게 사용)
-   *   student_id: string;     // 화면에서 선택한 학생 ID
+   *   user_id: string;         // 교사/연구 참여자 ID (X-User-Id와 동일하게 사용)
+   *   student_id: string;      // 화면에서 선택한 학생 ID
+   *   student_name?: string;   // 학생 표시 이름 (선택)
    *   answers: { [sub_question_id: string]: string };
    * }
    */
@@ -228,6 +229,7 @@ export const api = {
     problem_id: string;
     user_id: string;
     student_id: string;
+    student_name?: string;
     answers: Record<string, string>;
   }) {
     const response = await fetch(getApiUrl("/api/v1/student-answers/save"), {
@@ -272,73 +274,6 @@ export const api = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
         (errorData as { detail?: string }).detail || "저장된 학생 답안을 불러오는 중 오류가 발생했습니다."
-      );
-    }
-    return response.json();
-  },
-
-  /** 진단 결과 저장 (학생별·문제별 levels/feedback) — 백엔드: POST /api/v1/diagnosis-results/save */
-  async saveDiagnosisResults(payload: {
-    user_id: string;
-    student_id: string;
-    problem_id: string;
-    levels_by_display_code: Record<string, "상" | "중" | "하">;
-    feedback_by_display_code?: Record<string, string>;
-  }) {
-    const response = await fetch(getApiUrl("/api/v1/diagnosis-results/save"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        (errorData as { detail?: string }).detail || "진단 결과를 저장하는 중 오류가 발생했습니다."
-      );
-    }
-    return response.json();
-  },
-
-  /** 저장된 진단 결과 목록 (student_id, problem_id별) — 복원용 */
-  async getDiagnosisResultsList(): Promise<{
-    items: Array<{
-      student_id: string;
-      problem_id: string;
-      levels_by_display_code: Record<string, "상" | "중" | "하">;
-      feedback_by_display_code?: Record<string, string>;
-    }>;
-  }> {
-    const response = await fetch(getApiUrl("/api/v1/diagnosis-results/list"), {
-      headers: getHistoryHeaders(),
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        (errorData as { detail?: string }).detail || "저장된 진단 결과 목록을 불러오는 중 오류가 발생했습니다."
-      );
-    }
-    return response.json();
-  },
-
-  /** 진단 결과 1건 조회 (없으면 null) */
-  async getDiagnosisResults(
-    studentId: string,
-    problemId: string
-  ): Promise<{
-    student_id: string;
-    problem_id: string;
-    levels_by_display_code: Record<string, "상" | "중" | "하">;
-    feedback_by_display_code?: Record<string, string>;
-  } | null> {
-    const params = new URLSearchParams({ student_id: studentId, problem_id: problemId });
-    const response = await fetch(getApiUrl(`/api/v1/diagnosis-results/get?${params}`), {
-      headers: getHistoryHeaders(),
-    });
-    if (response.status === 404) return null;
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        (errorData as { detail?: string }).detail || "저장된 진단 결과를 불러오는 중 오류가 발생했습니다."
       );
     }
     return response.json();

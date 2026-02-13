@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import styles from "./StudentDiagnosis.module.css";
 import { useApp } from "../../contexts/AppContext";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { api } from "../../services/api";
 import { getSavedResults } from "../../hooks/useStorage";
-import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
 
 interface StudentDiagnosisProps {
   userId: string;
@@ -193,8 +192,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [bulkDiagnosing, setBulkDiagnosing] = useState(false);
   // diagnosisResults[studentId][problemKey][subQuestionId] = { level, reason }
   const [diagnosisResults, setDiagnosisResults] = useState<Record<string, Record<string, Record<string, { level: string; reason: string }>>>>({});
-  // 개별 하위문항 진단 편집 모드 (등급/피드백)
-  const [editingDiagnosisById, setEditingDiagnosisById] = useState<Record<string, boolean>>({});
   // 하위문항 카드별 정답/루브릭 보기 토글 상태
   const [showAnswerById, setShowAnswerById] = useState<Record<string, boolean>>({});
   const [showRubricById, setShowRubricById] = useState<Record<string, boolean>>({});
@@ -219,18 +216,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       feedback_summary?: string | null;
     }>;
   } | null>(null);
-  // 리포트 단계별 피드백(요약)을 사용자가 수정할 수 있도록 display_code 기준 편집 상태
-  const [reportFeedbackEdits, setReportFeedbackEdits] = useState<Record<string, string>>({});
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
-  // 마운트 후 저장 effect 첫 실행 시 localStorage 덮어쓰기 방지 (복원이 적용된 뒤에만 저장)
-  const saveEffectHasRunRef = useRef(false);
-  // "답안 없음" 알림 시 원인 확인용 (화면에 표시)
-  const [debugNoAnswerReason, setDebugNoAnswerReason] = useState<{
-    answersKeys: string[];
-    itemsDetail: Array<{ id: string; displayCode: string; hasRubric: boolean; valueByDisplayCode: string; valueById: string }>;
-    currentProblemKey: string;
-  } | null>(null);
 
   // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
   useEffect(() => {
@@ -285,7 +272,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           for (const item of items) {
             if (!item.student_id || !item.problem_id) continue;
             if (!next[item.student_id]) next[item.student_id] = {};
-            next[item.student_id][item.problem_id] = { ...(next[item.student_id][item.problem_id] ?? {}), ...(item.answers || {}) };
+            const existing = next[item.student_id][item.problem_id];
+            if (!existing || Object.keys(existing).length === 0) {
+              next[item.student_id][item.problem_id] = { ...(item.answers || {}) };
+            }
           }
           return next;
         });
@@ -298,63 +288,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     };
   }, [userId]);
 
-  // 서버에 저장된 진단 결과 불러와서 studentProblemSummaries에 병합
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { items } = await api.getDiagnosisResultsList();
-        if (cancelled || !items?.length) return;
-        setStudentProblemSummaries((prev) => {
-          const next = JSON.parse(JSON.stringify(prev));
-          for (const item of items) {
-            if (!item.student_id || !item.problem_id || !item.levels_by_display_code) continue;
-            if (!next[item.student_id]) next[item.student_id] = {};
-            next[item.student_id][item.problem_id] = {
-              problemId: item.problem_id,
-              levelsByDisplayCode: item.levels_by_display_code,
-              feedbackByDisplayCode: item.feedback_by_display_code,
-            };
-          }
-          return next;
-        });
-      } catch (err) {
-        if (!cancelled) console.error("저장된 진단 결과 목록 불러오기 오류:", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  // studentProblemSummaries(서버 복원 포함) → 현재 학생/문제의 diagnosisResults 동기화 (displayCode → item.id)
-  const problemKeyForSync = problemIdForDiagnosis ?? "__current__";
-  const summaryForSync = studentProblemSummaries[currentStudentId]?.[problemKeyForSync];
-  useEffect(() => {
-    if (!summaryForSync?.levelsByDisplayCode || !diagnosisItems.length) return;
-    setDiagnosisResults((prev) => {
-      const cur = prev[currentStudentId]?.[problemKeyForSync] ?? {};
-      let changed = false;
-      const nextForProblem = { ...cur };
-      for (const item of diagnosisItems) {
-        const level = summaryForSync.levelsByDisplayCode[item.displayCode];
-        const reason = summaryForSync.feedbackByDisplayCode?.[item.displayCode] ?? "";
-        if (level && !nextForProblem[item.id]) {
-          nextForProblem[item.id] = { level, reason };
-          changed = true;
-        }
-      }
-      if (!changed) return prev;
-      return {
-        ...prev,
-        [currentStudentId]: {
-          ...(prev[currentStudentId] ?? {}),
-          [problemKeyForSync]: nextForProblem,
-        },
-      };
-    });
-  }, [currentStudentId, problemKeyForSync, summaryForSync, diagnosisItems.length]);
-
   // 동일 로그인 id·문제·학생에 해당하는 저장 답안이 있으면 화면에 표시
   useEffect(() => {
     if (!problemIdForDiagnosis || !currentStudentId) return;
@@ -362,21 +295,15 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     (async () => {
       try {
         const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId);
-        if (cancelled) return;
+        if (cancelled || !item?.answers) return;
         const problemKey = problemIdForDiagnosis;
-        setStudentAnswers((prev) => {
-          const existing = prev[currentStudentId]?.[problemKey] ?? {};
-          const fromServer = item?.answers && typeof item.answers === "object" ? item.answers : {};
-          // 서버 값으로 채우되, 이미 입력된 값(현재 세션)은 유지해 덮어쓰지 않음
-          const merged = { ...fromServer, ...existing };
-          return {
-            ...prev,
-            [currentStudentId]: {
-              ...(prev[currentStudentId] ?? {}),
-              [problemKey]: merged,
-            },
-          };
-        });
+        setStudentAnswers((prev) => ({
+          ...prev,
+          [currentStudentId]: {
+            ...(prev[currentStudentId] ?? {}),
+            [problemKey]: { ...(item.answers || {}) },
+          },
+        }));
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안(단건) 불러오기 오류:", err);
       }
@@ -387,12 +314,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   }, [userId, problemIdForDiagnosis, currentStudentId]);
 
   // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장
-  // 마운트 직후 첫 실행에서는 복원 전 빈 state로 덮어쓰지 않도록 스킵
   useEffect(() => {
-    if (!saveEffectHasRunRef.current) {
-      saveEffectHasRunRef.current = true;
-      return;
-    }
     try {
       const stateToSave = {
         studentAnswers,
@@ -423,14 +345,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
 
-  const handleStudentAnswerChange = (displayCode: string, value: string) => {
+  const handleStudentAnswerChange = (id: string, value: string) => {
     setStudentAnswers((prev) => ({
       ...prev,
       [currentStudentId]: {
         ...(prev[currentStudentId] ?? {}),
         [currentProblemKey]: {
           ...(prev[currentStudentId]?.[currentProblemKey] ?? {}),
-          [displayCode]: value,
+          [id]: value,
         },
       },
     }));
@@ -439,7 +361,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   // 현재 학생의 모든 하위문항(답안이 있는 것만)을 한 번에 진단
   const handleRunDiagnosisForAll = async () => {
-    console.warn("[진단] 전체 하위문항 진단 버튼 클릭됨");
     if (!problemIdForDiagnosis) {
       alert("먼저 진단할 문제를 선택해 주세요.");
       return;
@@ -454,30 +375,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
 
     const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
-    const targetItems = diagnosisItems.filter((item) => {
-      const text = (answersForStudent[item.displayCode] ?? answersForStudent[item.id] ?? "").trim();
-      return !!(item.rubric && item.rubric.levels?.length && text.length > 0);
-    });
+    const targetItems = diagnosisItems.filter((item) => item.rubric && item.rubric.levels?.length && (answersForStudent[item.id] ?? "").trim().length > 0);
 
     if (!targetItems.length) {
-      const itemsDetail = diagnosisItems.slice(0, 15).map((item) => ({
-        id: item.id,
-        displayCode: item.displayCode,
-        hasRubric: !!(item.rubric && item.rubric.levels?.length),
-        valueByDisplayCode: answersForStudent[item.displayCode] ?? "(없음)",
-        valueById: answersForStudent[item.id] ?? "(없음)",
-      }));
-      setDebugNoAnswerReason({
-        answersKeys: Object.keys(answersForStudent),
-        itemsDetail,
-        currentProblemKey,
-      });
-      console.warn("[진단] 답안 없음 원인 확인", { currentStudentId, currentProblemKey, answersKeys: Object.keys(answersForStudent), itemsDetail });
       alert("답안이 입력된 하위문항이 없습니다. 먼저 학생 답안을 입력해 주세요.");
       return;
     }
 
-    setDebugNoAnswerReason(null);
     setBulkDiagnosing(true);
     try {
       const newResultsForStudent: Record<string, { level: string; reason: string }> = {
@@ -485,7 +389,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       };
 
       for (const item of targetItems) {
-        const answerText = answersForStudent[item.displayCode] ?? answersForStudent[item.id] ?? "";
+        const answerText = answersForStudent[item.id] ?? "";
 
         // 루브릭을 백엔드 진단 스키마에 맞게 변환
         const rubricLevels: Record<string, any> = {};
@@ -553,18 +457,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             [currentStudentId]: perStudent,
           };
         });
-        // 진단 결과 서버 저장
-        try {
-          await api.saveDiagnosisResults({
-            user_id: userId,
-            student_id: currentStudentId,
-            problem_id: problemIdForDiagnosis,
-            levels_by_display_code: levelOnlyByDisplayCode,
-            feedback_by_display_code: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
-          });
-        } catch (err: any) {
-          console.error("진단 결과 서버 저장 오류:", err);
-        }
       }
     } finally {
       setBulkDiagnosing(false);
@@ -581,12 +473,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       return;
     }
     const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
-    const answersToSave: Record<string, string> = {};
-    diagnosisItems.forEach((item) => {
-      const v = answersForStudent[item.displayCode] ?? answersForStudent[item.id];
-      if (v != null && String(v).trim() !== "") answersToSave[item.displayCode] = String(v).trim();
-    });
-    if (!Object.keys(answersToSave).length) {
+    if (!Object.keys(answersForStudent).length) {
       alert("저장할 학생 답안이 없습니다.");
       return;
     }
@@ -594,11 +481,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     setSaving(true);
     setSaveMessage(null);
     try {
+      const currentStudent = students.find((s) => s.id === currentStudentId) || null;
       await api.saveStudentAnswers({
         problem_id: problemIdForDiagnosis,
         user_id: userId,
         student_id: currentStudentId,
-        answers: answersToSave,
+        student_name: currentStudent?.name,
+        answers: answersForStudent,
       });
       setSaveMessage("학생 답안을 저장했습니다.");
       setCanDiagnose((prev) => ({
@@ -657,85 +546,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     const detailLabel = STEP_DETAIL_LABELS[displayCode] || stageLabel;
     return { group, stageLabel, detailLabel };
   };
-  // 100점 만점을 5등급: 상 80+, 중상 60+, 중 40+, 중하 20+, 하 20 미만
-  const scoreToGradeFrom100 = (score_100: number): "상" | "중상" | "중" | "중하" | "하" | "-" => {
+  // 100점 만점을 5등급으로 동일 간격(20점): A 80+, B 60+, C 40+, D 20+, F 20 미만
+  const scoreToGradeFrom100 = (score_100: number): "A" | "B" | "C" | "D" | "F" | "-" => {
     if (score_100 < 0 || score_100 > 100) return "-";
-    if (score_100 >= 80) return "상";
-    if (score_100 >= 60) return "중상";
-    if (score_100 >= 40) return "중";
-    if (score_100 >= 20) return "중하";
-    return "하";
-  };
-
-  // 개별 하위문항 진단 결과(등급/피드백) 수정 → 요약/서버 저장까지 반영
-  const updateDiagnosisForItem = (item: DiagnosisItem, field: "level" | "reason", value: string) => {
-    const nextValue = value;
-    setDiagnosisResults((prev) => {
-      const perStudentPrev = prev[currentStudentId] ?? {};
-      const forProblemPrev = perStudentPrev[currentProblemKey] ?? {};
-      const prevRes = forProblemPrev[item.id] ?? { level: "중", reason: "" };
-      const nextRes = {
-        ...prevRes,
-        [field]: nextValue,
-      };
-      const nextForProblem = {
-        ...forProblemPrev,
-        [item.id]: nextRes,
-      };
-      const next: typeof prev = {
-        ...prev,
-        [currentStudentId]: {
-          ...perStudentPrev,
-          [currentProblemKey]: nextForProblem,
-        },
-      };
-
-      // 요약 및 서버 저장은 별도 async 처리
-      (async () => {
-        if (!problemIdForDiagnosis) return;
-        const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};
-        const feedbackByDisplayCode: Record<string, string> = {};
-        diagnosisItems.forEach((it) => {
-          const res = nextForProblem[it.id];
-          if (!res) return;
-          if (res.level === "상" || res.level === "중" || res.level === "하") {
-            levelOnlyByDisplayCode[it.displayCode] = res.level as LevelType;
-          }
-          if (res.reason && res.reason.trim()) {
-            feedbackByDisplayCode[it.displayCode] = res.reason.trim();
-          }
-        });
-
-        if (Object.keys(levelOnlyByDisplayCode).length === 0) return;
-
-        setStudentProblemSummaries((prevSummaries) => {
-          const perStudent = { ...(prevSummaries[currentStudentId] ?? {}) };
-          perStudent[problemIdForDiagnosis] = {
-            problemId: problemIdForDiagnosis,
-            levelsByDisplayCode: levelOnlyByDisplayCode,
-            feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
-          };
-          return {
-            ...prevSummaries,
-            [currentStudentId]: perStudent,
-          };
-        });
-
-        try {
-          await api.saveDiagnosisResults({
-            user_id: userId,
-            student_id: currentStudentId,
-            problem_id: problemIdForDiagnosis,
-            levels_by_display_code: levelOnlyByDisplayCode,
-            feedback_by_display_code: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
-          });
-        } catch (err) {
-          console.error("진단 결과 수동 수정 저장 오류:", err);
-        }
-      })();
-
-      return next;
-    });
+    if (score_100 >= 80) return "A";
+    if (score_100 >= 60) return "B";
+    if (score_100 >= 40) return "C";
+    if (score_100 >= 20) return "D";
+    return "F";
   };
   const openReport = async () => {
     const perStudent = studentProblemSummaries[currentStudentId] ?? {};
@@ -758,14 +576,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       };
       const data = await api.generateStudentDiagnosisReport(payload);
       setReportData(data);
-      // 단계(display_code)별 LLM 요약 피드백을 편집 상태로 초기화
-      const initialEdits: Record<string, string> = {};
-      (data.step_rows || []).forEach((row) => {
-        if (row.feedback_summary && typeof row.feedback_summary === "string") {
-          initialEdits[row.display_code] = row.feedback_summary;
-        }
-      });
-      setReportFeedbackEdits(initialEdits);
     } catch (err: any) {
       console.error("학생 진단 리포트 생성 오류:", err);
       setReportError(err.message || "학생 진단 리포트를 불러오는 중 오류가 발생했습니다.");
@@ -785,7 +595,11 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             학생 {students.findIndex((s) => s.id === currentStudentId) + 1}/{students.length} · 문항 {activeItemIndex + 1}/{diagnosisItems.length}
           </span>
         </div>
-        <div className={styles.headerRight}></div>
+        <div className={styles.headerRight}>
+          <button className={styles.backBtn} onClick={onClose}>
+            문항 생성으로 돌아가기
+          </button>
+        </div>
       </header>
 
       <main className={styles.main}>
@@ -868,9 +682,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               + 학생 추가
             </button>
             {summaryProblemIds.length > 0 && (
-              <button type="button" className={styles.reportBtn} onClick={openReport} disabled={reportLoading}>
-                {reportLoading && <span className={styles.reportBtnSpinner} />}
-                {reportLoading ? "리포트 생성 중..." : "학생 진단 리포트"}
+              <button type="button" className={styles.reportBtn} onClick={openReport}>
+                학생 진단 리포트
               </button>
             )}
           </aside>
@@ -893,24 +706,23 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         </select>
                       </div>
                     </div>
+                    {activeItem && (
+                      <span className={styles.studentMeta}>
+                        선택된 진단 대상: {activeItem.id} · {activeItem.stepName} - {activeItem.subSkillName}
+                      </span>
+                    )}
                   </header>
 
                   {diagnosisItems.length > 0 ? (
                     <>
                       <p className={styles.studentAllDesc}>아래에서 모든 하위문항에 대한 학생 답안을 한 번에 입력할 수 있습니다.</p>
-                      {(() => {
-                        const currentAnswers = studentAnswers[currentStudentId]?.[currentProblemKey] ?? {};
-                        const hasSaved = Object.values(currentAnswers).some((v) => !!v?.trim());
-                        return hasSaved ? <p className={styles.studentSavedHint}>저장된 답안이 불러와졌습니다. 수정 후 다시 저장할 수 있습니다.</p> : null;
-                      })()}
                       <div className={styles.studentAllList}>
                         {diagnosisItems.map((item) => {
-                          const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.displayCode] ?? studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
+                          const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
                           const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
                           const isActive = activeItem?.id === item.id;
                           const showAnswer = !!showAnswerById[item.id];
                           const showRubric = !!showRubricById[item.id];
-                          const isEditingDiagnosis = !!editingDiagnosisById[item.id];
                           return (
                             <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
                               <div className={styles.studentAnswerHeader}>
@@ -920,6 +732,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                     {item.stepName} - {item.subSkillName}
                                   </span>
                                 </div>
+                                {result && <span className={styles.studentAnswerResult}>진단: {result.level}</span>}
                               </div>
                               <div
                                 className={styles.studentAnswerQuestion}
@@ -932,7 +745,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 rows={4}
                                 placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
                                 value={value}
-                                onChange={(e) => handleStudentAnswerChange(item.displayCode, e.target.value)}
+                                onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
                               />
                               <div className={styles.studentAnswerToggles}>
                                 {item.answer && (
@@ -997,50 +810,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                   })}
                                 </div>
                               )}
-                              {result && (
+                              {result?.reason && (
                                 <div className={styles.studentFeedbackPanel}>
                                   <div className={styles.studentFeedbackHeader}>
-                                    <span className={styles.studentFeedbackTitle}>개별 진단 결과 ({item.displayCode})</span>
-                                    <div className={styles.studentFeedbackControls}>
-                                      {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>진단: {result.level}</span>}
-                                      <button
-                                        type="button"
-                                        className={styles.studentFeedbackEditBtn}
-                                        onClick={() =>
-                                          setEditingDiagnosisById((prev) => ({
-                                            ...prev,
-                                            [item.id]: !prev[item.id],
-                                          }))
-                                        }
-                                      >
-                                        {isEditingDiagnosis ? "편집 종료" : "편집"}
-                                      </button>
-                                    </div>
+                                    <span className={styles.studentFeedbackTitle}>진단 피드백 ({item.displayCode})</span>
+                                    <span className={styles.studentFeedbackLevel}>진단: {result.level}</span>
                                   </div>
-                                  {isEditingDiagnosis ? (
-                                    <>
-                                      <label className={styles.studentFeedbackLevelLabel}>
-                                        진단 등급
-                                        <select className={styles.studentFeedbackLevelSelect} value={result.level} onChange={(e) => updateDiagnosisForItem(item, "level", e.target.value)}>
-                                          <option value="상">상</option>
-                                          <option value="중">중</option>
-                                          <option value="하">하</option>
-                                        </select>
-                                      </label>
-                                      <label className={styles.studentFeedbackBodyLabel}>
-                                        진단 피드백
-                                        <textarea
-                                          className={styles.studentFeedbackBodyInput}
-                                          rows={3}
-                                          value={result.reason ?? ""}
-                                          placeholder="이 하위문항에 대한 학생의 이해 수준, 오류 유형 등을 간단히 기록해 두세요."
-                                          onChange={(e) => updateDiagnosisForItem(item, "reason", e.target.value)}
-                                        />
-                                      </label>
-                                    </>
-                                  ) : (
-                                    <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : "피드백이 없습니다."}</p>
-                                  )}
+                                  <p className={styles.studentFeedbackBody}>{result.reason}</p>
                                 </div>
                               )}
                             </div>
@@ -1065,35 +841,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                       </div>
 
-                      {debugNoAnswerReason && (
-                        <div style={{ marginTop: 12, padding: 12, background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 8 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 8 }}>답안 없음 원인 (확인 후 닫기)</div>
-                          <div style={{ fontSize: 12 }}>
-                            <p>
-                              <strong>저장된 답안 키:</strong> {debugNoAnswerReason.answersKeys.length ? debugNoAnswerReason.answersKeys.join(", ") : "(비어 있음)"}
-                            </p>
-                            <p>
-                              <strong>문제 키:</strong> {debugNoAnswerReason.currentProblemKey}
-                            </p>
-                            <p>
-                              <strong>문항별 매칭:</strong>
-                            </p>
-                            <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-                              {debugNoAnswerReason.itemsDetail.map((row, i) => (
-                                <li key={i}>
-                                  id={row.id}, displayCode={row.displayCode}, rubric={row.hasRubric ? "O" : "X"} · displayCode값={String(row.valueByDisplayCode).slice(0, 20)} · id값=
-                                  {String(row.valueById).slice(0, 20)}
-                                </li>
-                              ))}
-                            </ul>
-                            <p style={{ marginTop: 8 }}>키가 다르면(예: 저장은 SQ-1, 문항은 1-1) 매칭이 안 됩니다. 입력 후 저장하고 다시 진단해 보세요.</p>
-                          </div>
-                          <button type="button" onClick={() => setDebugNoAnswerReason(null)} style={{ marginTop: 8 }}>
-                            닫기
-                          </button>
-                        </div>
-                      )}
-
                       {/* 개별 문항 진단 결과 요약 배지는 요약 섹션과 카드 상단에서 충분히 표현되므로,
                           별도의 상세 피드백 박스는 표시하지 않습니다. */}
                     </>
@@ -1110,7 +857,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                 <div className={styles.studentSummaryRow}>
                   {diagnosisItems.map((item) => {
                     const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                    const hasAnswer = !!(studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.displayCode] ?? studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id])?.trim();
+                    const hasAnswer = !!studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id]?.trim();
                     const isActive = activeItem?.id === item.id;
                     return (
                       <button key={item.id} type="button" className={`${styles.studentSummaryChip} ${isActive ? styles.studentSummaryChipActive : ""}`} onClick={() => setActiveId(item.id)}>
@@ -1241,28 +988,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                   {students.find((s) => s.id === currentStudentId)?.name} · 진단한 문제 수 {summaryProblemIds.length}개
                 </p>
               </div>
-              <div className={styles.reportHeaderActions}>
-                <button
-                  type="button"
-                  className={styles.reportPdfBtn}
-                  disabled={reportLoading || !!reportError || !reportData}
-                  onClick={async () => {
-                    if (!reportData) return;
-                    const perStudent = studentProblemSummaries[currentStudentId] ?? {};
-                    try {
-                      await exportDiagnosisReportPdf(reportData, students.find((s) => s.id === currentStudentId)?.name ?? "학생", currentStudentId, perStudent);
-                    } catch (err: any) {
-                      console.error("진단 리포트 PDF 내보내기 오류:", err);
-                      alert(err?.message ?? "PDF 저장 중 오류가 발생했습니다.");
-                    }
-                  }}
-                >
-                  PDF 다운로드
-                </button>
-                <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
-                  닫기
-                </button>
-              </div>
+              <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
+                닫기
+              </button>
             </header>
 
             <div className={styles.reportBody}>
@@ -1405,7 +1133,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         </table>
                         <div className={styles.reportGraphList}>
                           {(() => {
-                            const sorted = [...reportData.step_rows].sort((a, b) => a.display_code.localeCompare(b.display_code, undefined, { numeric: true }));
+                            const sorted = [...reportData.step_rows].sort((a, b) =>
+                              a.display_code.localeCompare(b.display_code, undefined, { numeric: true })
+                            );
                             const byGroup: Record<string, typeof sorted> = {};
                             sorted.forEach((row) => {
                               const g = getStepGroupInfo(row.display_code).group;
@@ -1417,7 +1147,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                               const rows = byGroup[g] || [];
                               if (rows.length === 0) return null;
                               const stageLabel = STEP_GROUP_LABELS[g] || `${g}단계`;
-                              const groupClass = g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
+                              const groupClass =
+                                g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
                               return (
                                 <div key={`graph-group-${g}`} className={styles.reportGraphGroup}>
                                   <div className={`${styles.reportGraphGroupTitle} ${groupClass}`}>{stageLabel}</div>
@@ -1437,7 +1168,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                       });
                                       const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
                                       const grade = stepCount > 0 ? scoreToGradeFrom100(score_100) : "-";
-                                      const feedbackValue = reportFeedbackEdits[row.display_code] ?? row.feedback_summary ?? "";
                                       return (
                                         <div key={`step-graph-${row.display_code}`} className={styles.reportGraphItem}>
                                           <div className={styles.reportGraphHeader}>
@@ -1450,32 +1180,16 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                             </div>
                                           </div>
                                           <div className={styles.reportGraphBar}>
-                                            <div className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`} style={{ width: `${score_100}%` }} />
-                                          </div>
-                                          <div className={styles.reportGraphFeedbackEdit}>
-                                            <label className={styles.reportGraphFeedbackLabel}>리포트용 단계별 피드백</label>
-                                            <textarea
-                                              className={styles.reportGraphFeedbackTextarea}
-                                              rows={3}
-                                              value={feedbackValue}
-                                              placeholder="이 단계에 대한 학생의 강점·보완점 등을 간단히 적어 주세요."
-                                              onChange={(e) => {
-                                                const value = e.target.value;
-                                                setReportFeedbackEdits((prev) => ({
-                                                  ...prev,
-                                                  [row.display_code]: value,
-                                                }));
-                                                setReportData((prev) =>
-                                                  prev
-                                                    ? {
-                                                        ...prev,
-                                                        step_rows: prev.step_rows.map((r) => (r.display_code === row.display_code ? { ...r, feedback_summary: value || null } : r)),
-                                                      }
-                                                    : prev,
-                                                );
-                                              }}
+                                            <div
+                                              className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`}
+                                              style={{ width: `${score_100}%` }}
                                             />
                                           </div>
+                                          {row.feedback_summary && (
+                                            <p className={styles.reportGraphFeedbackSummary}>
+                                              {row.feedback_summary}
+                                            </p>
+                                          )}
                                         </div>
                                       );
                                     })}
