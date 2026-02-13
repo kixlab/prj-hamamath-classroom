@@ -5,6 +5,7 @@ import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { api } from "../../services/api";
 import { getSavedResults } from "../../hooks/useStorage";
+import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
 
 interface StudentDiagnosisProps {
   userId: string;
@@ -1121,9 +1122,33 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                   {students.find((s) => s.id === currentStudentId)?.name} · 진단한 문제 수 {summaryProblemIds.length}개
                 </p>
               </div>
-              <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
-                닫기
-              </button>
+              <div className={styles.reportHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.reportPdfBtn}
+                  disabled={reportLoading || !!reportError || !reportData}
+                  onClick={async () => {
+                    if (!reportData) return;
+                    const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                    try {
+                      await exportDiagnosisReportPdf(
+                        reportData,
+                        students.find((s) => s.id === currentStudentId)?.name ?? "학생",
+                        currentStudentId,
+                        perStudent
+                      );
+                    } catch (err: any) {
+                      console.error("진단 리포트 PDF 내보내기 오류:", err);
+                      alert(err?.message ?? "PDF 저장 중 오류가 발생했습니다.");
+                    }
+                  }}
+                >
+                  PDF 다운로드
+                </button>
+                <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
+                  닫기
+                </button>
+              </div>
             </header>
 
             <div className={styles.reportBody}>

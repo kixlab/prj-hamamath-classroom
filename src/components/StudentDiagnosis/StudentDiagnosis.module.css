@@ -983,6 +983,31 @@
   color: var(--color-text-secondary);
 }
 
+.reportHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reportPdfBtn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  font-size: 0.8rem;
+  color: #fff;
+  cursor: pointer;
+}
+
+.reportPdfBtn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.reportPdfBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .reportCloseBtn {
   padding: 6px 12px;
   border-radius: 999px;
