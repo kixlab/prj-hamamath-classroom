@@ -1010,6 +1010,16 @@
   color: var(--color-text-secondary);
 }
 
+.studentSavedHint {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  color: var(--color-text);
+  background: var(--color-bg-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--color-border);
+}
+
 .studentAllList {
   margin-top: 6px;
   display: flex;

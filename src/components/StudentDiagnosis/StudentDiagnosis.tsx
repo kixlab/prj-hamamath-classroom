@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import styles from "./StudentDiagnosis.module.css";
 import { useApp } from "../../contexts/AppContext";
 import { useMathJax } from "../../hooks/useMathJax";
@@ -218,6 +218,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   } | null>(null);
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
+  // 마운트 후 저장 effect 첫 실행 시 localStorage 덮어쓰기 방지 (복원이 적용된 뒤에만 저장)
+  const saveEffectHasRunRef = useRef(false);
+  // "답안 없음" 알림 시 원인 확인용 (화면에 표시)
+  const [debugNoAnswerReason, setDebugNoAnswerReason] = useState<{
+    answersKeys: string[];
+    itemsDetail: Array<{ id: string; displayCode: string; hasRubric: boolean; valueByDisplayCode: string; valueById: string }>;
+    currentProblemKey: string;
+  } | null>(null);
 
   // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
   useEffect(() => {
@@ -244,24 +252,142 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           if (parsed.selectedProblemId && typeof parsed.selectedProblemId === "string") {
             setSelectedProblemId(parsed.selectedProblemId);
           }
-          return;
         }
-      }
-
-      // 구버전(답안만 저장)과의 호환: 예전 키에 저장된 값이 있다면 최소한 답안만이라도 복원
-      const legacyRaw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
-      if (!legacyRaw) return;
-      const legacyParsed = JSON.parse(legacyRaw);
-      if (legacyParsed && typeof legacyParsed === "object") {
-        setStudentAnswers(legacyParsed);
+      } else {
+        // 구버전(답안만 저장)과의 호환
+        const legacyRaw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
+        if (legacyRaw) {
+          const legacyParsed = JSON.parse(legacyRaw);
+          if (legacyParsed && typeof legacyParsed === "object") {
+            setStudentAnswers(legacyParsed);
+          }
+        }
       }
     } catch (err) {
       console.error("저장된 학생 진단 상태를 불러오는 중 오류:", err);
     }
   }, [userId]);
 
-  // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장
+  // 서버에 저장된 학생 답안 불러와서 복원 (새로고침 후 빈 화면 방지)
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { items } = await api.getStudentAnswersList();
+        if (cancelled || !items?.length) return;
+        setStudentAnswers((prev) => {
+          const next = JSON.parse(JSON.stringify(prev));
+          for (const item of items) {
+            if (!item.student_id || !item.problem_id) continue;
+            if (!next[item.student_id]) next[item.student_id] = {};
+            next[item.student_id][item.problem_id] = { ...(next[item.student_id][item.problem_id] ?? {}), ...(item.answers || {}) };
+          }
+          return next;
+        });
+      } catch (err) {
+        if (!cancelled) console.error("저장된 학생 답안 목록 불러오기 오류:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // 서버에 저장된 진단 결과 불러와서 studentProblemSummaries에 병합
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { items } = await api.getDiagnosisResultsList();
+        if (cancelled || !items?.length) return;
+        setStudentProblemSummaries((prev) => {
+          const next = JSON.parse(JSON.stringify(prev));
+          for (const item of items) {
+            if (!item.student_id || !item.problem_id || !item.levels_by_display_code) continue;
+            if (!next[item.student_id]) next[item.student_id] = {};
+            next[item.student_id][item.problem_id] = {
+              problemId: item.problem_id,
+              levelsByDisplayCode: item.levels_by_display_code,
+              feedbackByDisplayCode: item.feedback_by_display_code,
+            };
+          }
+          return next;
+        });
+      } catch (err) {
+        if (!cancelled) console.error("저장된 진단 결과 목록 불러오기 오류:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // studentProblemSummaries(서버 복원 포함) → 현재 학생/문제의 diagnosisResults 동기화 (displayCode → item.id)
+  const problemKeyForSync = problemIdForDiagnosis ?? "__current__";
+  const summaryForSync = studentProblemSummaries[currentStudentId]?.[problemKeyForSync];
+  useEffect(() => {
+    if (!summaryForSync?.levelsByDisplayCode || !diagnosisItems.length) return;
+    setDiagnosisResults((prev) => {
+      const cur = prev[currentStudentId]?.[problemKeyForSync] ?? {};
+      let changed = false;
+      const nextForProblem = { ...cur };
+      for (const item of diagnosisItems) {
+        const level = summaryForSync.levelsByDisplayCode[item.displayCode];
+        const reason = summaryForSync.feedbackByDisplayCode?.[item.displayCode] ?? "";
+        if (level && !nextForProblem[item.id]) {
+          nextForProblem[item.id] = { level, reason };
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      return {
+        ...prev,
+        [currentStudentId]: {
+          ...(prev[currentStudentId] ?? {}),
+          [problemKeyForSync]: nextForProblem,
+        },
+      };
+    });
+  }, [currentStudentId, problemKeyForSync, summaryForSync, diagnosisItems.length]);
+
+  // 동일 로그인 id·문제·학생에 해당하는 저장 답안이 있으면 화면에 표시
+  useEffect(() => {
+    if (!problemIdForDiagnosis || !currentStudentId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId);
+        if (cancelled) return;
+        const problemKey = problemIdForDiagnosis;
+        setStudentAnswers((prev) => {
+          const existing = prev[currentStudentId]?.[problemKey] ?? {};
+          const fromServer = (item?.answers && typeof item.answers === "object") ? item.answers : {};
+          // 서버 값으로 채우되, 이미 입력된 값(현재 세션)은 유지해 덮어쓰지 않음
+          const merged = { ...fromServer, ...existing };
+          return {
+            ...prev,
+            [currentStudentId]: {
+              ...(prev[currentStudentId] ?? {}),
+              [problemKey]: merged,
+            },
+          };
+        });
+      } catch (err) {
+        if (!cancelled) console.error("저장된 학생 답안(단건) 불러오기 오류:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, problemIdForDiagnosis, currentStudentId]);
+
+  // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장
+  // 마운트 직후 첫 실행에서는 복원 전 빈 state로 덮어쓰지 않도록 스킵
+  useEffect(() => {
+    if (!saveEffectHasRunRef.current) {
+      saveEffectHasRunRef.current = true;
+      return;
+    }
     try {
       const stateToSave = {
         studentAnswers,
@@ -292,14 +418,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
 
-  const handleStudentAnswerChange = (id: string, value: string) => {
+  const handleStudentAnswerChange = (displayCode: string, value: string) => {
     setStudentAnswers((prev) => ({
       ...prev,
       [currentStudentId]: {
         ...(prev[currentStudentId] ?? {}),
         [currentProblemKey]: {
           ...(prev[currentStudentId]?.[currentProblemKey] ?? {}),
-          [id]: value,
+          [displayCode]: value,
         },
       },
     }));
@@ -308,6 +434,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   // 현재 학생의 모든 하위문항(답안이 있는 것만)을 한 번에 진단
   const handleRunDiagnosisForAll = async () => {
+    console.warn("[진단] 전체 하위문항 진단 버튼 클릭됨");
     if (!problemIdForDiagnosis) {
       alert("먼저 진단할 문제를 선택해 주세요.");
       return;
@@ -322,13 +449,30 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
 
     const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
-    const targetItems = diagnosisItems.filter((item) => item.rubric && item.rubric.levels?.length && (answersForStudent[item.id] ?? "").trim().length > 0);
+    const targetItems = diagnosisItems.filter((item) => {
+      const text = (answersForStudent[item.displayCode] ?? answersForStudent[item.id] ?? "").trim();
+      return !!(item.rubric && item.rubric.levels?.length && text.length > 0);
+    });
 
     if (!targetItems.length) {
+      const itemsDetail = diagnosisItems.slice(0, 15).map((item) => ({
+        id: item.id,
+        displayCode: item.displayCode,
+        hasRubric: !!(item.rubric && item.rubric.levels?.length),
+        valueByDisplayCode: answersForStudent[item.displayCode] ?? "(없음)",
+        valueById: answersForStudent[item.id] ?? "(없음)",
+      }));
+      setDebugNoAnswerReason({
+        answersKeys: Object.keys(answersForStudent),
+        itemsDetail,
+        currentProblemKey,
+      });
+      console.warn("[진단] 답안 없음 원인 확인", { currentStudentId, currentProblemKey, answersKeys: Object.keys(answersForStudent), itemsDetail });
       alert("답안이 입력된 하위문항이 없습니다. 먼저 학생 답안을 입력해 주세요.");
       return;
     }
 
+    setDebugNoAnswerReason(null);
     setBulkDiagnosing(true);
     try {
       const newResultsForStudent: Record<string, { level: string; reason: string }> = {
@@ -336,7 +480,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       };
 
       for (const item of targetItems) {
-        const answerText = answersForStudent[item.id] ?? "";
+        const answerText = answersForStudent[item.displayCode] ?? answersForStudent[item.id] ?? "";
 
         // 루브릭을 백엔드 진단 스키마에 맞게 변환
         const rubricLevels: Record<string, any> = {};
@@ -404,6 +548,18 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             [currentStudentId]: perStudent,
           };
         });
+        // 진단 결과 서버 저장
+        try {
+          await api.saveDiagnosisResults({
+            user_id: userId,
+            student_id: currentStudentId,
+            problem_id: problemIdForDiagnosis,
+            levels_by_display_code: levelOnlyByDisplayCode,
+            feedback_by_display_code: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
+          });
+        } catch (err: any) {
+          console.error("진단 결과 서버 저장 오류:", err);
+        }
       }
     } finally {
       setBulkDiagnosing(false);
@@ -420,7 +576,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       return;
     }
     const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
-    if (!Object.keys(answersForStudent).length) {
+    const answersToSave: Record<string, string> = {};
+    diagnosisItems.forEach((item) => {
+      const v = answersForStudent[item.displayCode] ?? answersForStudent[item.id];
+      if (v != null && String(v).trim() !== "") answersToSave[item.displayCode] = String(v).trim();
+    });
+    if (!Object.keys(answersToSave).length) {
       alert("저장할 학생 답안이 없습니다.");
       return;
     }
@@ -432,7 +593,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         problem_id: problemIdForDiagnosis,
         user_id: userId,
         student_id: currentStudentId,
-        answers: answersForStudent,
+        answers: answersToSave,
       });
       setSaveMessage("학생 답안을 저장했습니다.");
       setCanDiagnose((prev) => ({
@@ -491,14 +652,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     const detailLabel = STEP_DETAIL_LABELS[displayCode] || stageLabel;
     return { group, stageLabel, detailLabel };
   };
-  // 100점 만점을 5등급으로 동일 간격(20점): A 80+, B 60+, C 40+, D 20+, F 20 미만
-  const scoreToGradeFrom100 = (score_100: number): "A" | "B" | "C" | "D" | "F" | "-" => {
+  // 100점 만점을 5등급: 상 80+, 중상 60+, 중 40+, 중하 20+, 하 20 미만
+  const scoreToGradeFrom100 = (score_100: number): "상" | "중상" | "중" | "중하" | "하" | "-" => {
     if (score_100 < 0 || score_100 > 100) return "-";
-    if (score_100 >= 80) return "A";
-    if (score_100 >= 60) return "B";
-    if (score_100 >= 40) return "C";
-    if (score_100 >= 20) return "D";
-    return "F";
+    if (score_100 >= 80) return "상";
+    if (score_100 >= 60) return "중상";
+    if (score_100 >= 40) return "중";
+    if (score_100 >= 20) return "중하";
+    return "하";
   };
   const openReport = async () => {
     const perStudent = studentProblemSummaries[currentStudentId] ?? {};
@@ -661,9 +822,16 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                   {diagnosisItems.length > 0 ? (
                     <>
                       <p className={styles.studentAllDesc}>아래에서 모든 하위문항에 대한 학생 답안을 한 번에 입력할 수 있습니다.</p>
+                      {(() => {
+                        const currentAnswers = studentAnswers[currentStudentId]?.[currentProblemKey] ?? {};
+                        const hasSaved = Object.values(currentAnswers).some((v) => !!v?.trim());
+                        return hasSaved ? (
+                          <p className={styles.studentSavedHint}>저장된 답안이 불러와졌습니다. 수정 후 다시 저장할 수 있습니다.</p>
+                        ) : null;
+                      })()}
                       <div className={styles.studentAllList}>
                         {diagnosisItems.map((item) => {
-                          const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
+                          const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.displayCode] ?? studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
                           const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
                           const isActive = activeItem?.id === item.id;
                           const showAnswer = !!showAnswerById[item.id];
@@ -690,7 +858,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 rows={4}
                                 placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
                                 value={value}
-                                onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
+                                onChange={(e) => handleStudentAnswerChange(item.displayCode, e.target.value)}
                               />
                               <div className={styles.studentAnswerToggles}>
                                 {item.answer && (
@@ -786,6 +954,26 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                       </div>
 
+                      {debugNoAnswerReason && (
+                        <div style={{ marginTop: 12, padding: 12, background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 8 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 8 }}>답안 없음 원인 (확인 후 닫기)</div>
+                          <div style={{ fontSize: 12 }}>
+                            <p><strong>저장된 답안 키:</strong> {debugNoAnswerReason.answersKeys.length ? debugNoAnswerReason.answersKeys.join(", ") : "(비어 있음)"}</p>
+                            <p><strong>문제 키:</strong> {debugNoAnswerReason.currentProblemKey}</p>
+                            <p><strong>문항별 매칭:</strong></p>
+                            <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
+                              {debugNoAnswerReason.itemsDetail.map((row, i) => (
+                                <li key={i}>
+                                  id={row.id}, displayCode={row.displayCode}, rubric={row.hasRubric ? "O" : "X"} · displayCode값={String(row.valueByDisplayCode).slice(0, 20)} · id값={String(row.valueById).slice(0, 20)}
+                                </li>
+                              ))}
+                            </ul>
+                            <p style={{ marginTop: 8 }}>키가 다르면(예: 저장은 SQ-1, 문항은 1-1) 매칭이 안 됩니다. 입력 후 저장하고 다시 진단해 보세요.</p>
+                          </div>
+                          <button type="button" onClick={() => setDebugNoAnswerReason(null)} style={{ marginTop: 8 }}>닫기</button>
+                        </div>
+                      )}
+
                       {/* 개별 문항 진단 결과 요약 배지는 요약 섹션과 카드 상단에서 충분히 표현되므로,
                           별도의 상세 피드백 박스는 표시하지 않습니다. */}
                     </>
@@ -802,7 +990,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                 <div className={styles.studentSummaryRow}>
                   {diagnosisItems.map((item) => {
                     const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                    const hasAnswer = !!studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id]?.trim();
+                    const hasAnswer = !!(studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.displayCode] ?? studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id])?.trim();
                     const isActive = activeItem?.id === item.id;
                     return (
                       <button key={item.id} type="button" className={`${styles.studentSummaryChip} ${isActive ? styles.studentSummaryChipActive : ""}`} onClick={() => setActiveId(item.id)}>
