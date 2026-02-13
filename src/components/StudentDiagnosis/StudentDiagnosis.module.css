@@ -729,7 +729,27 @@
 }
 
 .reportGraphList {
-  margin-top: 8px;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reportGraphGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reportGraphGroupTitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border-left: 4px solid currentColor;
+}
+
+.reportGraphGroupItems {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -746,14 +766,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 4px;
   font-size: 0.8rem;
 }
 
 .reportGraphTitle {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   color: var(--color-text);
+}
+
+.reportGraphHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .reportGraphLevelBadge {
@@ -763,6 +792,11 @@
   border: 1px solid var(--color-border);
   font-size: 0.75rem;
   font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.reportGraphScoreText {
+  font-size: 0.75rem;
   color: var(--color-text-secondary);
 }
 
@@ -794,6 +828,24 @@
 
 .reportGraphStepFill {
   background: #4b5563;
+}
+
+.reportGraphFeedback {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.reportGraphFeedbackSummary {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border-radius: 6px;
+  border-left: 3px solid var(--color-border);
 }
 
 .reportStepGroup1 {
@@ -863,6 +915,23 @@
 .problemSummaryTable th {
   background: var(--color-bg-secondary);
   font-weight: 600;
+}
+
+.reportTableThStage {
+  min-width: 120px;
+  text-align: center;
+}
+
+.reportStageTd {
+  vertical-align: middle;
+  background: var(--color-bg-secondary);
+  font-weight: 600;
+  text-align: center;
+}
+
+.reportDetailTd {
+  text-align: left;
+  padding-left: 10px;
 }
 
 .problemSummaryEmpty {

@@ -330,6 +330,7 @@ export const api = {
     problem_summaries: Array<{
       problem_id: string;
       levels_by_display_code: Record<string, "상" | "중" | "하">;
+      feedback_by_display_code?: Record<string, string>;
     }>;
   }): Promise<{
     problem_rows: Array<{
@@ -343,7 +344,9 @@ export const api = {
     step_rows: Array<{
       display_code: string;
       problem_count: number;
-      final_level: "상" | "중" | "하";
+      score_100?: number;
+      final_level: string;
+      feedback_summary?: string | null;
     }>;
   }> {
     const response = await fetch(getApiUrl("/api/v1/reports/student-diagnosis"), {

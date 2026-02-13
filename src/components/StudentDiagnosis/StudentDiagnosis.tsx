@@ -29,6 +29,8 @@ interface StudentInfo {
 interface ProblemStepSummary {
   problemId: string;
   levelsByDisplayCode: Record<string, "상" | "중" | "하">;
+  /** 단계(display_code)별 LLM 진단 피드백(reason) */
+  feedbackByDisplayCode?: Record<string, string>;
 }
 
 // 학생 진단 상태를 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
@@ -208,7 +210,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     step_rows: Array<{
       display_code: string;
       problem_count: number;
-      final_level: "상" | "중" | "하";
+      score_100?: number;
+      final_level: string;
+      /** 단계별 LLM 피드백 요약 (여러 문제 피드백 통합) */
+      feedback_summary?: string | null;
     }>;
   } | null>(null);
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
@@ -373,12 +378,16 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         };
       });
 
-      // 이 학생의 현재 문제에 대한 단계별 수준 요약을 저장 (표용)
+      // 이 학생의 현재 문제에 대한 단계별 수준·피드백 요약 저장 (표·리포트용)
       const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const feedbackByDisplayCode: Record<string, string> = {};
       targetItems.forEach((item) => {
         const res = newResultsForStudent[item.id];
         if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
           levelOnlyByDisplayCode[item.displayCode] = res.level;
+        }
+        if (res?.reason?.trim()) {
+          feedbackByDisplayCode[item.displayCode] = res.reason.trim();
         }
       });
 
@@ -388,6 +397,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           perStudent[problemIdForDiagnosis] = {
             problemId: problemIdForDiagnosis,
             levelsByDisplayCode: levelOnlyByDisplayCode,
+            feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
           };
           return {
             ...prev,
@@ -448,28 +458,48 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const summaryProblemIds = Object.keys(summariesForCurrentStudent);
   const hasMultiProblemSummary = summaryProblemIds.length >= 2;
 
-  // 페이지 내 인라인 요약 표용 (집계는 모달에서 API 사용, 여기서는 표시만)
+  // 하: 0점 / 중: 1점 / 상: 2점
   type LevelType = "상" | "중" | "하";
-  const LEVEL_SCORE: Record<LevelType, number> = { 상: 3, 중: 2, 하: 1 };
+  const LEVEL_SCORE: Record<LevelType, number> = { 상: 2, 중: 1, 하: 0 };
   const scoreToLevel = (score: number): LevelType => {
-    if (score >= 2.5) return "상";
-    if (score >= 1.5) return "중";
+    if (score >= 1.5) return "상";
+    if (score >= 0.5) return "중";
     return "하";
   };
 
-  // 단계 코드(예: 1-1, 2-1)를 역량/큰 단계 이름으로 매핑
+  // 문제 풀이 단계(이미지 기준): 1=문제 이해, 2=정보 구조화, 3=수학적 표현, 4=수학적 계산
   const STEP_GROUP_LABELS: Record<string, string> = {
-    "1": "정보이해력",
-    "2": "분석력",
-    "3": "지식연계능력",
-    "4": "논리적사고·표현력",
+    "1": "문제 이해",
+    "2": "정보 구조화",
+    "3": "수학적 표현",
+    "4": "수학적 계산",
+  };
+  // 세부 역량(이미지 기준)
+  const STEP_DETAIL_LABELS: Record<string, string> = {
+    "1-1": "핵심 정보 파악하기",
+    "1-2": "문제 요지 확인하기",
+    "2-1": "조건 정리하기",
+    "2-2": "조건 연결하기",
+    "3-1": "지식 활용하기",
+    "3-2": "식, 모델 세우기",
+    "4-1": "계산 실행하기",
+    "4-2": "결과 정리하기",
   };
   const getStepGroupInfo = (displayCode: string) => {
     const [group] = displayCode.split("-");
-    const label = STEP_GROUP_LABELS[group] || `${group}단계`;
-    return { group, label };
+    const stageLabel = STEP_GROUP_LABELS[group] || `${group}단계`;
+    const detailLabel = STEP_DETAIL_LABELS[displayCode] || stageLabel;
+    return { group, stageLabel, detailLabel };
   };
-
+  // 100점 만점을 5등급으로 동일 간격(20점): A 80+, B 60+, C 40+, D 20+, F 20 미만
+  const scoreToGradeFrom100 = (score_100: number): "A" | "B" | "C" | "D" | "F" | "-" => {
+    if (score_100 < 0 || score_100 > 100) return "-";
+    if (score_100 >= 80) return "A";
+    if (score_100 >= 60) return "B";
+    if (score_100 >= 40) return "C";
+    if (score_100 >= 20) return "D";
+    return "F";
+  };
   const openReport = async () => {
     const perStudent = studentProblemSummaries[currentStudentId] ?? {};
     const problemIds = Object.keys(perStudent);
@@ -486,6 +516,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         problem_summaries: problemIds.map((pid) => ({
           problem_id: pid,
           levels_by_display_code: perStudent[pid].levelsByDisplayCode,
+          feedback_by_display_code: perStudent[pid].feedbackByDisplayCode ?? {},
         })),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
@@ -665,9 +696,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 {item.answer && (
                                   <button
                                     type="button"
-                                    className={`${styles.studentToggleBtn} ${
-                                      showAnswer ? styles.studentToggleBtnActive : ""
-                                    }`}
+                                    className={`${styles.studentToggleBtn} ${showAnswer ? styles.studentToggleBtnActive : ""}`}
                                     onClick={() =>
                                       setShowAnswerById((prev) => ({
                                         ...prev,
@@ -681,9 +710,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 {item.rubric && item.rubric.levels?.length > 0 && (
                                   <button
                                     type="button"
-                                    className={`${styles.studentToggleBtn} ${
-                                      showRubric ? styles.studentToggleBtnActive : ""
-                                    }`}
+                                    className={`${styles.studentToggleBtn} ${showRubric ? styles.studentToggleBtnActive : ""}`}
                                     onClick={() =>
                                       setShowRubricById((prev) => ({
                                         ...prev,
@@ -709,17 +736,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                               {showRubric && item.rubric && item.rubric.levels?.length > 0 && (
                                 <div className={styles.studentRubricInline}>
                                   {item.rubric.levels.map((lv: any) => {
-                                    const showTitle =
-                                      typeof lv.title === "string" &&
-                                      lv.title.trim().length > 0 &&
-                                      lv.title.trim() !== (lv.description ?? "").trim();
+                                    const showTitle = typeof lv.title === "string" && lv.title.trim().length > 0 && lv.title.trim() !== (lv.description ?? "").trim();
                                     return (
                                       <div key={lv.level} className={styles.studentRubricLevel}>
                                         <div className={styles.studentRubricLevelHeader}>
                                           <span className={styles.studentRubricBadge}>{lv.level}</span>
-                                          {showTitle && (
-                                            <span className={styles.studentRubricTitle}>{lv.title}</span>
-                                          )}
+                                          {showTitle && <span className={styles.studentRubricTitle}>{lv.title}</span>}
                                         </div>
                                         {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
                                           <ul className={styles.studentRubricBullets}>
@@ -931,47 +953,45 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                           <th>상</th>
                           <th>중</th>
                           <th>하</th>
-                          <th>평균 수준</th>
+                          <th>평균 등급</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {reportData.problem_rows.map((row) => (
-                          <tr key={row.problem_id}>
-                            <td>{row.problem_id}</td>
-                            <td>{row.step_count}</td>
-                            <td>{row.high_count}</td>
-                            <td>{row.mid_count}</td>
-                            <td>{row.low_count}</td>
-                            <td>{row.average_level}</td>
-                          </tr>
-                        ))}
+                        {reportData.problem_rows.map((row) => {
+                          const total = row.high_count + row.mid_count + row.low_count || 0;
+                          const sum = total > 0 ? row.high_count * 2 + row.mid_count * 1 + row.low_count * 0 : 0;
+                          const score_100 = total > 0 ? (sum / (total * 2)) * 100 : 0;
+                          const grade = total > 0 ? scoreToGradeFrom100(score_100) : "-";
+                          return (
+                            <tr key={row.problem_id}>
+                              <td>{row.problem_id}</td>
+                              <td>{row.step_count}</td>
+                              <td>{row.high_count}</td>
+                              <td>{row.mid_count}</td>
+                              <td>{row.low_count}</td>
+                              <td>{grade}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                     <div className={styles.reportGraphList}>
                       {reportData.problem_rows.map((row) => {
-                        const total = row.high_count + row.mid_count + row.low_count || 1;
-                        const highPct = (row.high_count / total) * 100;
-                        const midPct = (row.mid_count / total) * 100;
-                        const lowPct = (row.low_count / total) * 100;
+                        const total = row.high_count + row.mid_count + row.low_count || 0;
+                        const sum = total > 0 ? row.high_count * 2 + row.mid_count * 1 + row.low_count * 0 : 0;
+                        const score_100 = total > 0 ? (sum / (total * 2)) * 100 : 0;
+                        const grade = total > 0 ? scoreToGradeFrom100(score_100) : "-";
                         return (
                           <div key={`graph-${row.problem_id}`} className={styles.reportGraphItem}>
                             <div className={styles.reportGraphHeader}>
                               <span className={styles.reportGraphTitle}>{row.problem_id}</span>
-                              <span className={styles.reportGraphLevelBadge}>{row.average_level}</span>
+                              <div className={styles.reportGraphHeaderRight}>
+                                <span className={styles.reportGraphLevelBadge}>{grade}</span>
+                                <span className={styles.reportGraphScoreText}>{Math.round(score_100)}점</span>
+                              </div>
                             </div>
                             <div className={styles.reportGraphBar}>
-                              <div
-                                className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`}
-                                style={{ width: `${highPct}%` }}
-                              />
-                              <div
-                                className={`${styles.reportGraphSegment} ${styles.reportGraphMid}`}
-                                style={{ width: `${midPct}%` }}
-                              />
-                              <div
-                                className={`${styles.reportGraphSegment} ${styles.reportGraphLow}`}
-                                style={{ width: `${lowPct}%` }}
-                              />
+                              <div className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`} style={{ width: `${score_100}%` }} />
                             </div>
                             <div className={styles.reportGraphLegend}>
                               <span>상 {row.high_count}</span>
@@ -987,7 +1007,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
               </div>
 
               <div className={styles.problemSummaryBlock}>
-                <h4 className={styles.problemSummarySubTitle}>단계별 최종 수준 (여러 문제 기준)</h4>
+                <h4 className={styles.problemSummarySubTitle}>
+                  단계별 최종 수준
+                  {reportData ? ` (진단한 문제 수: ${reportData.problem_rows.length}개)` : " (여러 문제 기준)"}
+                </h4>
                 {reportLoading && <p className={styles.problemSummaryEmpty}>리포트를 불러오는 중입니다...</p>}
                 {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
                 {!reportLoading && !reportError && reportData && (
@@ -999,60 +1022,127 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         <table className={styles.problemSummaryTable}>
                           <thead>
                             <tr>
-                              <th>단계(역량)</th>
-                              <th>진단한 문제 수</th>
-                              <th>최종 수준</th>
+                              <th className={styles.reportTableThStage}>문제 풀이 단계</th>
+                              <th>세부 역량</th>
+                              <th>점수(100)</th>
+                              <th>최종 등급</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {reportData.step_rows.map((row) => {
-                              const info = getStepGroupInfo(row.display_code);
-                              return (
-                                <tr key={row.display_code}>
-                                  <td>
-                                    <span className={styles.stepCodeText}>{row.display_code}</span>
-                                    <span className={styles.stepAbilityText}>{info.label}</span>
-                                  </td>
-                                  <td>{row.problem_count}</td>
-                                  <td>{row.final_level}</td>
-                                </tr>
+                            {(() => {
+                              const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                              const sorted = [...reportData.step_rows].sort((a, b) => a.display_code.localeCompare(b.display_code, undefined, { numeric: true }));
+                              const byGroup: Record<string, typeof sorted> = {};
+                              sorted.forEach((row) => {
+                                const g = getStepGroupInfo(row.display_code).group;
+                                if (!byGroup[g]) byGroup[g] = [];
+                                byGroup[g].push(row);
+                              });
+                              const order = ["1", "2", "3", "4"];
+                              return order.flatMap((g) =>
+                                (byGroup[g] || []).map((row, idx) => {
+                                  const info = getStepGroupInfo(row.display_code);
+                                  const problemIds = Object.keys(perStudent);
+                                  let sum = 0,
+                                    stepCount = 0;
+                                  problemIds.forEach((pid) => {
+                                    const level = perStudent[pid].levelsByDisplayCode?.[row.display_code];
+                                    if (level === "상" || level === "중" || level === "하") {
+                                      sum += LEVEL_SCORE[level as LevelType];
+                                      stepCount += 1;
+                                    }
+                                  });
+                                  const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
+                                  const grade = stepCount > 0 ? scoreToGradeFrom100(score_100) : "-";
+                                  const isFirst = idx === 0;
+                                  const span = (byGroup[g] || []).length;
+                                  return (
+                                    <tr key={row.display_code}>
+                                      {isFirst && (
+                                        <td rowSpan={span} className={styles.reportStageTd}>
+                                          {info.stageLabel}
+                                        </td>
+                                      )}
+                                      <td className={styles.reportDetailTd}>
+                                        <span className={styles.stepCodeText}>{row.display_code}</span>
+                                        <span className={styles.stepAbilityText}>{info.detailLabel}</span>
+                                      </td>
+                                      <td>{stepCount > 0 ? Math.round(score_100) : "-"}</td>
+                                      <td>{grade}</td>
+                                    </tr>
+                                  );
+                                }),
                               );
-                            })}
+                            })()}
                           </tbody>
                         </table>
                         <div className={styles.reportGraphList}>
-                          {reportData.step_rows.map((row) => {
-                            const info = getStepGroupInfo(row.display_code);
-                            const groupClass =
-                              info.group === "1"
-                                ? styles.reportStepGroup1
-                                : info.group === "2"
-                                ? styles.reportStepGroup2
-                                : info.group === "3"
-                                ? styles.reportStepGroup3
-                                : styles.reportStepGroup4;
-                            return (
-                              <div key={`step-graph-${row.display_code}`} className={styles.reportGraphItem}>
-                                <div className={styles.reportGraphHeader}>
-                                  <span className={styles.reportGraphTitle}>
-                                    {row.display_code} · {info.label}
-                                  </span>
-                                  <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>
-                                    {row.final_level}
-                                  </span>
-                                </div>
-                                <div className={styles.reportGraphBar}>
-                                  <div
-                                    className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`}
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                                <div className={styles.reportGraphLegend}>
-                                  <span>진단한 문제 수 {row.problem_count}</span>
-                                </div>
-                              </div>
+                          {(() => {
+                            const sorted = [...reportData.step_rows].sort((a, b) =>
+                              a.display_code.localeCompare(b.display_code, undefined, { numeric: true })
                             );
-                          })}
+                            const byGroup: Record<string, typeof sorted> = {};
+                            sorted.forEach((row) => {
+                              const g = getStepGroupInfo(row.display_code).group;
+                              if (!byGroup[g]) byGroup[g] = [];
+                              byGroup[g].push(row);
+                            });
+                            const order = ["1", "2", "3", "4"];
+                            return order.map((g) => {
+                              const rows = byGroup[g] || [];
+                              if (rows.length === 0) return null;
+                              const stageLabel = STEP_GROUP_LABELS[g] || `${g}단계`;
+                              const groupClass =
+                                g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
+                              return (
+                                <div key={`graph-group-${g}`} className={styles.reportGraphGroup}>
+                                  <div className={`${styles.reportGraphGroupTitle} ${groupClass}`}>{stageLabel}</div>
+                                  <div className={styles.reportGraphGroupItems}>
+                                    {rows.map((row) => {
+                                      const info = getStepGroupInfo(row.display_code);
+                                      const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                                      const problemIds = Object.keys(perStudent);
+                                      let sum = 0,
+                                        stepCount = 0;
+                                      problemIds.forEach((pid) => {
+                                        const level = perStudent[pid].levelsByDisplayCode?.[row.display_code];
+                                        if (level === "상" || level === "중" || level === "하") {
+                                          sum += LEVEL_SCORE[level as LevelType];
+                                          stepCount += 1;
+                                        }
+                                      });
+                                      const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
+                                      const grade = stepCount > 0 ? scoreToGradeFrom100(score_100) : "-";
+                                      return (
+                                        <div key={`step-graph-${row.display_code}`} className={styles.reportGraphItem}>
+                                          <div className={styles.reportGraphHeader}>
+                                            <span className={styles.reportGraphTitle}>
+                                              {row.display_code} · {info.detailLabel}
+                                            </span>
+                                            <div className={styles.reportGraphHeaderRight}>
+                                              <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>{grade}</span>
+                                              <span className={styles.reportGraphScoreText}>{Math.round(score_100)}점</span>
+                                            </div>
+                                          </div>
+                                          <div className={styles.reportGraphBar}>
+                                            <div
+                                              className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`}
+                                              style={{ width: `${score_100}%` }}
+                                            />
+                                          </div>
+                                          {row.feedback_summary && (
+                                            <p className={styles.reportGraphFeedbackSummary}>
+                                              {row.feedback_summary}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
                         </div>
                       </>
                     )}
