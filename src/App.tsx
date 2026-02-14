@@ -3,8 +3,7 @@ import { AppProvider, useApp } from './contexts/AppContext';
 import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
 import { initEventLogger, stopEventLogger } from './services/eventLogger';
 import { loadResult } from './hooks/useStorage';
-import { getApiUrl } from './services/api';
-import { getHistoryHeaders } from './hooks/useStorage';
+import { api } from './services/api';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
@@ -54,9 +53,9 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
     let cancelled = false;
     (async () => {
       try {
-        const resp = await fetch(getApiUrl('/api/v1/history/list'), { headers: getHistoryHeaders() });
-        if (!resp.ok || cancelled) return;
-        const list = await resp.json();
+        if (!userId?.trim()) return;
+        const list = await api.getMyHistoryList(userId);
+        if (cancelled) return;
         if (!Array.isArray(list) || list.length === 0) return;
         const mostRecent = list[0];
         const problemId = mostRecent.problem_id ?? mostRecent.problemId;

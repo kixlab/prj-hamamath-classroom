@@ -46,18 +46,22 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [apiRubrics, setApiRubrics] = useState<any[] | null>(null);
   const [apiGuideSubQuestions, setApiGuideSubQuestions] = useState<any[] | null>(null);
 
-  // 내 저장 결과 목록 가져와 드롭다운에 표시 (초기에는 아무 문제도 선택하지 않음)
+  // 로그인한 사용자 저장 결과 목록만 가져와 드롭다운에 표시
   useEffect(() => {
+    if (!userId?.trim()) {
+      setHistoryItems([]);
+      return;
+    }
     const fetchHistory = async () => {
       try {
-        const list = await api.getMyHistoryList();
+        const list = await api.getMyHistoryList(userId);
         setHistoryItems(list || []);
       } catch (err) {
         console.error("저장 결과 목록 불러오기 오류:", err);
       }
     };
     fetchHistory();
-  }, [currentProblemId]);
+  }, [userId, currentProblemId]);
 
   const problemIdForDiagnosis = selectedProblemId;
   const isCurrentProblemSelected = !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
