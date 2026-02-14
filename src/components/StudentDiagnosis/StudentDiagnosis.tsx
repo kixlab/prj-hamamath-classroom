@@ -38,6 +38,30 @@ interface ProblemStepSummary {
 const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`; // 구버전 호환용
 const getStudentDiagnosisStateKey = (userId: string) => `hamamath_student_diagnosis_state_${userId}`;
 
+/** guide_sub_questions에서 sub_question_id → display_code 매핑 생성 (리포트용 요약 복원 시 사용) */
+function buildSubQuestionIdToDisplayCode(
+  guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }>
+): Record<string, string> {
+  const stepIndexByName: Record<string, number> = {};
+  const withinStepCount: Record<string, number> = {};
+  let stepCounter = 0;
+  const map: Record<string, string> = {};
+  guideSubQuestions.forEach((sq, idx) => {
+    const id = sq.sub_question_id ?? `SQ-${idx + 1}`;
+    const stepName = sq.step_name ?? "";
+    let stepIndex = stepIndexByName[stepName];
+    if (!stepIndex) {
+      stepIndex = ++stepCounter;
+      stepIndexByName[stepName] = stepIndex;
+    }
+    const withinKey = String(stepIndex);
+    const withinIndex = (withinStepCount[withinKey] ?? 0) + 1;
+    withinStepCount[withinKey] = withinIndex;
+    map[id] = `${stepIndex}-${withinIndex}`;
+  });
+  return map;
+}
+
 export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => {
   const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
 
@@ -323,6 +347,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   }, [userId]);
 
   // 서버에 저장된 진단 결과 불러와서 복원 (다른 브라우저/기기 동기화)
+  // + 모든 문제에 대해 studentProblemSummaries 복원 → 리포트가 여러 문제를 반영하도록 함
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -340,6 +365,66 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           }
           return next;
         });
+
+        // 진단 결과에 등장하는 모든 문제 ID 수집
+        const problemIds = new Set<string>();
+        for (const sid of Object.keys(results)) {
+          for (const pid of Object.keys(results[sid] || {})) {
+            problemIds.add(pid);
+          }
+        }
+        const saved = getSavedResults();
+        const builtSummaries: Record<string, Record<string, ProblemStepSummary>> = {};
+        for (const problemId of problemIds) {
+          if (cancelled) return;
+          let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
+          try {
+            const result = await api.getResult(problemId);
+            const local = saved[problemId] || null;
+            const gd = (result as any)?.guidelineData || (local as any)?.guidelineData;
+            if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
+              guideSubQuestions = gd.guide_sub_questions;
+            }
+          } catch {
+            // 문제별 가이드라인 없으면 해당 문제는 요약 스킵
+          }
+          if (guideSubQuestions.length === 0) continue;
+          const subIdToDisplayCode = buildSubQuestionIdToDisplayCode(guideSubQuestions);
+
+          for (const studentId of Object.keys(results)) {
+            const perProblem = results[studentId]?.[problemId];
+            if (!perProblem || typeof perProblem !== "object") continue;
+            const levelsByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+            const feedbackByDisplayCode: Record<string, string> = {};
+            for (const subId of Object.keys(perProblem)) {
+              const dc = subIdToDisplayCode[subId];
+              if (!dc) continue;
+              const res = perProblem[subId];
+              if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
+                levelsByDisplayCode[dc] = res.level as "상" | "중" | "하";
+              }
+              if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
+            }
+            if (Object.keys(levelsByDisplayCode).length > 0) {
+              if (!builtSummaries[studentId]) builtSummaries[studentId] = {};
+              builtSummaries[studentId][problemId] = {
+                problemId,
+                levelsByDisplayCode,
+                feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
+              };
+            }
+          }
+        }
+
+        if (!cancelled && Object.keys(builtSummaries).length > 0) {
+          setStudentProblemSummaries((prev) => {
+            const next = { ...prev };
+            for (const sid of Object.keys(builtSummaries)) {
+              next[sid] = { ...(next[sid] ?? {}), ...builtSummaries[sid] };
+            }
+            return next;
+          });
+        }
       } catch (err) {
         if (!cancelled) console.error("저장된 진단 결과 불러오기 오류:", err);
       }
@@ -780,7 +865,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     setReportError(null);
     try {
       const savedReport = await api.getDiagnosisReport(studentId);
-      if (savedReport && savedReport.problem_rows?.length > 0) {
+      // 저장된 리포트는 현재 진단한 문제 수보다 적을 수 있음(예: 이전에 1문제만 저장됨). 문제 수가 현재와 같거나 많을 때만 사용
+      const useSaved =
+        savedReport &&
+        savedReport.problem_rows?.length > 0 &&
+        savedReport.problem_rows.length >= problemIds.length;
+      if (useSaved) {
         setReportData(savedReport);
         const initialEdits: Record<string, string> = {};
         (savedReport.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {

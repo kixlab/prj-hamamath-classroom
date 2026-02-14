@@ -7,9 +7,14 @@ const STORAGE_KEY_PREFIX = 'hamamath_saved_results';
 const LAST_PROBLEM_KEY_PREFIX = 'hamamath_last_problem_id';
 const MAX_SAVED_RESULTS = 50;
 
+/** 현재 로그인한 사용자 ID (세션 기준 — 사이트 처음 접속 시 로그인 화면 표시) */
+function getStoredUserId(): string | null {
+  return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(USER_ID_STORAGE_KEY) : null;
+}
+
 /** 현재 로그인한 사용자 ID 기준 저장 키 (아이디별로 저장 결과 분리) */
 function getStorageKey(): string {
-  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
+  const uid = getStoredUserId();
   return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
 }
 
@@ -38,12 +43,11 @@ export function encodeUserIdForHeader(uid: string): Record<string, string> {
 
 /** history API 호출 시 서버에 유저별 저장을 위해 X-User-Id 헤더 반환 */
 export function getHistoryHeaders(): Record<string, string> {
-  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
-  return encodeUserIdForHeader(uid ?? '');
+  return encodeUserIdForHeader(getStoredUserId() ?? '');
 }
 
 function getLastProblemKey(): string {
-  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
+  const uid = getStoredUserId();
   return uid ? `${LAST_PROBLEM_KEY_PREFIX}_${uid}` : LAST_PROBLEM_KEY_PREFIX;
 }
 
@@ -86,7 +90,7 @@ function normalizeServerResult(serverItem: Record<string, unknown>): SavedResult
 }
 
 export async function loadResult(problemId: string): Promise<SavedResult | null> {
-  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
+  const uid = getStoredUserId();
   const savedResults = getSavedResults();
 
   // 동일 ID로 다른 기기/브라우저에서도 같은 내용이 보이도록 서버를 먼저 조회

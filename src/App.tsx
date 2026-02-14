@@ -228,15 +228,16 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
 };
 
 function App() {
+  // sessionStorage 사용 → 탭/브라우저 처음 열 때마다 로그인 화면 표시
   const [userId, setUserId] = useState<string | null>(() =>
-    typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null
+    typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(USER_ID_STORAGE_KEY) : null
   );
 
   if (!userId) {
     return (
       <UserIdPage
         onSuccess={(id) => {
-          localStorage.setItem(USER_ID_STORAGE_KEY, id);
+          if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(USER_ID_STORAGE_KEY, id);
           setUserId(id);
         }}
       />
@@ -244,7 +245,7 @@ function App() {
   }
 
   const showUserIdPage = () => {
-    localStorage.removeItem(USER_ID_STORAGE_KEY);
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(USER_ID_STORAGE_KEY);
     setUserId(null);
   };
 
