@@ -501,15 +501,15 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
               </button>
             </div>
             <div className={styles.body}>
+              <div className={styles.field}>
+                <label>문제 ID</label>
+                <input type="text" value={problemId} onChange={(e) => setProblemId(e.target.value)} placeholder="예: admin-1 (저장·사이드바 표시용)" className={styles.input} />
+              </div>
               {formSubTab === "cot" && (
                 <div className={styles.formPanel}>
                   <div className={styles.field}>
-                    <label>문제 ID</label>
-                    <input type="text" value={problemId} onChange={(e) => setProblemId(e.target.value)} placeholder="예: admin-1" className={styles.input} />
-                  </div>
-                  <div className={styles.field}>
                     <label>문제</label>
-                    <textarea value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="문제 텍스트" className={styles.input} rows={3} />
+                    <textarea value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="문제 텍스트" className={styles.input} rows={3} spellCheck={false} />
                   </div>
                   <div className={styles.field}>
                     <label>정답</label>

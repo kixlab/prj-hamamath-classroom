@@ -1,4 +1,4 @@
-import { getHistoryHeaders } from "../hooks/useStorage";
+import { getHistoryHeaders, encodeUserIdForHeader, encodeForHeader } from "../hooks/useStorage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -415,31 +415,47 @@ export const api = {
 
   /** 관리자: 지정한 유저의 저장 결과 목록 */
   async getHistoryListForUser(viewUserId: string): Promise<any[]> {
-    const response = await fetch(getApiUrl("/api/v1/history/list"), {
-      headers: { ...getHistoryHeaders(), "X-Admin-View-User": viewUserId },
-    });
+    const { value, encoding } = encodeForHeader(viewUserId);
+    const headers: Record<string, string> = { ...getHistoryHeaders(), "X-Admin-View-User": value };
+    if (encoding) headers["X-Admin-View-User-Encoding"] = encoding;
+    const response = await fetch(getApiUrl("/api/v1/history/list"), { headers });
     if (!response.ok) throw new Error("저장 결과 목록을 불러올 수 없습니다.");
     return response.json();
   },
 
   /** 현재 로그인한 사용자 자신의 저장 결과 목록 (사이드바 등에서 사용). userId를 넘기면 해당 ID만 조회. */
   async getMyHistoryList(userId?: string): Promise<any[]> {
+    const url = getApiUrl("/api/v1/history/list");
     const headers: Record<string, string> = userId?.trim()
-      ? { "X-User-Id": userId.trim() }
+      ? encodeUserIdForHeader(userId)
       : getHistoryHeaders();
-    const response = await fetch(getApiUrl("/api/v1/history/list"), {
-      credentials: "include",
-      headers,
-    });
-    if (!response.ok) throw new Error("저장 결과 목록을 불러올 수 없습니다.");
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        credentials: "include",
+        headers,
+      });
+    } catch (err: any) {
+      const reason = err?.message || String(err);
+      throw new Error(`저장 결과 목록을 불러올 수 없습니다. (${reason}). API 주소 확인: ${url || "비어 있음"}`);
+    }
+    if (!response.ok) {
+      const status = response.status;
+      const body = await response.text();
+      const detail = body ? body.slice(0, 100) : response.statusText;
+      throw new Error(`저장 결과 목록을 불러올 수 없습니다. (HTTP ${status}${detail ? `: ${detail}` : ""})`);
+    }
     return response.json();
   },
 
   /** 관리자: 지정한 유저의 저장 결과 상세 (하위문항·루브릭 포함) */
   async getResultForUser(problemId: string, viewUserId: string): Promise<any> {
+    const { value, encoding } = encodeForHeader(viewUserId);
+    const headers: Record<string, string> = { ...getHistoryHeaders(), "X-Admin-View-User": value };
+    if (encoding) headers["X-Admin-View-User-Encoding"] = encoding;
     const response = await fetch(
       getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`),
-      { headers: { ...getHistoryHeaders(), "X-Admin-View-User": viewUserId } }
+      { headers }
     );
     if (!response.ok) {
       if (response.status === 404) return null;

@@ -10,6 +10,13 @@ import example1Image from "../../../data/example1.png";
 import example2Data from "../../../data/example2.json";
 import example2Image from "../../../data/example2.png";
 
+/** data/*.json 목록 (example1/2 제외) — 드롭다운에 로컬 예시로 표시 */
+const dataJsonGlob = import.meta.glob<{ default: { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string } }>("../../../data/*.json");
+const dataJsonFilenames = Object.keys(dataJsonGlob)
+  .map((k) => k.replace(/^.*\//, ""))
+  .filter((f) => f !== "example1.json" && f !== "example2.json")
+  .sort();
+
 const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
 /** 문제 ID를 입력하지 않았을 때 사용할 순차 번호 반환 (1, 2, 3, ...) */
@@ -109,6 +116,27 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             setFormData((prev) => (prev.imagePreview === example2Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
           })
           .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
+      }
+      return;
+    }
+
+    // data/ 폴더의 로컬 JSON (num1, num2 등)
+    const dataKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(filename));
+    if (dataKey) {
+      try {
+        const mod = await dataJsonGlob[dataKey]();
+        const data = mod.default;
+        setFormData((prev) => ({
+          ...prev,
+          problem: data.main_problem || "",
+          answer: data.main_answer || "",
+          solution: data.main_solution || "",
+          grade: data.grade || "",
+          imagePreview: null,
+          imageData: null,
+        }));
+      } catch (err) {
+        console.error("로컬 문제 데이터 로드 중 오류:", err);
       }
       return;
     }
@@ -248,6 +276,11 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               ))}
               <option value="__example1_json__">example1.json</option>
               <option value="__example2_json__">example2.json</option>
+              {dataJsonFilenames.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
             </select>
             {selectedProblem === "" && (
               <input

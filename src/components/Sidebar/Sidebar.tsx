@@ -58,7 +58,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     } catch (err: any) {
       console.warn("저장 목록 조회 실패:", err);
       const msg = err?.message || String(err);
-      setListLoadError(msg.includes("불러올 수 없습니다") ? msg : "저장 목록을 불러올 수 없습니다. (API 주소·CORS 확인)");
+      setListLoadError(msg.includes("불러올 수 없습니다") ? msg : `저장 목록을 불러올 수 없습니다. ${msg} (API 주소·CORS 확인)`);
     }
 
     const allResults: SavedResultItem[] = serverResults.map((item) => {
