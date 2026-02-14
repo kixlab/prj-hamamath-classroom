@@ -246,8 +246,40 @@ export const api = {
     return response.json();
   },
 
-  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 새로고침 후 복원용 */
-  async getStudentAnswersList(): Promise<{ items: Array<{ problem_id: string; student_id: string; answers: Record<string, string> }> }> {
+  /** 학생 목록 조회 (다른 브라우저에서 왼쪽 패널 복원용) */
+  async getStudentList(): Promise<{ students: Array<{ id: string; name: string }> }> {
+    const response = await fetch(getApiUrl("/api/v1/student-list"), {
+      headers: getHistoryHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "학생 목록을 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 학생 목록 저장 (다른 브라우저에서 복원용) */
+  async saveStudentList(students: Array<{ id: string; name: string }>): Promise<void> {
+    const body = { students };
+    const response = await fetch(getApiUrl("/api/v1/student-list"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "학생 목록을 저장하는 중 오류가 발생했습니다."
+      );
+    }
+  },
+
+  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 다른 브라우저 복원용. student_name 있으면 학생 목록 표시에 사용 */
+  async getStudentAnswersList(): Promise<{
+    items: Array<{ problem_id: string; student_id: string; student_name?: string; answers: Record<string, string> }>;
+  }> {
     const response = await fetch(getApiUrl("/api/v1/student-answers/list"), {
       headers: getHistoryHeaders(),
     });
