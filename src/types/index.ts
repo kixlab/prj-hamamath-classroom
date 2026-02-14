@@ -1,13 +1,22 @@
-// API 응답 타입 정의
+// API 응답 타입 정의 (createCoT 응답·UI 공용)
+export interface CoTStep {
+  step_number: number;
+  step_title: string;
+  step_content: string;
+  sub_skill_id?: string;
+  step_name?: string;
+  sub_skill_name?: string;
+}
+
 export interface CoTData {
-  problem_id: string;
-  problem_text: string;
-  steps: Array<{
-    step_number: number;
-    step_title: string;
-    step_content: string;
-  }>;
-  final_answer: string;
+  problem_id?: string;
+  problem_text?: string;
+  problem?: string;
+  answer?: string;
+  final_answer?: string;
+  grade?: string;
+  main_solution?: string | null;
+  steps: CoTStep[];
 }
 
 export interface SubQuestion {

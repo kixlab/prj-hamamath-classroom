@@ -21,6 +21,7 @@ function getWorkflowHierarchy(
       return { phase: "problem_input" };
     case "cot_output":
     case "cot_edit":
+    case "cot_finalized":
       return { phase: "cot" };
     case "confirm_next_clicked":
     case "sub_question_generated":
@@ -45,6 +46,8 @@ function getWorkflowHierarchy(
               ? payload.sub_question_id
               : undefined,
       };
+    case "sub_questions_finalized":
+      return { phase: "subq_review" };
     case "rubric_generated":
     case "rubric_level_edited":
     case "rubric_regenerated":
