@@ -86,7 +86,7 @@ interface FormData {
 }
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId, setCurrentRubrics } = useApp();
+  const { userId, setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId, setCurrentRubrics } = useApp();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
   /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
@@ -146,7 +146,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentGuidelineData(guidelineData);
       if (setCurrentRubrics) setCurrentRubrics(rubrics);
       setCurrentStep(rubrics?.length ? 4 : 3);
-      saveResult(problemId, cotData, null, guidelineData, null, rubrics);
+      saveResult(problemId, cotData, null, guidelineData, null, rubrics, userId);
     } catch (err: any) {
       setError(err?.message ?? "로컬 문제 불러오기 실패");
     } finally {
@@ -330,7 +330,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);
-      saveResult(problemId, cotDataWithExtras, null, null, null, null);
+      saveResult(problemId, cotDataWithExtras, null, null, null, null, userId);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
       setError(err.message || "오류가 발생했습니다.");

@@ -7,7 +7,7 @@ import type { CoTData, CoTStep } from '../../types';
 import styles from './CoTSteps.module.css';
 
 export const CoTSteps = () => {
-  const { currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
+  const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
   const containerRef = useMathJax([currentCotData?.steps]);
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
@@ -55,7 +55,7 @@ export const CoTSteps = () => {
     );
     const updated = { ...currentCotData, steps: newSteps };
     setCurrentCotData(updated);
-    if (currentProblemId) saveResult(currentProblemId, updated, undefined, undefined, undefined, undefined);
+    if (currentProblemId) saveResult(currentProblemId, updated, undefined, undefined, undefined, undefined, userId);
     logUserEvent('cot_edit', {
       stepId: editingStepId,
       step_name: step?.step_name ?? step?.step_title,

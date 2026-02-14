@@ -103,7 +103,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     }
 
     const problemId = currentProblemId || `manual_${Date.now()}`;
-    saveResult(problemId, currentCotData, null, currentGuidelineData);
+    saveResult(problemId, currentCotData, null, currentGuidelineData, undefined, undefined, userId);
     setCurrentProblemId(problemId);
     alert("현재 결과를 저장했습니다.");
     updateSavedResultsList();

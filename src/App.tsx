@@ -251,7 +251,7 @@ function App() {
 
   return (
     <AppWithClickLogger userId={userId}>
-      <AppProvider>
+      <AppProvider userId={userId}>
         <AppContent userId={userId} onShowUserIdPage={showUserIdPage} />
       </AppProvider>
     </AppWithClickLogger>
