@@ -385,7 +385,7 @@ export const api = {
       );
     }
     return response.json();
-  }
+  },
 
   // 학생 진단: 학생 답안 상/중/하 채점
   async diagnoseStudentAnswer(payload: {
