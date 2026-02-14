@@ -186,7 +186,11 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         main_solution: formData.solution,
       };
 
+      const problemId =
+        selectedProblem === "__example1_json__" ? "example1.json" : selectedProblem === "__example2_json__" ? "example2.json" : selectedProblem || customProblemId.trim() || getNextProblemSeq();
+
       logUserEvent("problem_input", {
+        problem_id: problemId,
         problem: formData.problem,
         answer: formData.answer,
         solution: formData.solution || null,
@@ -195,6 +199,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         imgDescription: formData.imgDescription || null,
       });
       logUserEvent("cot_output", {
+        problem_id: problemId,
         problem: result.problem,
         answer: result.answer,
         grade: result.grade,
@@ -206,9 +211,6 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           step_content: s.step_content,
         })),
       });
-
-      const problemId =
-        selectedProblem === "__example1_json__" ? "example1.json" : selectedProblem === "__example2_json__" ? "example2.json" : selectedProblem || customProblemId.trim() || getNextProblemSeq();
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotDataWithExtras);

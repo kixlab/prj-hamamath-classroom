@@ -3,6 +3,7 @@ import { useApp } from '../../contexts/AppContext';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
+import type { CoTData, CoTStep } from '../../types';
 import styles from './CoTSteps.module.css';
 
 export const CoTSteps = () => {
@@ -17,6 +18,21 @@ export const CoTSteps = () => {
   }
 
   const handleGenerateGuideline = () => {
+    const cot = currentCotData as CoTData | null;
+    if (cot) {
+      logUserEvent("cot_finalized", {
+        problem: cot.problem,
+        answer: cot.answer,
+        grade: cot.grade,
+        main_solution: cot.main_solution ?? null,
+        steps: (cot.steps || []).map((s: CoTStep) => ({
+          sub_skill_id: s.sub_skill_id,
+          step_name: s.step_name ?? s.step_title,
+          sub_skill_name: s.sub_skill_name,
+          step_content: s.step_content,
+        })),
+      });
+    }
     setCurrentStep(3);
   };
 
@@ -32,17 +48,17 @@ export const CoTSteps = () => {
 
   const saveEdit = () => {
     if (!editingStepId || !currentCotData?.steps) return;
-    const step = currentCotData.steps.find((s: any) => s.sub_skill_id === editingStepId);
+    const step = currentCotData.steps.find((s: CoTStep) => s.sub_skill_id === editingStepId) as CoTStep | undefined;
     const originalContent = step?.step_content ?? '';
-    const newSteps = currentCotData.steps.map((step: any) =>
-      step.sub_skill_id === editingStepId ? { ...step, step_content: editingContent } : step
+    const newSteps = currentCotData.steps.map((s: CoTStep) =>
+      s.sub_skill_id === editingStepId ? { ...s, step_content: editingContent } : s
     );
     const updated = { ...currentCotData, steps: newSteps };
     setCurrentCotData(updated);
     if (currentProblemId) saveResult(currentProblemId, updated, undefined, undefined, undefined, undefined);
     logUserEvent('cot_edit', {
       stepId: editingStepId,
-      step_name: step?.step_name,
+      step_name: step?.step_name ?? step?.step_title,
       sub_skill_name: step?.sub_skill_name,
       originalContent,
       newContent: editingContent,

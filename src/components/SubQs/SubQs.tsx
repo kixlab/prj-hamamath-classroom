@@ -126,12 +126,16 @@ export const SubQs = () => {
             guide_sub_answer: finalAnswer,
           };
         });
-        setFinalizedGuidelineForRubric({
+        const finalizedPayload = {
           problem_id: gd.problem_id ?? currentProblemId,
           main_problem: gd.main_problem ?? cot?.problem ?? null,
           main_answer: gd.main_answer ?? cot?.answer ?? null,
           grade: gd.grade ?? cot?.grade ?? null,
           subject_area: gd.subject_area ?? cot?.subject_area ?? null,
+          guide_sub_questions: finalizedSubs,
+        };
+        setFinalizedGuidelineForRubric(finalizedPayload);
+        logUserEvent("sub_questions_finalized", {
           guide_sub_questions: finalizedSubs,
         });
       } else {

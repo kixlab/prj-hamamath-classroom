@@ -124,6 +124,27 @@ export const Rubrics = () => {
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
   const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
+
+  // 3단계에서 문항이 수정된 뒤, 전체 루브릭을 다시 생성하고 싶을 때 사용하는 헬퍼
+  const handleRegenerateAllRubrics = () => {
+    const confirmed = window.confirm("현재 하위문항 내용을 기준으로 루브릭을 다시 생성하시겠습니까?\n기존에 편집한 루브릭 내용은 덮어쓰여질 수 있습니다.");
+    if (!confirmed) return;
+    runGenerateRubrics();
+  };
+
+  const handleFinalizeRubrics = () => {
+    const confirmed = window.confirm("루브릭을 확정하시겠습니까? 확정 후에는 현재 상태를 기준으로 활용하게 됩니다.");
+    if (!confirmed) return;
+    try {
+      logUserEvent("rubric_finalized", {
+        count: rubrics.length,
+      });
+    } catch {
+      // 로깅 실패는 무시
+    }
+    window.alert("루브릭이 확정되었습니다. 필요한 경우 JSON을 다운로드하여 보관해 주세요.");
+  };
+
   const runGenerateRubrics = async () => {
     const gd = guidelineForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
@@ -409,12 +430,11 @@ export const Rubrics = () => {
     );
   }
 
-  const hasGuideline = guidelineForStep4 && (guidelineForStep4 as any).guide_sub_questions?.length;
   if (!rubrics.length) {
     return (
       <div className={styles.rubricContainer}>
         <div className={styles.emptyState}>
-          {!hasGuideline ? (
+          {!guidelineForStep4 || !(guidelineForStep4 as any).guide_sub_questions?.length ? (
             <p>하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.</p>
           ) : (
             <>
@@ -431,6 +451,15 @@ export const Rubrics = () => {
 
   return (
     <div className={styles.rubricContainer} ref={containerRef}>
+      {(guidelineForStep4 as any)?.guide_sub_questions?.length ? (
+        <div className={styles.regenerateAllRow}>
+          <div className={styles.regenerateAllText}>3단계에서 하위문항을 수정했다면, 아래 루브릭은 이전 문항 기준일 수 있습니다.</div>
+          <button type="button" className={styles.generateBtn} onClick={handleRegenerateAllRubrics} disabled={generating}>
+            루브릭 새로 생성하기
+          </button>
+        </div>
+      ) : null}
+
       <div className={styles.rubricCards}>
         {rubrics.map((rubric) => {
           const isFeedbackOpen = feedbackStates[rubric.sub_question_id];
@@ -514,7 +543,6 @@ export const Rubrics = () => {
                         </>
                       ) : (
                         <>
-                          <div className={styles.levelDescription}>{preprocessLatex(lv.description)}</div>
                           {lv.bullets.length > 0 && (
                             <ul className={styles.levelBullets}>
                               {lv.bullets.map((bullet, i) => (
@@ -586,6 +614,14 @@ export const Rubrics = () => {
             </div>
           );
         })}
+      </div>
+      <div className={styles.finalizeRow}>
+        <button type="button" className={styles.downloadBtn} onClick={handleDownloadJson}>
+          JSON 다운로드
+        </button>
+        <button type="button" className={styles.finalizeBtn} onClick={handleFinalizeRubrics}>
+          루브릭 확정하기
+        </button>
       </div>
     </div>
   );

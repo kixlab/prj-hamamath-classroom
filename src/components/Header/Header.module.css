@@ -69,6 +69,32 @@
   flex-shrink: 0;
 }
 
+.modeToggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.6);
+}
+
+.modeBtn {
+  min-width: 88px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.modeBtnActive {
+  background: #f9fafb;
+  color: #111827;
+}
+
 .userIdLabel {
   font-size: 0.8125rem;
   opacity: 0.95;

@@ -5,9 +5,19 @@ interface HeaderProps {
   onNewProblem: () => void;
   onShowUserIdPage?: () => void;
   userId?: string | null;
+  mode?: "workflow" | "diagnosis";
+  onSelectWorkflow?: () => void;
+  onSelectDiagnosis?: () => void;
 }
 
-export const Header = ({ onNewProblem, onShowUserIdPage, userId }: HeaderProps) => {
+export const Header = ({
+  onNewProblem,
+  onShowUserIdPage,
+  userId,
+  mode,
+  onSelectWorkflow,
+  onSelectDiagnosis,
+}: HeaderProps) => {
   const { sidebarOpen, setSidebarOpen } = useApp();
 
   const handleHamburgerClick = () => {
@@ -42,9 +52,32 @@ export const Header = ({ onNewProblem, onShowUserIdPage, userId }: HeaderProps) 
         </button>
       </div>
       <div className={styles.headerRight}>
-        <button className={styles.newProblemBtn} onClick={onNewProblem}>
-          문제 입력하기
-        </button>
+        {mode && onSelectWorkflow && onSelectDiagnosis ? (
+          <div className={styles.modeToggle}>
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${
+                mode === "workflow" ? styles.modeBtnActive : ""
+              }`}
+              onClick={onSelectWorkflow}
+            >
+              문항 생성
+            </button>
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${
+                mode === "diagnosis" ? styles.modeBtnActive : ""
+              }`}
+              onClick={onSelectDiagnosis}
+            >
+              학생 진단
+            </button>
+          </div>
+        ) : (
+          <button className={styles.newProblemBtn} onClick={onNewProblem}>
+            문제 입력하기
+          </button>
+        )}
         {userId && (
           <>
             <span className={styles.userIdLabel}>{userId}</span>

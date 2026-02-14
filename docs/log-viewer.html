@@ -331,6 +331,10 @@
         <option value="workflow">워크플로우 계층 (기본)</option>
         <option value="flat">평면 목록 (세션별)</option>
       </select>
+      <label for="dateSelect">날짜</label>
+      <select id="dateSelect">
+        <option value="">전체</option>
+      </select>
       <label for="eventFilter">이벤트 타입</label>
       <select id="eventFilter">
         <option value="">전체</option>
@@ -524,6 +528,37 @@
           const col = db.collection(userId);
           const snap = await col.get();
           let docs = snap.docs;
+
+          // 존재하는 날짜만 추출하여 드롭다운 채우기
+          const dateSet = new Set();
+          docs.forEach((doc) => {
+            const ts = doc.data().timestamp;
+            if (ts && ts.toDate) {
+              const d = ts.toDate();
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, "0");
+              const day = String(d.getDate()).padStart(2, "0");
+              dateSet.add(y + "-" + m + "-" + day);
+            }
+          });
+          const dateList = Array.from(dateSet).sort().reverse();
+          const dateSelect = document.getElementById("dateSelect");
+          const selectedDate = (dateSelect && dateSelect.value) || "";
+          dateSelect.innerHTML = '<option value="">전체</option>' + dateList.map((d) => '<option value="' + d + '">' + d + '</option>').join("");
+          if (selectedDate && dateList.includes(selectedDate)) dateSelect.value = selectedDate;
+
+          // 선택한 날짜로 필터링
+          if (selectedDate) {
+            const from = new Date(selectedDate + "T00:00:00");
+            const to = new Date(selectedDate + "T23:59:59");
+            docs = docs.filter((doc) => {
+              const ts = doc.data().timestamp;
+              if (!ts || !ts.toDate) return false;
+              const t = ts.toDate();
+              return t >= from && t <= to;
+            });
+          }
+
           docs = docs.slice().sort((a, b) => (a.data().eventIndex ?? 0) - (b.data().eventIndex ?? 0));
           const viewMode = document.getElementById("viewMode").value;
 

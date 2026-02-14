@@ -3,6 +3,23 @@
   width: 100%;
 }
 
+.regenerateAllRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f3f4ff;
+  border: 1px solid #c7d2fe;
+}
+
+.regenerateAllText {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
 .rubricCards {
   display: flex;
   flex-direction: column;

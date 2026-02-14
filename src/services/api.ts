@@ -214,6 +214,71 @@ export const api = {
     return response.json();
   },
 
+  /**
+   * 학생 진단용: 학생 답안 저장
+   * payload 예시:
+   * {
+   *   problem_id: string;
+   *   user_id: string;         // 교사/연구 참여자 ID (X-User-Id와 동일하게 사용)
+   *   student_id: string;      // 화면에서 선택한 학생 ID
+   *   student_name?: string;   // 학생 표시 이름 (선택)
+   *   answers: { [sub_question_id: string]: string };
+   * }
+   */
+  async saveStudentAnswers(payload: {
+    problem_id: string;
+    user_id: string;
+    student_id: string;
+    student_name?: string;
+    answers: Record<string, string>;
+  }) {
+    const response = await fetch(getApiUrl("/api/v1/student-answers/save"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "학생 답안을 저장하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 새로고침 후 복원용 */
+  async getStudentAnswersList(): Promise<{ items: Array<{ problem_id: string; student_id: string; answers: Record<string, string> }> }> {
+    const response = await fetch(getApiUrl("/api/v1/student-answers/list"), {
+      headers: getHistoryHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "저장된 학생 답안 목록을 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 동일 로그인 id·문제·학생에 해당하는 저장 답안 1건 조회 (없으면 null) */
+  async getStudentAnswers(
+    problemId: string,
+    studentId: string
+  ): Promise<{ problem_id: string; student_id: string; answers: Record<string, string> } | null> {
+    const params = new URLSearchParams({ problem_id: problemId, student_id: studentId });
+    const response = await fetch(getApiUrl(`/api/v1/student-answers/get?${params}`), {
+      headers: getHistoryHeaders(),
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "저장된 학생 답안을 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
   // 결과 불러오기
   async getResult(problemId: string) {
     const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
@@ -249,6 +314,15 @@ export const api = {
     return response.json();
   },
 
+  /** 현재 로그인한 사용자 자신의 저장 결과 목록 */
+  async getMyHistoryList(): Promise<any[]> {
+    const response = await fetch(getApiUrl("/api/v1/history/list"), {
+      headers: getHistoryHeaders(),
+    });
+    if (!response.ok) throw new Error("저장 결과 목록을 불러올 수 없습니다.");
+    return response.json();
+  },
+
   /** 관리자: 지정한 유저의 저장 결과 상세 (하위문항·루브릭 포함) */
   async getResultForUser(problemId: string, viewUserId: string): Promise<any> {
     const response = await fetch(
@@ -258,6 +332,120 @@ export const api = {
     if (!response.ok) {
       if (response.status === 404) return null;
       throw new Error("저장 결과를 불러올 수 없습니다.");
+    }
+    return response.json();
+  },
+
+  /** 현재 사용자의 진단 결과 목록 (다른 기기/브라우저 동기화용) */
+  async getDiagnosisResultsList(params?: {
+    problem_id?: string;
+    student_id?: string;
+  }): Promise<{
+    items: Array<{
+      user_id: string;
+      problem_id: string;
+      student_id: string;
+      sub_question_id: string;
+      level: string;
+      reason: string;
+      created_at?: string;
+    }>;
+  }> {
+    const q = new URLSearchParams();
+    if (params?.problem_id) q.set("problem_id", params.problem_id);
+    if (params?.student_id) q.set("student_id", params.student_id);
+    const url = getApiUrl("/api/v1/diagnosis/results" + (q.toString() ? `?${q}` : ""));
+    const response = await fetch(url, { headers: getHistoryHeaders() });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 결과 목록을 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    const list = await response.json();
+    return { items: Array.isArray(list) ? list : [] };
+  }
+
+  /** 진단 결과 일괄 저장 (서버/다른 기기 동기화용) */
+  async saveDiagnosisResults(payload: {
+    user_id: string;
+    problem_id: string;
+    student_id: string;
+    results: Record<string, { level: string; reason: string }>;
+  }): Promise<{ status: string }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/results/save"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 결과를 저장하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  }
+
+  // 학생 진단: 학생 답안 상/중/하 채점
+  async diagnoseStudentAnswer(payload: {
+    problem_id: string;
+    sub_question_id: string;
+    question: string;
+    correct_answer?: string | null;
+    rubric: any;
+    student_answer: string;
+  }): Promise<{ level: "상" | "중" | "하"; reason: string }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/grade-answer"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "학생 진단 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 학생 진단 리포트(문제별/단계별 요약) 생성 */
+  async generateStudentDiagnosisReport(payload: {
+    student_id: string;
+    problem_summaries: Array<{
+      problem_id: string;
+      levels_by_display_code: Record<string, "상" | "중" | "하">;
+      feedback_by_display_code?: Record<string, string>;
+    }>;
+  }): Promise<{
+    problem_rows: Array<{
+      problem_id: string;
+      step_count: number;
+      high_count: number;
+      mid_count: number;
+      low_count: number;
+      average_level: "상" | "중" | "하" | "-";
+    }>;
+    step_rows: Array<{
+      display_code: string;
+      problem_count: number;
+      score_100?: number;
+      final_level: string;
+      feedback_summary?: string | null;
+    }>;
+  }> {
+    const response = await fetch(getApiUrl("/api/v1/reports/student-diagnosis"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail ||
+          "학생 진단 리포트를 생성하는 중 오류가 발생했습니다."
+      );
     }
     return response.json();
   },

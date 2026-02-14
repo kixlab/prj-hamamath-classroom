@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>워크플로우 최종 버전 뷰어</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --border: #1f2937;
+        --accent: #3b82f6;
+        --accent-soft: rgba(59, 130, 246, 0.12);
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --danger: #f97373;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top left, #1f2937, #020617 50%);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin-bottom: 18px;
+        color: #e5e7eb;
+      }
+      .subtitle {
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin-bottom: 18px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 14px 16px;
+        background: rgba(15, 23, 42, 0.8);
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        backdrop-filter: blur(12px);
+      }
+      .controls label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .controls-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      input[type="text"],
+      select {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #020617;
+        color: var(--text);
+        font-size: 0.9rem;
+      }
+      input[type="text"] {
+        min-width: 200px;
+      }
+      select {
+        min-width: 160px;
+      }
+      button {
+        padding: 9px 16px;
+        border-radius: 8px;
+        border: none;
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button:hover:not(:disabled) {
+        background: #2563eb;
+      }
+      .summary {
+        margin-bottom: 14px;
+        padding: 10px 14px;
+        background: rgba(15, 23, 42, 0.85);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .error-msg {
+        margin-bottom: 10px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(248, 113, 113, 0.7);
+        background: rgba(127, 29, 29, 0.3);
+        color: var(--danger);
+        font-size: 0.9rem;
+      }
+      .hidden {
+        display: none;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .sidebar {
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid var(--border);
+        padding: 12px 12px 16px;
+      }
+      .sidebar h2 {
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+      }
+      .sidebar-list {
+        max-height: 360px;
+        overflow: auto;
+        margin-top: 8px;
+      }
+      .wf-item {
+        width: 100%;
+        text-align: left;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.8rem;
+      }
+      .wf-item:hover {
+        border-color: var(--accent-soft);
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--text);
+      }
+      .wf-item.active {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+      .wf-item code {
+        font-size: 0.78rem;
+      }
+      .main {
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid var(--border);
+        padding: 14px 16px 18px;
+        min-height: 260px;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .section-header h3 {
+        font-size: 0.95rem;
+      }
+      .section-header span {
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .card {
+        margin-top: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #020617;
+        padding: 10px 12px;
+      }
+      .card-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #e5e7eb;
+      }
+      .card-meta {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      pre.json {
+        margin: 0;
+        padding: 8px 10px;
+        font-size: 0.8rem;
+        background: #020617;
+        border-radius: 6px;
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        overflow: auto;
+        max-height: 240px;
+        white-space: pre-wrap;
+      }
+      .placeholder {
+        font-size: 0.85rem;
+        color: var(--muted);
+        padding: 16px 4px;
+      }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  </head>
+  <body>
+    <h1>📚 워크플로우 최종 버전 뷰어</h1>
+    <p class="subtitle">유저 → 날짜 → 워크플로우를 순서대로 선택해서 CoT / 하위문항 / 루브릭의 최종 버전을 확인할 수 있습니다.</p>
+
+    <div class="controls">
+      <div class="controls-group">
+        <label for="userId">유저 ID</label>
+        <input type="text" id="userId" placeholder="예: test, doh" />
+      </div>
+      <div class="controls-group">
+        <label for="dateSelect">날짜</label>
+        <select id="dateSelect">
+          <option value="">전체</option>
+        </select>
+      </div>
+      <button type="button" id="loadBtn">로그 불러오기</button>
+    </div>
+
+    <div id="error" class="error-msg hidden"></div>
+    <div id="summary" class="summary hidden"></div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <h2>워크플로우 목록</h2>
+        <p style="font-size:0.8rem;color:var(--muted);">유저와 날짜를 선택하면, 해당 조건의 워크플로우 ID들이 표시됩니다.</p>
+        <div id="workflowList" class="sidebar-list"></div>
+      </aside>
+      <main class="main">
+        <div id="wfSummary" class="placeholder">왼쪽에서 워크플로우를 선택하면, 이 영역에 CoT / 하위문항 / 루브릭의 최종 버전이 표시됩니다.</div>
+      </main>
+    </div>
+
+    <script src="log-viewer-config.js"></script>
+    <script type="module">
+      const firebaseConfig = window.__FIREBASE_CONFIG__;
+      let db = null;
+      if (typeof firebase !== "undefined" && firebaseConfig?.apiKey) {
+        try {
+          firebase.initializeApp(firebaseConfig);
+          db = firebase.firestore();
+        } catch (_) {}
+      }
+
+      let allDocs = [];
+      let docsForDate = [];
+
+      const errorEl = document.getElementById("error");
+      const summaryEl = document.getElementById("summary");
+      const wfListEl = document.getElementById("workflowList");
+      const wfSummaryEl = document.getElementById("wfSummary");
+
+      function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.classList.toggle("hidden", !msg);
+      }
+
+      function escapeHtml(s) {
+        const div = document.createElement("div");
+        div.textContent = String(s ?? "");
+        return div.innerHTML;
+      }
+
+      function formatTs(ts) {
+        if (!ts || !ts.toDate) return "-";
+        return ts.toDate().toLocaleString("ko-KR");
+      }
+
+      function formatPayloadForSummary(d) {
+        if (!d || typeof d !== "object") return "";
+        const omit = ["userId", "sessionId", "eventIndex", "timestamp", "eventType", "pathname", "workflowId", "phase", "stepId"];
+        const out = {};
+        for (const [k, v] of Object.entries(d)) {
+          if (omit.includes(k)) continue;
+          if (v && typeof v === "object" && v.toDate) {
+            out[k] = v.toDate().toLocaleString("ko-KR");
+          } else {
+            out[k] = v;
+          }
+        }
+        return JSON.stringify(out, null, 2);
+      }
+
+      async function loadUserLogs() {
+        const userId = document.getElementById("userId").value.trim();
+        if (!userId) {
+          showError("유저 ID를 입력해 주세요.");
+          return;
+        }
+        if (!db) {
+          showError("Firebase 초기화에 실패했습니다. log-viewer-config.js 설정을 확인하세요.");
+          return;
+        }
+        document.getElementById("loadBtn").disabled = true;
+        showError("");
+        summaryEl.classList.add("hidden");
+        wfListEl.innerHTML = "";
+        wfSummaryEl.innerHTML = '<p class="placeholder">날짜와 워크플로우를 선택하면 최종 버전을 볼 수 있습니다.</p>';
+
+        try {
+          const col = db.collection(userId);
+          const snap = await col.get();
+          allDocs = snap.docs;
+
+          if (!allDocs.length) {
+            summaryEl.textContent = `유저 "${userId}" 에 대한 로그가 없습니다.`;
+            summaryEl.classList.remove("hidden");
+            document.getElementById("dateSelect").innerHTML = '<option value=\"\">(없음)</option>';
+            return;
+          }
+
+          const dateSet = new Set();
+          allDocs.forEach((doc) => {
+            const ts = doc.data().timestamp;
+            if (ts && ts.toDate) {
+              const d = ts.toDate();
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, "0");
+              const day = String(d.getDate()).padStart(2, "0");
+              dateSet.add(y + "-" + m + "-" + day);
+            }
+          });
+          const dateList = Array.from(dateSet).sort().reverse();
+          const dateSelect = document.getElementById("dateSelect");
+          dateSelect.innerHTML = '<option value=\"\">전체</option>' + dateList.map((d) => '<option value=\"' + d + '\">' + d + "</option>").join("");
+
+          summaryEl.textContent = `유저 "${userId}" 에 대한 로그 ${allDocs.length}건 · 날짜 ${dateList.length}일`;
+          summaryEl.classList.remove("hidden");
+        } catch (e) {
+          showError("로그를 불러오는 중 오류가 발생했습니다: " + e.message);
+        } finally {
+          document.getElementById("loadBtn").disabled = false;
+        }
+      }
+
+      function handleDateChange() {
+        const date = document.getElementById("dateSelect").value;
+        wfListEl.innerHTML = "";
+        wfSummaryEl.innerHTML = '<p class="placeholder">왼쪽에서 워크플로우를 선택하세요.</p>';
+        if (!allDocs.length) return;
+
+        if (!date) {
+          docsForDate = allDocs.slice();
+        } else {
+          const from = new Date(date + "T00:00:00");
+          const to = new Date(date + "T23:59:59");
+          docsForDate = allDocs.filter((doc) => {
+            const ts = doc.data().timestamp;
+            if (!ts || !ts.toDate) return false;
+            const t = ts.toDate();
+            return t >= from && t <= to;
+          });
+        }
+
+        const wfSet = new Set();
+        docsForDate.forEach((doc) => {
+          const d = doc.data();
+          if (d.workflowId) wfSet.add(d.workflowId);
+        });
+        const wfIds = Array.from(wfSet).sort();
+        if (!wfIds.length) {
+          wfListEl.innerHTML = '<p style=\"font-size:0.8rem;color:var(--muted);margin-top:8px;\">선택한 조건에 해당하는 워크플로우가 없습니다.</p>';
+          return;
+        }
+        wfIds.forEach((wid) => {
+          const btn = document.createElement("button");
+          btn.className = "wf-item";
+          const shortWid = wid.length > 32 ? wid.slice(0, 28) + "…" : wid;
+          btn.innerHTML = `<code>${escapeHtml(shortWid)}</code>`;
+          btn.addEventListener("click", () => {
+            document.querySelectorAll(".wf-item").forEach((el) => el.classList.remove("active"));
+            btn.classList.add("active");
+            renderWorkflowSummary(wid);
+          });
+          wfListEl.appendChild(btn);
+        });
+      }
+
+      function pickLastByPhase(docs, predicate) {
+        let last = null;
+        docs.forEach((doc) => {
+          const d = doc.data();
+          if (!predicate(d)) return;
+          if (!last) {
+            last = doc;
+            return;
+          }
+          const prevIdx = last.data().eventIndex ?? 0;
+          const curIdx = d.eventIndex ?? 0;
+          if (curIdx >= prevIdx) last = doc;
+        });
+        return last;
+      }
+
+      /** 하위문항 확정 버튼으로 저장된 버전(우선 사용). 없으면 아래 buildFinalGuideSubQuestions 결과 사용 */
+      function getFinalizedSubQuestionsFromLog(docs) {
+        const last = pickLastByPhase(docs, (d) => (d.eventType || "") === "sub_questions_finalized");
+        if (!last) return null;
+        const list = last.data().guide_sub_questions;
+        return Array.isArray(list) && list.length > 0 ? list : null;
+      }
+
+      /** 하위문항: edit/version_selected/재생성 로그 없으면 원본, 있으면 수정·선택된 버전 (확정 이벤트 없을 때만 사용) */
+      function buildFinalGuideSubQuestions(docs) {
+        const sorted = docs.slice().sort((a, b) => (a.data().eventIndex ?? 0) - (b.data().eventIndex ?? 0));
+        const byId = {};
+        const order = [];
+
+        sorted.forEach((doc) => {
+          const d = doc.data();
+          const et = (d.eventType || "").trim();
+
+          if (et === "sub_question_generated" && d.sub_question_id) {
+            const id = d.sub_question_id;
+            if (!byId[id]) order.push(id);
+            byId[id] = {
+              sub_question_id: id,
+              step_id: d.stepId ?? byId[id]?.step_id,
+              step_name: d.step_name ?? byId[id]?.step_name,
+              sub_skill_name: d.sub_skill_name ?? byId[id]?.sub_skill_name,
+              guide_sub_question: d.guide_sub_question ?? byId[id]?.guide_sub_question ?? "",
+              guide_sub_answer: d.guide_sub_answer ?? byId[id]?.guide_sub_answer ?? null,
+              re_sub_question: byId[id]?.re_sub_question ?? null,
+              re_sub_answer: byId[id]?.re_sub_answer ?? null,
+            };
+          } else if (et === "sub_question_verified" && d.sub_question_id) {
+            const id = d.sub_question_id;
+            if (byId[id]) {
+              if (d.re_sub_question != null) byId[id].re_sub_question = d.re_sub_question;
+              if (d.re_sub_answer != null) byId[id].re_sub_answer = d.re_sub_answer;
+            }
+          } else if (et === "regenerated_output" && d.subqId) {
+            const id = d.subqId;
+            if (byId[id]) {
+              if (d.re_sub_question != null) byId[id].re_sub_question = d.re_sub_question;
+              if (d.re_sub_answer != null) byId[id].re_sub_answer = d.re_sub_answer;
+            }
+          }
+        });
+
+        const preferredVersion = {};
+        const edits = {};
+        sorted.forEach((doc) => {
+          const d = doc.data();
+          const et = (d.eventType || "").trim();
+          if (et === "version_selected" && d.subqId) {
+            preferredVersion[d.subqId] = d.version || "original";
+          } else if ((et === "edit_original" || et === "edit_regenerated") && d.subqId) {
+            edits[d.subqId] = { type: et, newQuestion: d.newQuestion, newAnswer: d.newAnswer };
+          }
+        });
+
+        const hasAnyEditOrSelection = Object.keys(edits).length > 0 || Object.keys(preferredVersion).length > 0;
+
+        return order.map((id) => {
+          const row = byId[id] || { sub_question_id: id, guide_sub_question: "", guide_sub_answer: null, re_sub_question: null, re_sub_answer: null };
+          let displayQuestion = (row.guide_sub_question || "").trim();
+          let displayAnswer = row.guide_sub_answer ?? null;
+
+          if (edits[id]) {
+            displayQuestion = (edits[id].newQuestion ?? "").trim() || displayQuestion;
+            displayAnswer = edits[id].newAnswer ?? displayAnswer;
+          } else if (hasAnyEditOrSelection && (preferredVersion[id] === "regenerated") && (row.re_sub_question || "").trim()) {
+            displayQuestion = (row.re_sub_question || "").trim();
+            displayAnswer = row.re_sub_answer ?? displayAnswer;
+          }
+
+          return {
+            sub_question_id: row.sub_question_id,
+            step_id: row.step_id,
+            step_name: row.step_name,
+            sub_skill_name: row.sub_skill_name,
+            guide_sub_question: displayQuestion,
+            guide_sub_answer: displayAnswer,
+            _source: edits[id] ? "edit" : (preferredVersion[id] === "regenerated" && (row.re_sub_question || "").trim() ? "regenerated" : "original"),
+          };
+        });
+      }
+
+      /** 루브릭: edit 로그 없으면 원본(rubric_generated), 있으면 수정된 버전 */
+      function buildFinalRubrics(docs) {
+        const sorted = docs.slice().sort((a, b) => (a.data().eventIndex ?? 0) - (b.data().eventIndex ?? 0));
+        let base = null;
+        let baseEventIndex = -1;
+
+        sorted.forEach((doc) => {
+          const d = doc.data();
+          const et = (d.eventType || "").trim();
+          const idx = d.eventIndex ?? 0;
+          if (et === "rubric_generated" && Array.isArray(d.output)) {
+            base = d.output.map((r) => ({ ...r, levels: (r.levels || []).map((lv) => ({ ...lv })) }));
+            baseEventIndex = idx;
+          }
+        });
+
+        if (!base || !base.length) return null;
+
+        const hasEdit = sorted.some((doc) => {
+          const et = (doc.data().eventType || "").trim();
+          return (et === "rubric_level_edited" || et === "rubric_regenerated") && (doc.data().eventIndex ?? 0) > baseEventIndex;
+        });
+
+        if (!hasEdit) return { rubrics: base, _source: "original" };
+
+        const rubrics = base.map((r) => ({
+          sub_question_id: r.sub_question_id,
+          question: r.question,
+          levels: (r.levels || []).map((lv) => ({ level: lv.level, description: lv.description, bullets_count: lv.bullets_count, examples_count: lv.examples_count })),
+        }));
+
+        const findRubric = (id) => rubrics.find((r) => r.sub_question_id === id);
+
+        sorted.forEach((doc) => {
+          const d = doc.data();
+          const idx = d.eventIndex ?? 0;
+          if (idx <= baseEventIndex) return;
+          const et = (d.eventType || "").trim();
+          const sid = d.sub_question_id;
+
+          if (et === "rubric_level_edited" && sid && d.after) {
+            const r = findRubric(sid);
+            if (r && r.levels) {
+              const i = r.levels.findIndex((lv) => lv.level === d.level);
+              if (i >= 0) {
+                r.levels[i] = {
+                  level: d.level,
+                  description: d.after.description ?? r.levels[i].description,
+                  bullets_count: Array.isArray(d.after.bullets) ? d.after.bullets.length : (d.after.bullets ? 1 : 0),
+                  examples_count: Array.isArray(d.after.examples) ? d.after.examples.length : (d.after.examples ? 1 : 0),
+                };
+              }
+            }
+          } else if (et === "rubric_regenerated" && sid && Array.isArray(d.output)) {
+            const r = findRubric(sid);
+            if (r) r.levels = d.output.map((lv) => ({ level: lv.level, description: lv.description, bullets_count: lv.bullets_count ?? 0, examples_count: lv.examples_count ?? 0 }));
+          }
+        });
+
+        return { rubrics, _source: "modified" };
+      }
+
+      // 뷰 모드: "pretty" | "json"
+      let viewMode = "pretty";
+      let lastWorkflowId = null;
+
+      function getProblemIdForWorkflow(docs) {
+        let problemId = null;
+        docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.problem_id && !problemId) {
+            problemId = d.problem_id;
+          }
+        });
+        return problemId;
+      }
+
+      /** 멀티라인 텍스트를 HTML로 보기 좋게 */
+      function formatMultiline(text) {
+        if (text == null) return "";
+        return escapeHtml(String(text)).replace(/\n/g, "<br />");
+      }
+
+      /** CoT payload를 사람이 읽기 좋은 HTML로 렌더링 */
+      function renderCotReadable(payload) {
+        if (!payload || typeof payload !== "object") return "";
+        const problem = payload.problem ?? "";
+        const answer = payload.answer ?? "";
+        const grade = payload.grade ?? "";
+        const mainSolution = payload.main_solution ?? "";
+        const steps = Array.isArray(payload.steps) ? payload.steps : [];
+
+        const header = `
+          <div style="margin-bottom:10px;">
+            <div style="font-size:0.85rem;color:var(--muted);margin-bottom:4px;">문제</div>
+            <div style="margin-bottom:6px;">${formatMultiline(problem)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.85rem;color:var(--muted);">
+              <span>정답: <strong style="color:var(--text);">${escapeHtml(String(answer || "-"))}</strong></span>
+              <span>학년: <strong style="color:var(--text);">${escapeHtml(String(grade || "-"))}</strong></span>
+            </div>
+            ${mainSolution ? `<div style="margin-top:6px;font-size:0.85rem;"><span style="color:var(--muted);">모범 풀이</span><br />${formatMultiline(mainSolution)}</div>` : ""}
+          </div>
+        `;
+
+        if (!steps.length) {
+          return header + '<p class="placeholder" style="margin-top:4px;">단계(step) 정보가 없습니다.</p>';
+        }
+
+        const stepsHtml = steps
+          .map((s, idx) => {
+            const title =
+              (s.step_name || s.step_title || "") +
+              (s.sub_skill_name ? ` · ${s.sub_skill_name}` : "") +
+              (s.sub_skill_id ? ` (${s.sub_skill_id})` : "");
+            return `
+              <div style="padding:8px 10px;border-radius:8px;background:rgba(15,23,42,0.6);border:1px solid var(--border);margin-bottom:6px;">
+                <div style="font-size:0.85rem;color:var(--muted);margin-bottom:4px;">STEP ${idx + 1}</div>
+                <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(title || `단계 ${idx + 1}`)}</div>
+                <div style="font-size:0.9rem;">${formatMultiline(s.step_content || "")}</div>
+              </div>
+            `;
+          })
+          .join("");
+
+        return header + `<div>${stepsHtml}</div>`;
+      }
+
+      /** 하위문항 리스트를 사람이 읽기 좋은 HTML로 렌더링 */
+      function renderSubQuestionsReadable(list) {
+        const items = Array.isArray(list) ? list : [];
+        if (!items.length) return '<p class="placeholder" style="padding:4px 0 0;">하위문항이 없습니다.</p>';
+
+        const rows = items
+          .map((sq, idx) => {
+            const sourceLabel =
+              sq._source === "edit" ? "직접 수정" : sq._source === "regenerated" ? "재생성 선택" : "원본";
+            return `
+              <tr>
+                <td>${idx + 1}</td>
+                <td>${escapeHtml(sq.sub_question_id || "")}</td>
+                <td>${escapeHtml(sq.step_name || "")}</td>
+                <td>${formatMultiline(sq.guide_sub_question || "")}</td>
+                <td>${formatMultiline(sq.guide_sub_answer || "")}</td>
+                <td>${escapeHtml(sourceLabel)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        return `
+          <div class="table-wrapper">
+            <table class="simple-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>sub_question_id</th>
+                  <th>단계명</th>
+                  <th>하위문항</th>
+                  <th>정답(서술)</th>
+                  <th>출처</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      /** 루브릭을 사람이 읽기 좋은 HTML로 렌더링 */
+      function renderRubricsReadable(rubricObj) {
+        if (!rubricObj || typeof rubricObj !== "object") {
+          return '<p class="placeholder" style="padding:4px 0 0;">루브릭 데이터가 없습니다.</p>';
+        }
+        const rubrics = Array.isArray(rubricObj.rubrics) ? rubricObj.rubrics : [];
+        if (!rubrics.length) {
+          return '<p class="placeholder" style="padding:4px 0 0;">루브릭 데이터가 없습니다.</p>';
+        }
+
+        const blocks = rubrics
+          .map((r, idx) => {
+            const levels = Array.isArray(r.levels) ? r.levels : [];
+            const levelRows = levels
+              .map(
+                (lv) => `
+                <tr>
+                  <td>${escapeHtml(lv.level || "")}</td>
+                  <td>${formatMultiline(lv.description || "")}</td>
+                  <td style="text-align:center;">${lv.bullets_count ?? 0}</td>
+                  <td style="text-align:center;">${lv.examples_count ?? 0}</td>
+                </tr>
+              `,
+              )
+              .join("");
+            return `
+              <div style="padding:10px 12px;border-radius:10px;background:rgba(15,23,42,0.6);border:1px solid var(--border);margin-bottom:10px;">
+                <div style="font-size:0.85rem;color:var(--muted);margin-bottom:4px;">
+                  문항 ${idx + 1} · sub_question_id: <code>${escapeHtml(r.sub_question_id || "")}</code>
+                </div>
+                <div style="font-weight:600;margin-bottom:6px;">${formatMultiline(r.question || "")}</div>
+                <div class="table-wrapper">
+                  <table class="simple-table">
+                    <thead>
+                      <tr>
+                        <th>수준</th>
+                        <th>설명</th>
+                        <th>기준 수</th>
+                        <th>예시 수</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${levelRows}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+
+        return blocks;
+      }
+
+      function renderWorkflowSummary(workflowId) {
+        lastWorkflowId = workflowId;
+        const docs = docsForDate.filter((doc) => (doc.data().workflowId || "") === workflowId);
+        if (!docs.length) {
+          wfSummaryEl.innerHTML = '<p class="placeholder">이 워크플로우에 대한 로그가 없습니다.</p>';
+          return;
+        }
+
+        const problemId = getProblemIdForWorkflow(docs);
+        const cotFinalizedDoc = pickLastByPhase(docs, (d) => (d.eventType || "") === "cot_finalized");
+        // cot_edit 는 한 단계만 담고 있어서 전체 CoT 로 쓰기 부적절 → 기본 CoT 는 항상 cot_output 기준으로만 사용
+        const cotDoc = pickLastByPhase(docs, (d) => d.eventType === "cot_output");
+        const finalizedSubQs = getFinalizedSubQuestionsFromLog(docs);
+        const finalSubQs = finalizedSubQs ?? buildFinalGuideSubQuestions(docs);
+        const finalRubrics = buildFinalRubrics(docs);
+
+        const parts = [];
+
+        function pushCard(title, doc, description) {
+          if (!doc) {
+            parts.push(
+              `<div class="card"><div class="card-title">${title}</div><div class="card-meta">${escapeHtml(
+                description,
+              )}</div><p class="placeholder" style="padding:8px 0 4px;">해당 단계 로그가 없습니다.</p></div>`,
+            );
+            return;
+          }
+          const d = doc.data();
+          const payload = formatPayloadForSummary(d);
+          const ts = formatTs(d.timestamp);
+          const meta = `eventIndex: ${d.eventIndex ?? "-"} · ${ts} · eventType: ${d.eventType || "-"}`;
+          parts.push(
+            `<div class="card">
+              <div class="card-title">${title}</div>
+              <div class="card-meta">${escapeHtml(meta)}</div>
+              ${payload ? `<pre class="json">${escapeHtml(payload)}</pre>` : '<p class="placeholder" style="padding:4px 0 0;">표시할 payload 가 없습니다.</p>'}
+            </div>`,
+          );
+        }
+
+        function pushCardFromPayload(title, payloadObj, description, metaExtra) {
+          const payload = payloadObj == null ? "" : JSON.stringify(payloadObj, null, 2);
+          const meta = metaExtra ? escapeHtml(metaExtra) : "";
+          parts.push(
+            `<div class="card">
+              <div class="card-title">${title}</div>
+              ${meta ? `<div class="card-meta">${meta}</div>` : ""}
+              ${payload ? `<pre class="json">${escapeHtml(payload)}</pre>` : '<p class="placeholder" style="padding:4px 0 0;">표시할 payload 가 없습니다.</p>'}
+            </div>`,
+          );
+        }
+
+        wfSummaryEl.innerHTML = `
+          <div class="section-header">
+            <h3>워크플로우 상세</h3>
+            <span>
+              workflowId: <code>${escapeHtml(workflowId)}</code>
+              ${problemId ? ` · 문제 ID: <code>${escapeHtml(String(problemId))}</code>` : ""}
+              · 이벤트 ${docs.length}건
+            </span>
+            <div style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:0.8rem;">
+              <span style="color:var(--muted);">뷰 모드</span>
+              <button type="button"
+                style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:${viewMode === "pretty" ? "var(--accent-soft)" : "transparent"};color:var(--text);cursor:pointer;font-size:0.8rem;"
+                onclick="window.__setWorkflowViewMode && window.__setWorkflowViewMode('pretty')">
+                읽기
+              </button>
+              <button type="button"
+                style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:${viewMode === "json" ? "var(--accent-soft)" : "transparent"};color:var(--text);cursor:pointer;font-size:0.8rem;"
+                onclick="window.__setWorkflowViewMode && window.__setWorkflowViewMode('json')">
+                JSON
+              </button>
+            </div>
+          </div>
+        `;
+
+        if (viewMode === "pretty") {
+          // CoT: 확정된 버전이 있으면 그 버전, 없으면 마지막 cot_output/cot_edit 기반
+          if (cotFinalizedDoc) {
+            const d = cotFinalizedDoc.data();
+            const omit = ["userId", "sessionId", "eventIndex", "timestamp", "eventType", "pathname", "workflowId", "phase", "stepId"];
+            const cotPayload = {};
+            for (const [k, v] of Object.entries(d)) {
+              if (omit.includes(k)) continue;
+              cotPayload[k] = v && typeof v === "object" && typeof v.toDate === "function" ? v.toDate().toLocaleString("ko-KR") : v;
+            }
+            const ts = formatTs(d.timestamp);
+            const meta = `cot_finalized · eventIndex: ${d.eventIndex ?? "-"} · ${ts}`;
+            const body = renderCotReadable(cotPayload);
+            parts.push(`
+              <div class="card">
+                <div class="card-title">CoT 최종 버전</div>
+                <div class="card-meta">${escapeHtml(meta)} · 하위문항 생성하기 시점 확정 버전</div>
+                ${body || '<p class="placeholder" style="padding:4px 0 0;">표시할 내용이 없습니다.</p>'}
+              </div>
+            `);
+          } else if (cotDoc) {
+            const d = cotDoc.data();
+            const ts = formatTs(d.timestamp);
+            const meta = `eventIndex: ${d.eventIndex ?? "-"} · ${ts} · eventType: ${d.eventType || "-"}`;
+            const payload = {};
+            const omit = ["userId", "sessionId", "eventIndex", "timestamp", "eventType", "pathname", "workflowId", "phase", "stepId"];
+            for (const [k, v] of Object.entries(d)) {
+              if (omit.includes(k)) continue;
+              payload[k] = v && typeof v === "object" && typeof v.toDate === "function" ? v.toDate().toLocaleString("ko-KR") : v;
+            }
+            const body = renderCotReadable(payload);
+            parts.push(`
+              <div class="card">
+                <div class="card-title">CoT 최종 버전</div>
+                <div class="card-meta">${escapeHtml(meta)} · edit 없으면 원본(cot_output), 있으면 수정(cot_edit)</div>
+                ${body || '<p class="placeholder" style="padding:4px 0 0;">표시할 내용이 없습니다.</p>'}
+              </div>
+            `);
+          } else {
+            pushCard("CoT 최종 버전", null, "CoT 로그가 없습니다.");
+          }
+
+          // 하위문항: 확정 이벤트가 있으면 그 버전, 없으면 이벤트로 복원한 최종 버전
+          if (finalSubQs.length) {
+            const meta =
+              finalizedSubQs !== null
+                ? "하위문항 확정 시점 버전 (sub_questions_finalized)"
+                : "확정 이벤트 없음 · 원본 → 선택(원본/재생성) → 직접 수정 반영 결과";
+            const body = renderSubQuestionsReadable(finalSubQs);
+            parts.push(`
+              <div class="card">
+                <div class="card-title">하위문항(guide_sub_questions) 최종 버전</div>
+                <div class="card-meta">${escapeHtml(meta)}</div>
+                ${body}
+              </div>
+            `);
+          } else {
+            const subqDoc = pickLastByPhase(docs, (d) => d.phase === "subq_generate" || d.phase === "subq_review" || (d.eventType || "").startsWith("sub_question_"));
+            pushCard("하위문항(guide_sub_questions) 최종 버전", subqDoc, "phase = subq_generate / subq_review / sub_question_*");
+          }
+
+          // 루브릭: 최종 구조를 읽기 좋게 렌더링, 없으면 이전처럼 마지막 이벤트 출력
+          if (finalRubrics) {
+            const meta = `edit 없으면 원본(rubric_generated), 있으면 rubric_level_edited / rubric_regenerated 반영`;
+            const body = renderRubricsReadable(finalRubrics);
+            parts.push(`
+              <div class="card">
+                <div class="card-title">루브릭(rubrics) 최종 버전</div>
+                <div class="card-meta">${escapeHtml(meta)}</div>
+                ${body}
+              </div>
+            `);
+          } else {
+            const rubricDoc = pickLastByPhase(docs, (d) => d.phase === "rubric" || (d.eventType || "").startsWith("rubric_"));
+            pushCard("루브릭(rubrics) 최종 버전", rubricDoc, "phase = rubric / eventType = rubric_*");
+          }
+        } else {
+          // JSON 모드: 최종 구조를 JSON으로 그대로 표시
+          if (cotFinalizedDoc) {
+            const d = cotFinalizedDoc.data();
+            const payload = formatPayloadForSummary(d);
+            const ts = formatTs(d.timestamp);
+            const meta = `cot_finalized · eventIndex: ${d.eventIndex ?? "-"} · ${ts}`;
+            parts.push(
+              `<div class="card">
+                <div class="card-title">CoT 최종 버전</div>
+                <div class="card-meta">${escapeHtml(meta)}</div>
+                ${payload ? `<pre class="json">${escapeHtml(payload)}</pre>` : '<p class="placeholder" style="padding:4px 0 0;">표시할 payload 가 없습니다.</p>'}
+              </div>`,
+            );
+          } else {
+            pushCard("CoT 최종 버전", cotDoc, "edit 없으면 원본(cot_output), 있으면 수정(cot_edit) 반영");
+          }
+
+          if (finalSubQs.length) {
+            pushCardFromPayload(
+              "하위문항(guide_sub_questions) 최종 버전",
+              finalSubQs,
+              "하위문항 확정하기 버튼으로 저장된 버전(확정 로그 없으면 이벤트 기반 복원)",
+              finalizedSubQs !== null ? "하위문항 확정 시점 버전 (sub_questions_finalized)" : "원본 → 선택(원본/재생성) → 직접 수정 반영",
+            );
+          } else {
+            const subqDoc = pickLastByPhase(docs, (d) => d.phase === "subq_generate" || d.phase === "subq_review" || (d.eventType || "").startsWith("sub_question_"));
+            pushCard("하위문항(guide_sub_questions) 최종 버전", subqDoc, "phase = subq_generate / subq_review / sub_question_*");
+          }
+
+          if (finalRubrics) {
+            pushCardFromPayload(
+              "루브릭(rubrics) 최종 버전",
+              finalRubrics,
+              "edit 없으면 원본(rubric_generated), 있으면 rubric_level_edited/rubric_regenerated 반영",
+              "원본 → 직접 수정/재생성 반영",
+            );
+          } else {
+            const rubricDoc = pickLastByPhase(docs, (d) => d.phase === "rubric" || (d.eventType || "").startsWith("rubric_"));
+            pushCard("루브릭(rubrics) 최종 버전", rubricDoc, "phase = rubric / eventType = rubric_*");
+          }
+        }
+
+        wfSummaryEl.innerHTML += parts.join("");
+      }
+
+      document.getElementById("loadBtn").addEventListener("click", loadUserLogs);
+      document.getElementById("dateSelect").addEventListener("change", handleDateChange);
+
+      // 전역에서 뷰 모드 변경용 (헤더 버튼에서 호출)
+      window.__setWorkflowViewMode = (mode) => {
+        if (mode !== "pretty" && mode !== "json") return;
+        viewMode = mode;
+        if (lastWorkflowId) {
+          renderWorkflowSummary(lastWorkflowId);
+        }
+      };
+    </script>
+  </body>
+</html>
+
