@@ -86,7 +86,7 @@ interface FormData {
 }
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId } = useApp();
+  const { setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId, setCurrentRubrics } = useApp();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
   /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
@@ -107,33 +107,46 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   /** num1~5 중 하나 선택 시 "문제 불러오기" 버튼 활성화 */
   const canLoadLocal = !!(selectedProblem && isNum1To5(selectedProblem));
 
-  /** 문제 불러오기: 파이프라인 없이 로컬 _cot.json + _suqQ.json 로드 후 2·3단계 탭 채움 */
+  /** 문제 불러오기: 파이프라인 없이 로컬 _cot.json + _subQ.json(+ 선택 _rubric.json) 로드 후 2·3·4단계 탭 채움 */
   const handleLoadLocal = async () => {
     if (!canLoadLocal) return;
     const base = selectedProblem!.replace(/\.json$/i, "");
     const cotKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_cot.json`));
-    const subQKey =
-      Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`)) ??
-      Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_subQ.json`));
+    const subQKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`)) ?? Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_subQ.json`));
     if (!cotKey || !subQKey) {
       setError(`해당 문제의 ${base}_cot.json 및 ${base}_suqQ.json(또는 _subQ.json) 파일이 data/에 없습니다.`);
       return;
     }
+    const rubricKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_rubric.json`));
     setLoadLocalLoading(true);
     setError(null);
     try {
-      const [cotMod, subQMod] = await Promise.all([dataJsonGlob[cotKey](), dataJsonGlob[subQKey]()]);
-      const cotRaw = (cotMod as any).default as Record<string, unknown>;
-      const subQRaw = (subQMod as any).default as Record<string, unknown>;
+      const loadPromises: Promise<unknown>[] = [dataJsonGlob[cotKey](), dataJsonGlob[subQKey]()];
+      if (rubricKey) loadPromises.push(dataJsonGlob[rubricKey]());
+      const results = await Promise.all(loadPromises);
+      const cotRaw = (results[0] as any).default as Record<string, unknown>;
+      const subQRaw = (results[1] as any).default as Record<string, unknown>;
       const cotData = normalizeCotFromFile(cotRaw) as any;
       const guidelineData = guidelineFromSubQFile(subQRaw, base + ".json") as any;
       const problemId = selectedProblem || base + ".json";
+
+      let rubrics: any[] | null = null;
+      if (rubricKey && results[2] != null) {
+        const rubricData = (results[2] as any).default as Record<string, unknown> | unknown[];
+        if (Array.isArray(rubricData)) {
+          rubrics = rubricData;
+        } else if (rubricData && typeof rubricData === "object" && Array.isArray((rubricData as any).rubrics)) {
+          rubrics = (rubricData as any).rubrics;
+        }
+      }
+
       setCurrentProblemId(problemId);
       setCurrentGuidelineData(null as any);
       setCurrentCotData(cotData);
       setCurrentGuidelineData(guidelineData);
-      setCurrentStep(3);
-      saveResult(problemId, cotData, null, guidelineData, null, null);
+      if (setCurrentRubrics) setCurrentRubrics(rubrics);
+      setCurrentStep(rubrics?.length ? 4 : 3);
+      saveResult(problemId, cotData, null, guidelineData, null, rubrics);
     } catch (err: any) {
       setError(err?.message ?? "로컬 문제 불러오기 실패");
     } finally {
