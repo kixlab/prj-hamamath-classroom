@@ -953,6 +953,10 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
+                  {!problemIdForDiagnosis ? (
+                    <p className={styles.mainProblemEmpty}>상단에서 진단할 문제를 선택해 주세요.</p>
+                  ) : (
+                    <>
                   <header className={styles.studentHeader}>
                     <div className={styles.studentHeaderTop}>
                       <h3 className={styles.studentTitle}>학생 답안 입력</h3>
@@ -1147,6 +1151,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                     </>
                   ) : (
                     <p className={styles.empty}>먼저 상단에서 문제를 선택하고, 좌측에서 하위문항을 불러와 주세요.</p>
+                  )}
+                    </>
                   )}
                 </div>
               </section>
