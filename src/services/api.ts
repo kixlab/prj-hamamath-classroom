@@ -364,7 +364,7 @@ export const api = {
     }
     const list = await response.json();
     return { items: Array.isArray(list) ? list : [] };
-  }
+  },
 
   /** 진단 결과 일괄 저장 (서버/다른 기기 동기화용) */
   async saveDiagnosisResults(payload: {
