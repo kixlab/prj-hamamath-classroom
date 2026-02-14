@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
 import { initEventLogger, stopEventLogger } from './services/eventLogger';
+import { loadResult } from './hooks/useStorage';
+import { getApiUrl } from './services/api';
+import { getHistoryHeaders } from './hooks/useStorage';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
@@ -23,8 +26,60 @@ interface AppContentProps {
 const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const [showAdminDbView, setShowAdminDbView] = useState(false);
   const [showStudentDiagnosis, setShowStudentDiagnosis] = useState(false);
-  const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, loading, error, reset } = useApp();
+  const restoredOnce = useRef(false);
+  const {
+    currentProblemId,
+    currentStep,
+    setCurrentStep,
+    currentCotData,
+    currentGuidelineData,
+    loading,
+    error,
+    reset,
+    setCurrentProblemId,
+    setCurrentCotData,
+    setCurrentSubQData,
+    setCurrentGuidelineData,
+    setPreferredVersion,
+    setCurrentRubrics,
+  } = useApp();
   const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
+
+  // 다른 기기/브라우저에서 동일 ID로 로그인 시 서버에 저장된 최근 결과 자동 복원
+  useEffect(() => {
+    if (showAdminDbView || showStudentDiagnosis) return;
+    if (currentCotData !== null || currentProblemId !== null) return;
+    if (restoredOnce.current) return;
+    restoredOnce.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch(getApiUrl('/api/v1/history/list'), { headers: getHistoryHeaders() });
+        if (!resp.ok || cancelled) return;
+        const list = await resp.json();
+        if (!Array.isArray(list) || list.length === 0) return;
+        const mostRecent = list[0];
+        const problemId = mostRecent.problem_id ?? mostRecent.problemId;
+        if (!problemId) return;
+        const result = await loadResult(problemId);
+        if (cancelled || !result) return;
+        setCurrentProblemId(result.problemId ?? problemId);
+        setCurrentCotData(result.cotData ?? null);
+        setCurrentSubQData(result.subQData ?? null);
+        setCurrentGuidelineData(result.guidelineData ?? null);
+        if (setPreferredVersion) setPreferredVersion(result.preferredVersion ?? {});
+        if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
+        if (result.guidelineData && result.cotData) setCurrentStep(3);
+        else if (result.subQData && result.cotData) setCurrentStep(2);
+        else if (result.cotData) setCurrentStep(2);
+      } catch (e) {
+        if (!cancelled) console.warn('최근 저장 결과 복원 실패:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, showAdminDbView, showStudentDiagnosis, currentCotData, currentProblemId]);
 
   const handleNewProblem = () => {
     reset();

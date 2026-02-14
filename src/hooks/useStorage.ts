@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CoTData, GuidelineData } from '../types';
 import { USER_ID_STORAGE_KEY } from '../components/UserIdPage/UserIdPage';
+import { getApiUrl } from '../services/api';
 
 const STORAGE_KEY_PREFIX = 'hamamath_saved_results';
 const LAST_PROBLEM_KEY_PREFIX = 'hamamath_last_problem_id';
@@ -48,40 +49,58 @@ export function getSavedResults(): SavedResults {
   }
 }
 
+/** 서버 응답을 SavedResult 형태로 정규화 (snake_case → camelCase 등) */
+function normalizeServerResult(serverItem: Record<string, unknown>): SavedResult {
+  return {
+    problemId: (serverItem.problem_id as string) ?? (serverItem.problemId as string),
+    timestamp: (serverItem.timestamp as string) ?? '',
+    cotData: (serverItem.cot_data ?? serverItem.cotData) as SavedResult['cotData'],
+    subQData: (serverItem.subq_data ?? serverItem.subQData) as SavedResult['subQData'],
+    guidelineData: (serverItem.guideline_data ?? serverItem.guidelineData) as SavedResult['guidelineData'],
+    preferredVersion: (serverItem.preferred_version ?? serverItem.preferredVersion) as SavedResult['preferredVersion'],
+    rubrics: (serverItem.rubrics as SavedResult['rubrics']) ?? null,
+  };
+}
+
 export async function loadResult(problemId: string): Promise<SavedResult | null> {
-  // 먼저 localStorage에서 확인
+  const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
   const savedResults = getSavedResults();
-  let result = savedResults[problemId];
-  
-  // localStorage에 없으면 서버에서 불러오기
-  if (!result) {
+
+  // 동일 ID로 다른 기기/브라우저에서도 같은 내용이 보이도록 서버를 먼저 조회
+  if (uid) {
     try {
-      const response = await fetch(`/api/v1/history/${encodeURIComponent(problemId)}`, {
+      const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
         headers: getHistoryHeaders(),
       });
       if (response.ok) {
-        result = await response.json();
-        // 서버에서 불러온 결과를 localStorage에도 저장
+        const data = await response.json();
+        const result = normalizeServerResult(data);
         savedResults[problemId] = result;
-        localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
-        localStorage.setItem(getLastProblemKey(), problemId);
-      } else if (response.status === 404) {
-        console.warn(`문제 ID '${problemId}'에 대한 저장된 결과를 찾을 수 없습니다.`);
-        return null;
+        try {
+          localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
+          localStorage.setItem(getLastProblemKey(), problemId);
+        } catch {
+          // 로컬 캐시 실패해도 서버 결과는 반환
+        }
+        return result;
+      }
+      if (response.status === 404) {
+        // 서버에 없으면 아래에서 로컬 fallback
       } else {
         console.error(`서버에서 결과를 불러오는 중 오류 발생: ${response.status}`);
-        return null;
       }
     } catch (err) {
-      console.error('서버에서 결과를 불러오는 중 오류:', err);
-      return null;
+      console.warn('서버에서 결과를 불러오는 중 오류:', err);
+      // 네트워크 오류 시 로컬 fallback
     }
   }
 
-  if (!result) return null;
-  
-  localStorage.setItem(getLastProblemKey(), problemId);
-  return result;
+  const local = savedResults[problemId];
+  if (local) {
+    localStorage.setItem(getLastProblemKey(), problemId);
+    return local;
+  }
+  return null;
 }
 
 export async function deleteResult(problemId: string): Promise<void> {
@@ -92,7 +111,7 @@ export async function deleteResult(problemId: string): Promise<void> {
 
   // 서버에서도 삭제
   try {
-    const response = await fetch(`/api/v1/history/${encodeURIComponent(problemId)}`, {
+    const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
       method: 'DELETE',
       headers: getHistoryHeaders(),
     });
@@ -156,7 +175,7 @@ export function saveResult(
     localStorage.setItem(getLastProblemKey(), problemId);
     
     // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리)
-    fetch('/api/v1/history/save', {
+    fetch(getApiUrl('/api/v1/history/save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getHistoryHeaders() },
       body: JSON.stringify(resultData),

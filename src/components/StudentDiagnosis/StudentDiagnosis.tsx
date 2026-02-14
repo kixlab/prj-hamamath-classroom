@@ -33,8 +33,7 @@ interface ProblemStepSummary {
   feedbackByDisplayCode?: Record<string, string>;
 }
 
-// 학생 진단 상태를 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
-const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`; // 구버전 호환용
+// 학생 진단 UI 상태(선택된 문제/학생)만 로컬에 보관
 const getStudentDiagnosisStateKey = (userId: string) => `hamamath_student_diagnosis_state_${userId}`;
 
 export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => {
@@ -219,25 +218,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
 
-  // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
+  // UI 상태만 로컬에서 복원 (다른 기기와 공유할 데이터는 서버 기준)
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(getStudentDiagnosisStateKey(userId));
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === "object") {
-          if (parsed.studentAnswers && typeof parsed.studentAnswers === "object") {
-            setStudentAnswers(parsed.studentAnswers);
-          }
-          if (parsed.diagnosisResults && typeof parsed.diagnosisResults === "object") {
-            setDiagnosisResults(parsed.diagnosisResults);
-          }
-          if (parsed.canDiagnose && typeof parsed.canDiagnose === "object") {
-            setCanDiagnose(parsed.canDiagnose);
-          }
-          if (parsed.studentProblemSummaries && typeof parsed.studentProblemSummaries === "object") {
-            setStudentProblemSummaries(parsed.studentProblemSummaries);
-          }
           if (parsed.currentStudentId && typeof parsed.currentStudentId === "string") {
             setCurrentStudentId(parsed.currentStudentId);
           }
@@ -245,42 +232,59 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             setSelectedProblemId(parsed.selectedProblemId);
           }
         }
-      } else {
-        // 구버전(답안만 저장)과의 호환
-        const legacyRaw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
-        if (legacyRaw) {
-          const legacyParsed = JSON.parse(legacyRaw);
-          if (legacyParsed && typeof legacyParsed === "object") {
-            setStudentAnswers(legacyParsed);
-          }
-        }
       }
     } catch (err) {
-      console.error("저장된 학생 진단 상태를 불러오는 중 오류:", err);
+      console.error("저장된 진단 UI 상태 불러오기 오류:", err);
     }
   }, [userId]);
 
-  // 서버에 저장된 학생 답안 불러와서 복원 (새로고침 후 빈 화면 방지)
+  // 서버에 저장된 학생 답안을 기준으로 복원 (다른 기기/브라우저 동기화)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { items } = await api.getStudentAnswersList();
-        if (cancelled || !items?.length) return;
-        setStudentAnswers((prev) => {
-          const next = JSON.parse(JSON.stringify(prev));
-          for (const item of items) {
-            if (!item.student_id || !item.problem_id) continue;
-            if (!next[item.student_id]) next[item.student_id] = {};
-            const existing = next[item.student_id][item.problem_id];
-            if (!existing || Object.keys(existing).length === 0) {
-              next[item.student_id][item.problem_id] = { ...(item.answers || {}) };
-            }
-          }
-          return next;
-        });
+        if (cancelled) return;
+        const next: Record<string, Record<string, Record<string, string>>> = {};
+        for (const item of items || []) {
+          if (!item.student_id || !item.problem_id) continue;
+          if (!next[item.student_id]) next[item.student_id] = {};
+          next[item.student_id][item.problem_id] = { ...(item.answers || {}) };
+        }
+        setStudentAnswers(next);
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안 목록 불러오기 오류:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // 서버에 저장된 진단 결과를 기준으로 복원 (다른 기기/브라우저 동기화)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { items } = await api.getDiagnosisResultsList();
+        if (cancelled || !items?.length) return;
+        const next: Record<string, Record<string, Record<string, { level: string; reason: string }>>> = {};
+        const canDiagnoseNext: Record<string, Record<string, boolean>> = {};
+        for (const row of items) {
+          const sid = row.student_id;
+          const pid = row.problem_id;
+          const subId = row.sub_question_id;
+          if (!sid || !pid || !subId) continue;
+          if (!next[sid]) next[sid] = {};
+          if (!next[sid][pid]) next[sid][pid] = {};
+          next[sid][pid][subId] = { level: row.level || "", reason: row.reason || "" };
+          if (!canDiagnoseNext[sid]) canDiagnoseNext[sid] = {};
+          canDiagnoseNext[sid][pid] = true;
+        }
+        setDiagnosisResults(next);
+        setCanDiagnose(canDiagnoseNext);
+      } catch (err) {
+        if (!cancelled) console.error("저장된 진단 결과 목록 불러오기 오류:", err);
       }
     })();
     return () => {
@@ -430,6 +434,18 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           [currentStudentId]: perStudent,
         };
       });
+
+      // 서버에 진단 결과 저장 (다른 기기/브라우저 동기화)
+      try {
+        await api.saveDiagnosisResults({
+          user_id: userId,
+          problem_id: problemIdForDiagnosis,
+          student_id: currentStudentId,
+          results: newResultsForStudent,
+        });
+      } catch (err: any) {
+        console.warn("진단 결과 서버 저장 실패:", err);
+      }
 
       // 이 학생의 현재 문제에 대한 단계별 수준·피드백 요약 저장 (표·리포트용)
       const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};

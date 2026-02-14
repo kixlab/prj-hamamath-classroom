@@ -336,6 +336,57 @@ export const api = {
     return response.json();
   },
 
+  /** 현재 사용자의 진단 결과 목록 (다른 기기/브라우저 동기화용) */
+  async getDiagnosisResultsList(params?: {
+    problem_id?: string;
+    student_id?: string;
+  }): Promise<{
+    items: Array<{
+      user_id: string;
+      problem_id: string;
+      student_id: string;
+      sub_question_id: string;
+      level: string;
+      reason: string;
+      created_at?: string;
+    }>;
+  }> {
+    const q = new URLSearchParams();
+    if (params?.problem_id) q.set("problem_id", params.problem_id);
+    if (params?.student_id) q.set("student_id", params.student_id);
+    const url = getApiUrl("/api/v1/diagnosis/results" + (q.toString() ? `?${q}` : ""));
+    const response = await fetch(url, { headers: getHistoryHeaders() });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 결과 목록을 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    const list = await response.json();
+    return { items: Array.isArray(list) ? list : [] };
+  }
+
+  /** 진단 결과 일괄 저장 (서버/다른 기기 동기화용) */
+  async saveDiagnosisResults(payload: {
+    user_id: string;
+    problem_id: string;
+    student_id: string;
+    results: Record<string, { level: string; reason: string }>;
+  }): Promise<{ status: string }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/results/save"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 결과를 저장하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  }
+
   // 학생 진단: 학생 답안 상/중/하 채점
   async diagnoseStudentAnswer(payload: {
     problem_id: string;

@@ -1,6 +1,7 @@
 import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult, getHistoryHeaders } from '../../hooks/useStorage';
+import { getApiUrl } from '../../services/api';
 import { isAdmin } from '../../utils/admin';
 import styles from './Sidebar.module.css';
 
@@ -9,7 +10,6 @@ interface SavedResultItem {
   timestamp: string;
   dateStr: string;
   status: string[];
-  source: 'local' | 'server';
 }
 
 interface SidebarProps {
@@ -45,105 +45,45 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
   }, [sidebarOpen]);
 
   const updateSavedResultsList = async () => {
-    const saved = getSavedResults();
-    const localProblemIds = Object.keys(saved).sort((a, b) => {
-      return new Date(saved[b].timestamp || 0).getTime() - new Date(saved[a].timestamp || 0).getTime();
-    });
-
-    // 서버 목록도 가져오기
-    let serverResults: any[] = [];
+    // 다른 기기/브라우저에서도 동일 ID로 같은 목록이 보이도록 서버를 단일 기준으로 사용
+    let serverResults: Array<{ problem_id: string; timestamp: string; has_cot?: boolean; has_subq?: boolean; has_guideline?: boolean }> = [];
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
-      
-      const resp = await fetch('/api/v1/history/list', {
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(getApiUrl('/api/v1/history/list'), {
         signal: controller.signal,
         headers: getHistoryHeaders(),
       });
       clearTimeout(timeoutId);
-      
       if (resp.ok) {
-        const serverData = await resp.json();
-        if (Array.isArray(serverData)) {
-          serverResults = serverData;
-        }
+        const data = await resp.json();
+        if (Array.isArray(data)) serverResults = data;
       }
     } catch (err: any) {
-      // 네트워크 에러나 타임아웃은 조용히 무시 (백엔드 서버가 없을 수 있음)
-      if (err.name !== 'AbortError') {
-        // AbortError가 아닌 경우에만 로그 (타임아웃은 정상)
+      if (err?.name !== 'AbortError') {
+        console.warn('저장 목록 조회 실패:', err);
       }
     }
 
-    // localStorage와 서버 결과 병합
-    const allResults: SavedResultItem[] = [];
-    const seenIds = new Set<string>();
-
-    // localStorage 결과 먼저 추가
-    for (const problemId of localProblemIds) {
-      if (!seenIds.has(problemId)) {
-        const result = saved[problemId];
-        const date = new Date(result.timestamp || 0);
-        const dateStr = date.toLocaleString('ko-KR', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-        const hasCot = !!result.cotData;
-        const hasSubQ = !!result.subQData;
-        const hasGuideline = !!result.guidelineData;
-        const hasRubrics = !!(result as any).rubrics?.length;
-        const status: string[] = [];
-        if (hasCot) status.push('CoT');
-        if (hasSubQ) status.push('하위문항');
-        if (hasGuideline) status.push('Guideline');
-        if (hasRubrics) status.push('루브릭');
-
-        allResults.push({
-          problemId: problemId,
-          timestamp: result.timestamp || date.toISOString(),
-          dateStr: dateStr,
-          status: status,
-          source: 'local',
-        });
-        seenIds.add(problemId);
-      }
-    }
-
-    // 서버 결과 추가
-    for (const item of serverResults) {
-      if (!seenIds.has(item.problem_id)) {
-        const date = new Date(item.timestamp);
-        const dateStr = date.toLocaleString('ko-KR', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-        const status: string[] = [];
-        if (item.has_cot) status.push('CoT');
-        if (item.has_subq) status.push('하위문항');
-        if (item.has_guideline) status.push('Guideline');
-
-        allResults.push({
-          problemId: item.problem_id,
-          timestamp: item.timestamp,
-          dateStr: dateStr,
-          status: status,
-          source: 'server',
-        });
-        seenIds.add(item.problem_id);
-      }
-    }
-
-    // 타임스탬프 기준 정렬
-    allResults.sort((a, b) => {
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    const allResults: SavedResultItem[] = serverResults.map((item) => {
+      const pid = item.problem_id ?? (item as any).problemId;
+      const ts = item.timestamp ?? '';
+      const date = new Date(ts);
+      const dateStr = date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const status: string[] = [];
+      if (item.has_cot) status.push('CoT');
+      if (item.has_subq) status.push('하위문항');
+      if (item.has_guideline) status.push('Guideline');
+      return { problemId: pid, timestamp: ts, dateStr, status };
     });
 
+    allResults.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     setSavedResults(allResults);
   };
 
