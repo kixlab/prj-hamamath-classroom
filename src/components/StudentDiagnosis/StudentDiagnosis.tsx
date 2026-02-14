@@ -1194,9 +1194,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                         </table>
                         <div className={styles.reportGraphList}>
                           {(() => {
-                            const sorted = [...reportData.step_rows].sort((a, b) =>
-                              a.display_code.localeCompare(b.display_code, undefined, { numeric: true })
-                            );
+                            const sorted = [...reportData.step_rows].sort((a, b) => a.display_code.localeCompare(b.display_code, undefined, { numeric: true }));
                             const byGroup: Record<string, typeof sorted> = {};
                             sorted.forEach((row) => {
                               const g = getStepGroupInfo(row.display_code).group;
@@ -1208,8 +1206,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                               const rows = byGroup[g] || [];
                               if (rows.length === 0) return null;
                               const stageLabel = STEP_GROUP_LABELS[g] || `${g}단계`;
-                              const groupClass =
-                                g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
+                              const groupClass = g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
                               return (
                                 <div key={`graph-group-${g}`} className={styles.reportGraphGroup}>
                                   <div className={`${styles.reportGraphGroupTitle} ${groupClass}`}>{stageLabel}</div>
@@ -1241,16 +1238,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                             </div>
                                           </div>
                                           <div className={styles.reportGraphBar}>
-                                            <div
-                                              className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`}
-                                              style={{ width: `${score_100}%` }}
-                                            />
+                                            <div className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`} style={{ width: `${score_100}%` }} />
                                           </div>
-                                          {row.feedback_summary && (
-                                            <p className={styles.reportGraphFeedbackSummary}>
-                                              {row.feedback_summary}
-                                            </p>
-                                          )}
+                                          {row.feedback_summary && <p className={styles.reportGraphFeedbackSummary}>{row.feedback_summary}</p>}
                                         </div>
                                       );
                                     })}
