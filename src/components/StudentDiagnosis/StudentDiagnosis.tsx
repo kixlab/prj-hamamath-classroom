@@ -253,13 +253,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           if (parsed.selectedProblemId && typeof parsed.selectedProblemId === "string") {
             setSelectedProblemId(parsed.selectedProblemId);
           }
-          if (Array.isArray(parsed.students) && parsed.students.length > 0) {
-            setStudents(
-              parsed.students.filter(
-                (s: any) => s && typeof s.id === "string" && typeof s.name === "string"
-              )
-            );
-          }
+          // 학생 목록은 서버(getStudentList)만 소스로 사용. localStorage에서는 복원하지 않음 → 삭제 후 재접속 시 서버 목록과 일치
         }
       } else {
         // 구버전(답안만 저장)과의 호환
@@ -276,17 +270,18 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   }, [userId]);
 
-  // 서버에 저장된 학생 목록 불러오기 (다른 브라우저에서 왼쪽 패널 복원)
+  // 서버에 저장된 학생 목록 불러오기 (단일 소스: 삭제 반영·다른 브라우저 복원)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { students: serverStudents } = await api.getStudentList();
         if (cancelled) return;
-        if (Array.isArray(serverStudents) && serverStudents.length > 0) {
-          setStudents(
-            serverStudents.filter((s: any) => s && s.id).map((s: any) => ({ id: s.id, name: s.name || s.id }))
-          );
+        if (Array.isArray(serverStudents)) {
+          const list = serverStudents
+            .filter((s: any) => s && s.id)
+            .map((s: any) => ({ id: s.id, name: s.name || s.id }));
+          setStudents(list.length > 0 ? list : [{ id: "student-1", name: "학생 1" }]);
         }
       } catch (err) {
         if (!cancelled) console.warn("학생 목록 불러오기 오류:", err);
@@ -297,14 +292,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     };
   }, [userId]);
 
-  // 서버에 저장된 학생 답안 불러와서 복원 (다른 브라우저/기기에서도 접근 가능)
+  // 서버에 저장된 학생 답안 불러와서 복원 (다른 브라우저/기기에서도 접근 가능). 학생 목록은 건드리지 않음(삭제 반영 유지).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { items } = await api.getStudentAnswersList();
         if (cancelled || !items?.length) return;
-        const uniqueStudentIds = Array.from(new Set(items.map((i) => i.student_id).filter(Boolean)));
         setStudentAnswers((prev) => {
           const next = JSON.parse(JSON.stringify(prev));
           for (const item of items) {
@@ -316,24 +310,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             }
           }
           return next;
-        });
-        setStudents((prev) => {
-          const existingIds = new Set(prev.map((s) => s.id));
-          const nameById = new Map<string, string>();
-          for (const item of items) {
-            if (item.student_id && (item as any).student_name?.trim()) {
-              nameById.set(item.student_id, (item as any).student_name.trim());
-            }
-          }
-          const toAdd = uniqueStudentIds.filter((id) => !existingIds.has(id));
-          if (toAdd.length === 0) return prev;
-          return [
-            ...prev,
-            ...toAdd.map((id, idx) => ({
-              id,
-              name: nameById.get(id) || `학생 ${prev.length + idx + 1}`,
-            })),
-          ];
         });
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안 목록 불러오기 오류:", err);
@@ -429,7 +405,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name }))).catch((err) => console.warn("학생 목록 저장 실패:", err));
   };
 
-  const handleDeleteStudent = (studentId: string, e: React.MouseEvent) => {
+  const handleDeleteStudent = async (studentId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (students.length <= 1) {
       alert("마지막 학생은 삭제할 수 없습니다.");
@@ -459,10 +435,16 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       return next;
     });
     if (currentStudentId === studentId) {
-      const firstRemaining = nextList[0]?.id;
-      setCurrentStudentId(firstRemaining ?? "");
+      setCurrentStudentId(nextList[0]?.id ?? "");
     }
-    api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name }))).catch((err) => console.warn("학생 목록 저장 실패:", err));
+    try {
+      await api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name })));
+    } catch (err: any) {
+      console.error("학생 목록 저장 실패:", err);
+      alert("삭제한 내용을 서버에 저장하지 못했습니다. 새로고침 시 목록이 다시 보일 수 있습니다. 다시 시도해 주세요.");
+      setStudents(students);
+      setCurrentStudentId(currentStudentId);
+    }
   };
 
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
