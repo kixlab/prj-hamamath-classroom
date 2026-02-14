@@ -478,10 +478,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   // 현재 학생의 모든 하위문항(답안이 있는 것만)을 한 번에 진단
   const handleRunDiagnosisForAll = async () => {
-    if (!problemIdForDiagnosis) {
-      alert("먼저 진단할 문제를 선택해 주세요.");
-      return;
-    }
     if (!currentStudentId) {
       alert("학생 정보를 먼저 선택해 주세요.");
       return;
@@ -492,10 +488,15 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
 
     const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
+    const itemsWithAnswer = diagnosisItems.filter((item) => (answersForStudent[item.id] ?? "").trim().length > 0);
     const targetItems = diagnosisItems.filter((item) => item.rubric && item.rubric.levels?.length && (answersForStudent[item.id] ?? "").trim().length > 0);
 
     if (!targetItems.length) {
-      alert("답안이 입력된 하위문항이 없습니다. 먼저 학생 답안을 입력해 주세요.");
+      if (itemsWithAnswer.length > 0) {
+        alert("답안은 입력되었으나, 이 문제에 대한 루브릭이 없습니다. 문항 생성 4단계에서 루브릭을 저장한 뒤 다시 시도해 주세요.");
+      } else {
+        alert("답안이 입력된 하위문항이 없습니다. 먼저 학생 답안을 입력해 주세요.");
+      }
       return;
     }
 
@@ -521,7 +522,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
         try {
           const result = await api.diagnoseStudentAnswer({
-            problem_id: problemIdForDiagnosis,
+            problem_id: problemIdForDiagnosis ?? currentProblemId ?? "__current__",
             sub_question_id: item.id,
             question: item.question,
             correct_answer: item.answer,
@@ -561,11 +562,11 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         }
       });
 
-      if (Object.keys(levelOnlyByDisplayCode).length > 0 && problemIdForDiagnosis) {
+      if (Object.keys(levelOnlyByDisplayCode).length > 0) {
         setStudentProblemSummaries((prev) => {
           const perStudent = { ...(prev[currentStudentId] ?? {}) };
-          perStudent[problemIdForDiagnosis] = {
-            problemId: problemIdForDiagnosis,
+          perStudent[currentProblemKey] = {
+            problemId: currentProblemKey,
             levelsByDisplayCode: levelOnlyByDisplayCode,
             feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
           };
