@@ -13,10 +13,33 @@ function getStorageKey(): string {
   return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
 }
 
+/** HTTP 헤더 값은 ISO-8859-1만 허용. 한글 등이 있으면 Base64로 인코딩해 반환 (다른 커스텀 헤더용 export) */
+export function encodeForHeader(value: string): { value: string; encoding?: 'base64' } {
+  if (!value || !value.trim()) return { value: '' };
+  const trimmed = value.trim();
+  const isLatin1 = [...trimmed].every((c) => c.charCodeAt(0) < 256);
+  if (isLatin1) return { value: trimmed };
+  try {
+    return { value: btoa(unescape(encodeURIComponent(trimmed))), encoding: 'base64' };
+  } catch {
+    const fallback = trimmed.replace(/[^\x00-\xFF]/g, '?');
+    return { value: fallback };
+  }
+}
+
+/** X-User-Id 헤더용 객체 반환 (한글 등 비-Latin1이면 Base64 + X-User-Id-Encoding: base64). 백엔드에서 디코딩 필요 */
+export function encodeUserIdForHeader(uid: string): Record<string, string> {
+  if (!uid?.trim()) return {};
+  const { value, encoding } = encodeForHeader(uid);
+  const h: Record<string, string> = { 'X-User-Id': value };
+  if (encoding) h['X-User-Id-Encoding'] = encoding;
+  return h;
+}
+
 /** history API 호출 시 서버에 유저별 저장을 위해 X-User-Id 헤더 반환 */
 export function getHistoryHeaders(): Record<string, string> {
   const uid = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_ID_STORAGE_KEY) : null;
-  return uid ? { 'X-User-Id': uid } : {};
+  return encodeUserIdForHeader(uid ?? '');
 }
 
 function getLastProblemKey(): string {

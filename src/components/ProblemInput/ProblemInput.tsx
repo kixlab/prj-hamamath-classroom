@@ -10,6 +10,48 @@ import example1Image from "../../../data/example1.png";
 import example2Data from "../../../data/example2.json";
 import example2Image from "../../../data/example2.png";
 
+/** data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
+const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/*.json");
+
+/** 드롭다운에 표시할 문제: example1, example2, num1~num5 만 */
+const DROPDOWN_OPTIONS = ["num1.json", "num2.json", "num3.json", "num4.json", "num5.json"] as const;
+const isNum1To5 = (v: string) => DROPDOWN_OPTIONS.includes(v as any);
+
+/** _cot.json 형식(steps에 step_content만) → 앱 CoTData 형식 */
+function normalizeCotFromFile(cot: Record<string, unknown>): Record<string, unknown> {
+  const steps = cot.steps as Array<{ step_content?: string; step_number?: number; step_title?: string }> | undefined;
+  if (!Array.isArray(steps)) return cot;
+  return {
+    ...cot,
+    steps: steps.map((s, i) => ({
+      step_number: s.step_number ?? i + 1,
+      step_title: s.step_title ?? `단계 ${i + 1}`,
+      step_content: s.step_content ?? "",
+    })),
+  };
+}
+
+/** _suqQ.json 형식(finalized_sub_questions, final_question/final_answer) → 앱 guidelineData 형식 */
+function guidelineFromSubQFile(data: Record<string, unknown>, problemId: string): Record<string, unknown> {
+  const fq = data.finalized_sub_questions as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(fq) || fq.length === 0) return { problem_id: problemId, grade: "", subject_area: "", guide_sub_questions: [] };
+  const guide_sub_questions = fq.map((q: Record<string, unknown>) => ({
+    sub_question_id: q.sub_question_id,
+    step_id: q.step_id,
+    sub_skill_id: q.sub_skill_id,
+    step_name: q.step_name ?? "",
+    sub_skill_name: q.sub_skill_name ?? "",
+    guide_sub_question: q.guide_sub_question ?? q.final_question ?? "",
+    guide_sub_answer: q.guide_sub_answer ?? q.final_answer ?? "",
+  }));
+  return {
+    problem_id: problemId,
+    grade: (data.grade as string) ?? "",
+    subject_area: (data as any).subject_area ?? "",
+    guide_sub_questions,
+  };
+}
+
 const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
 /** 문제 ID를 입력하지 않았을 때 사용할 순차 번호 반환 (1, 2, 3, ...) */
@@ -60,6 +102,42 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     imgDescription: "",
   });
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [loadLocalLoading, setLoadLocalLoading] = useState(false);
+
+  /** num1~5 중 하나 선택 시 "문제 불러오기" 버튼 활성화 */
+  const canLoadLocal = !!(selectedProblem && isNum1To5(selectedProblem));
+
+  /** 문제 불러오기: 파이프라인 없이 로컬 _cot.json + _suqQ.json 로드 후 2·3단계 탭 채움 */
+  const handleLoadLocal = async () => {
+    if (!canLoadLocal) return;
+    const base = selectedProblem!.replace(/\.json$/i, "");
+    const cotKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_cot.json`));
+    const subQKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`));
+    if (!cotKey || !subQKey) {
+      setError(`해당 문제의 ${base}_cot.json 또는 ${base}_suqQ.json 파일이 data/에 없습니다.`);
+      return;
+    }
+    setLoadLocalLoading(true);
+    setError(null);
+    try {
+      const [cotMod, subQMod] = await Promise.all([dataJsonGlob[cotKey](), dataJsonGlob[subQKey]()]);
+      const cotRaw = (cotMod as any).default as Record<string, unknown>;
+      const subQRaw = (subQMod as any).default as Record<string, unknown>;
+      const cotData = normalizeCotFromFile(cotRaw) as any;
+      const guidelineData = guidelineFromSubQFile(subQRaw, base + ".json") as any;
+      const problemId = selectedProblem || base + ".json";
+      setCurrentProblemId(problemId);
+      setCurrentGuidelineData(null as any);
+      setCurrentCotData(cotData);
+      setCurrentGuidelineData(guidelineData);
+      setCurrentStep(3);
+      saveResult(problemId, cotData, null, guidelineData, null, null);
+    } catch (err: any) {
+      setError(err?.message ?? "로컬 문제 불러오기 실패");
+    } finally {
+      setLoadLocalLoading(false);
+    }
+  };
 
   /** 이미지 URL을 base64 data URL로 변환 (API는 base64만 허용) */
   const urlToBase64 = (url: string): Promise<string> =>
@@ -109,6 +187,27 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             setFormData((prev) => (prev.imagePreview === example2Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
           })
           .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
+      }
+      return;
+    }
+
+    // data/ 폴더의 로컬 JSON (num1, num2 등)
+    const dataKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(filename));
+    if (dataKey) {
+      try {
+        const mod = await dataJsonGlob[dataKey]();
+        const data = mod.default as Record<string, unknown>;
+        setFormData((prev) => ({
+          ...prev,
+          problem: String(data.main_problem ?? ""),
+          answer: String(data.main_answer ?? ""),
+          solution: String(data.main_solution ?? ""),
+          grade: String(data.grade ?? ""),
+          imagePreview: null,
+          imageData: null,
+        }));
+      } catch (err) {
+        console.error("로컬 문제 데이터 로드 중 오류:", err);
       }
       return;
     }
@@ -248,6 +347,11 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               ))}
               <option value="__example1_json__">example1.json</option>
               <option value="__example2_json__">example2.json</option>
+              {DROPDOWN_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
             </select>
             {selectedProblem === "" && (
               <input
@@ -319,6 +423,15 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         <div className={styles.buttonRow}>
           <button type="submit" className={styles.submitBtn} disabled={!formData.problem || !formData.answer}>
             문제 풀이하기
+          </button>
+          <button
+            type="button"
+            className={styles.loadLocalBtn}
+            onClick={handleLoadLocal}
+            disabled={!canLoadLocal || loadLocalLoading}
+            title={canLoadLocal ? "선택한 문제의 _cot.json, _suqQ.json을 로드해 2·3단계를 채웁니다" : "이 문제에는 해당 로컬 파일이 없습니다"}
+          >
+            {loadLocalLoading ? "불러오는 중…" : "문제 불러오기"}
           </button>
           {/* 어떤 아이디로 로그인하든 항상 표시 */}
           <button type="button" className={styles.adminModeBtn} onClick={() => setAdminModalOpen(true)}>

@@ -137,6 +137,28 @@
   min-width: 140px;
 }
 
+.loadLocalBtn {
+  padding: 12px 20px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.loadLocalBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.loadLocalBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .adminModeBtn {
   padding: 12px 20px;
   font-size: 0.9375rem;
