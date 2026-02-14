@@ -248,6 +248,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           if (parsed.selectedProblemId && typeof parsed.selectedProblemId === "string") {
             setSelectedProblemId(parsed.selectedProblemId);
           }
+          if (Array.isArray(parsed.students) && parsed.students.length > 0) {
+            setStudents(
+              parsed.students.filter(
+                (s: any) => s && typeof s.id === "string" && typeof s.name === "string"
+              )
+            );
+          }
         }
       } else {
         // 구버전(답안만 저장)과의 호환
@@ -264,13 +271,35 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   }, [userId]);
 
-  // 서버에 저장된 학생 답안 불러와서 복원 (새로고침 후 빈 화면 방지)
+  // 서버에 저장된 학생 목록 불러오기 (다른 브라우저에서 왼쪽 패널 복원)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { students: serverStudents } = await api.getStudentList();
+        if (cancelled) return;
+        if (Array.isArray(serverStudents) && serverStudents.length > 0) {
+          setStudents(
+            serverStudents.filter((s: any) => s && s.id).map((s: any) => ({ id: s.id, name: s.name || s.id }))
+          );
+        }
+      } catch (err) {
+        if (!cancelled) console.warn("학생 목록 불러오기 오류:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // 서버에 저장된 학생 답안 불러와서 복원 (다른 브라우저/기기에서도 접근 가능)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { items } = await api.getStudentAnswersList();
         if (cancelled || !items?.length) return;
+        const uniqueStudentIds = Array.from(new Set(items.map((i) => i.student_id).filter(Boolean)));
         setStudentAnswers((prev) => {
           const next = JSON.parse(JSON.stringify(prev));
           for (const item of items) {
@@ -282,6 +311,24 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             }
           }
           return next;
+        });
+        setStudents((prev) => {
+          const existingIds = new Set(prev.map((s) => s.id));
+          const nameById = new Map<string, string>();
+          for (const item of items) {
+            if (item.student_id && (item as any).student_name?.trim()) {
+              nameById.set(item.student_id, (item as any).student_name.trim());
+            }
+          }
+          const toAdd = uniqueStudentIds.filter((id) => !existingIds.has(id));
+          if (toAdd.length === 0) return prev;
+          return [
+            ...prev,
+            ...toAdd.map((id, idx) => ({
+              id,
+              name: nameById.get(id) || `학생 ${prev.length + idx + 1}`,
+            })),
+          ];
         });
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안 목록 불러오기 오류:", err);
@@ -344,7 +391,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     };
   }, [userId, problemIdForDiagnosis, currentStudentId]);
 
-  // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장
+  // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장 (다른 탭/같은 브라우저 복원용)
   useEffect(() => {
     try {
       const stateToSave = {
@@ -354,12 +401,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         studentProblemSummaries,
         currentStudentId,
         selectedProblemId,
+        students,
       };
       window.localStorage.setItem(getStudentDiagnosisStateKey(userId), JSON.stringify(stateToSave));
     } catch (err) {
       console.error("학생 진단 상태를 저장하는 중 오류:", err);
     }
-  }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId]);
+  }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, students]);
 
   const handleChangeStudent = (id: string) => {
     setCurrentStudentId(id);
@@ -370,8 +418,46 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     if (!name || !name.trim()) return;
     const id = `student-${Date.now()}`;
     const newStudent = { id, name: name.trim() };
-    setStudents((prev) => [...prev, newStudent]);
+    const nextList = [...students, newStudent];
+    setStudents(nextList);
     setCurrentStudentId(id);
+    api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name }))).catch((err) => console.warn("학생 목록 저장 실패:", err));
+  };
+
+  const handleDeleteStudent = (studentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (students.length <= 1) {
+      alert("마지막 학생은 삭제할 수 없습니다.");
+      return;
+    }
+    if (!window.confirm(`"${students.find((s) => s.id === studentId)?.name ?? studentId}" 학생을 목록에서 삭제할까요?`)) return;
+    const nextList = students.filter((s) => s.id !== studentId);
+    setStudents(nextList);
+    setStudentAnswers((prev) => {
+      const next = { ...prev };
+      delete next[studentId];
+      return next;
+    });
+    setDiagnosisResults((prev) => {
+      const next = { ...prev };
+      delete next[studentId];
+      return next;
+    });
+    setCanDiagnose((prev) => {
+      const next = { ...prev };
+      delete next[studentId];
+      return next;
+    });
+    setStudentProblemSummaries((prev) => {
+      const next = { ...prev };
+      delete next[studentId];
+      return next;
+    });
+    if (currentStudentId === studentId) {
+      const firstRemaining = nextList[0]?.id;
+      setCurrentStudentId(firstRemaining ?? "");
+    }
+    api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name }))).catch((err) => console.warn("학생 목록 저장 실패:", err));
   };
 
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
@@ -536,6 +622,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         }));
       }
       if (savedAnswers > 0) parts.push(`학생 답안 ${savedAnswers}건`);
+
+      // 학생 목록 저장 (다른 브라우저에서 왼쪽 패널 복원용)
+      try {
+        await api.saveStudentList(students.map((s) => ({ id: s.id, name: s.name })));
+        if (students.length > 0) parts.push("학생 목록");
+      } catch (e) {
+        console.warn("학생 목록 저장 실패:", e);
+      }
 
       // 진단 결과 전체 저장 (다른 브라우저 복원용)
       const hasDiagnosisResults = diagnosisResults && typeof diagnosisResults === "object" && Object.keys(diagnosisResults).length > 0;
@@ -734,12 +828,27 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                 const total = diagnosisItems.length || 0;
                 const isActiveStudent = currentStudentId === s.id;
                 return (
-                  <button key={s.id} type="button" className={`${styles.studentListItem} ${isActiveStudent ? styles.studentListItemActive : ""}`} onClick={() => setCurrentStudentId(s.id)}>
-                    <div className={styles.studentListName}>
-                      {idx + 1}. {s.name}
-                    </div>
-                    <div className={styles.studentListMeta}>{total > 0 ? `답안 ${answeredCount} · 진단 ${diagnosedCount}/${total}` : "문항 없음"}</div>
-                  </button>
+                  <div key={s.id} className={styles.studentListItemWrap}>
+                    <button
+                      type="button"
+                      className={`${styles.studentListItem} ${isActiveStudent ? styles.studentListItemActive : ""}`}
+                      onClick={() => setCurrentStudentId(s.id)}
+                    >
+                      <div className={styles.studentListName}>
+                        {idx + 1}. {s.name}
+                      </div>
+                      <div className={styles.studentListMeta}>{total > 0 ? `답안 ${answeredCount} · 진단 ${diagnosedCount}/${total}` : "문항 없음"}</div>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.studentListDeleteBtn}
+                      onClick={(e) => handleDeleteStudent(s.id, e)}
+                      title="학생 삭제"
+                      aria-label={`${s.name} 삭제`}
+                    >
+                      삭제
+                    </button>
+                  </div>
                 );
               })}
             </div>
