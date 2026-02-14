@@ -346,6 +346,26 @@
   background: rgba(200, 0, 0, 0.06);
 }
 
+.studentListReportBtn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.studentListReportBtn:hover:not(:disabled) {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: rgba(0, 100, 200, 0.06);
+}
+.studentListReportBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .studentListItemActive {
   background: var(--color-bg-secondary);
   border-color: var(--color-primary);
@@ -1129,6 +1149,25 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.reportRefreshBtn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-size: 0.8rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.reportRefreshBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.reportRefreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .reportPdfBtn {

@@ -203,6 +203,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [showAnswerById, setShowAnswerById] = useState<Record<string, boolean>>({});
   const [showRubricById, setShowRubricById] = useState<Record<string, boolean>>({});
   const [reportOpen, setReportOpen] = useState(false);
+  /** 모달에 표시 중인 리포트의 학생 ID (학생별 버튼으로 열 때 사용) */
+  const [reportStudentId, setReportStudentId] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportData, setReportData] = useState<{
@@ -693,6 +695,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const summariesForCurrentStudent = studentProblemSummaries[currentStudentId] ?? {};
   const summaryProblemIds = Object.keys(summariesForCurrentStudent);
   const hasMultiProblemSummary = summaryProblemIds.length >= 2;
+  /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
+  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
 
   // 하: 0점 / 중: 1점 / 상: 2점
   type LevelType = "상" | "중" | "하";
@@ -737,8 +741,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     return "하";
   };
   const handleDownloadReportPdf = async () => {
-    if (!reportData || !currentStudentId) return;
-    const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+    const sid = reportStudentId ?? currentStudentId;
+    if (!reportData || !sid) return;
+    const perStudent = studentProblemSummaries[sid] ?? {};
     const summariesForPdf = Object.fromEntries(
       Object.entries(perStudent).map(([pid, v]) => [
         pid,
@@ -752,8 +757,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     try {
       await exportDiagnosisReportPdf(
         reportData,
-        students.find((s) => s.id === currentStudentId)?.name ?? "학생",
-        currentStudentId,
+        students.find((s) => s.id === sid)?.name ?? "학생",
+        sid,
         summariesForPdf
       );
     } catch (err: any) {
@@ -761,19 +766,20 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   };
 
-  const openReport = async () => {
-    const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+  /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출) */
+  const openReport = async (studentId: string) => {
+    const perStudent = studentProblemSummaries[studentId] ?? {};
     const problemIds = Object.keys(perStudent);
     if (!problemIds.length) {
-      alert("먼저 한 개 이상의 문제에 대해 진단을 완료해 주세요.");
+      alert("해당 학생에 대해 한 개 이상의 문제에 진단을 완료해 주세요.");
       return;
     }
+    setReportStudentId(studentId);
     setReportOpen(true);
     setReportLoading(true);
     setReportError(null);
     try {
-      // 서버에 저장된 진단 리포트가 있으면 먼저 사용 (다른 브라우저와 동기화)
-      const savedReport = await api.getDiagnosisReport(currentStudentId);
+      const savedReport = await api.getDiagnosisReport(studentId);
       if (savedReport && savedReport.problem_rows?.length > 0) {
         setReportData(savedReport);
         const initialEdits: Record<string, string> = {};
@@ -787,7 +793,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         return;
       }
       const payload = {
-        student_id: currentStudentId,
+        student_id: studentId,
         problem_summaries: problemIds.map((pid) => ({
           problem_id: pid,
           levels_by_display_code: perStudent[pid].levelsByDisplayCode,
@@ -812,20 +818,48 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   };
 
+  /** 리포트 모달에서 새로고침: 열려 있는 리포트 학생 기준으로 다시 계산·생성 */
+  const handleRefreshReport = async () => {
+    const sid = reportStudentId ?? currentStudentId;
+    const perStudent = studentProblemSummaries[sid] ?? {};
+    const problemIds = Object.keys(perStudent);
+    if (!problemIds.length) {
+      setReportError("진단한 문제가 없습니다. 먼저 문제를 선택하고 진단을 실행해 주세요.");
+      return;
+    }
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const payload = {
+        student_id: sid,
+        problem_summaries: problemIds.map((pid) => ({
+          problem_id: pid,
+          levels_by_display_code: perStudent[pid].levelsByDisplayCode,
+          feedback_by_display_code: perStudent[pid].feedbackByDisplayCode ?? {},
+        })),
+      };
+      const data = await api.generateStudentDiagnosisReport(payload);
+      setReportData(data);
+      const initialEdits: Record<string, string> = {};
+      (data.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
+        if (row.feedback_summary && typeof row.feedback_summary === "string") {
+          initialEdits[row.display_code] = row.feedback_summary;
+        }
+      });
+      setReportFeedbackEdits(initialEdits);
+    } catch (err: any) {
+      console.error("리포트 새로고침 오류:", err);
+      setReportError(err.message ?? "리포트를 다시 생성하는 중 오류가 발생했습니다.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   return (
     <div className={styles.page} ref={containerRef}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <h1 className={styles.title}>학생 진단하기</h1>
-
-          <span className={styles.headerSummary}>
-            학생 {students.findIndex((s) => s.id === currentStudentId) + 1}/{students.length} · 문항 {activeItemIndex + 1}/{diagnosisItems.length}
-          </span>
-        </div>
-        <div className={styles.headerRight}>
-          <button className={styles.backBtn} onClick={onClose}>
-            문항 생성으로 돌아가기
-          </button>
         </div>
       </header>
 
@@ -889,11 +923,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             <h3 className={styles.studentListTitle}>학생 목록</h3>
             <div className={styles.studentList}>
               {students.map((s, idx) => {
-                const answersForProblem = studentAnswers[s.id]?.[currentProblemKey] ?? {};
-                const answeredCount = Object.values(answersForProblem).filter((v) => !!v?.trim()).length;
-                const diagnosedForProblem = diagnosisResults[s.id]?.[currentProblemKey] ?? {};
-                const diagnosedCount = Object.keys(diagnosedForProblem).length;
-                const total = diagnosisItems.length || 0;
                 const isActiveStudent = currentStudentId === s.id;
                 return (
                   <div key={s.id} className={styles.studentListItemWrap}>
@@ -905,7 +934,16 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                       <div className={styles.studentListName}>
                         {idx + 1}. {s.name}
                       </div>
-                      <div className={styles.studentListMeta}>{total > 0 ? `답안 ${answeredCount} · 진단 ${diagnosedCount}/${total}` : "문항 없음"}</div>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.studentListReportBtn}
+                      onClick={() => openReport(s.id)}
+                      title="진단 리포트"
+                      aria-label={`${s.name} 진단 리포트`}
+                      disabled={!Object.keys(studentProblemSummaries[s.id] ?? {}).length}
+                    >
+                      리포트
                     </button>
                     <button
                       type="button"
@@ -923,11 +961,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             <button type="button" className={styles.addStudentBtn} onClick={handleAddStudent}>
               + 학생 추가
             </button>
-            {summaryProblemIds.length > 0 && (
-              <button type="button" className={styles.reportBtn} onClick={openReport}>
-                학생 진단 리포트
-              </button>
-            )}
           </aside>
 
           {/* 우측: 학생 답안/진단 */}
@@ -979,7 +1012,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                     {item.stepName} - {item.subSkillName}
                                   </span>
                                 </div>
-                                {result && !isEditingDiagnosis && <span className={styles.studentAnswerResult}>진단: {result.level}</span>}
                               </div>
                               <div
                                 className={styles.studentAnswerQuestion}
@@ -1267,23 +1299,32 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         </div>
       </main>
 
-      {reportOpen && summaryProblemIds.length > 0 && (
+      {reportOpen && (
         <div className={styles.reportOverlay} role="dialog" aria-modal="true">
           <div className={styles.reportModal}>
             <header className={styles.reportHeader}>
               <div>
                 <h2 className={styles.reportTitle}>학생 진단 리포트</h2>
                 <p className={styles.reportSubtitle}>
-                  {students.find((s) => s.id === currentStudentId)?.name} · 진단한 문제 수 {summaryProblemIds.length}개
+                  {students.find((s) => s.id === reportStudentId)?.name ?? "학생"} · 진단한 문제 수 {reportSummaryProblemIds.length}개
                 </p>
               </div>
               <div className={styles.reportHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.reportRefreshBtn}
+                  onClick={handleRefreshReport}
+                  disabled={reportLoading}
+                  title="문제가 추가되었을 때 리포트를 다시 계산합니다"
+                >
+                  {reportLoading ? "새로고침 중…" : "새로고침"}
+                </button>
                 {reportData && !reportLoading && !reportError && (
                   <button type="button" className={styles.reportPdfBtn} onClick={handleDownloadReportPdf}>
                     PDF 다운로드
                   </button>
                 )}
-                <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
+                <button type="button" className={styles.reportCloseBtn} onClick={() => { setReportOpen(false); setReportStudentId(null); }}>
                   닫기
                 </button>
               </div>
