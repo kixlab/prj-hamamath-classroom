@@ -851,12 +851,69 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   };
 
-  /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출) */
+  /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출). 최초 제외하고는 이전 결과를 바로 표시 */
   const openReport = async (studentId: string) => {
-    const perStudent = studentProblemSummaries[studentId] ?? {};
-    const problemIds = Object.keys(perStudent);
-    if (!problemIds.length) {
+    // 진단 결과에 있는 모든 문제를 리포트에 반영 (studentProblemSummaries에 없는 문제는 여기서 채움)
+    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {});
+    if (!diagnosisProblemIds.length) {
       alert("해당 학생에 대해 한 개 이상의 문제에 진단을 완료해 주세요.");
+      return;
+    }
+    let fullPerStudent: Record<string, ProblemStepSummary> = { ...(studentProblemSummaries[studentId] ?? {}) };
+    const saved = getSavedResults();
+    for (const problemId of diagnosisProblemIds) {
+      if (fullPerStudent[problemId]) continue;
+      let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
+      try {
+        const result = await api.getResult(problemId);
+        const local = saved[problemId] || null;
+        const gd = (result as any)?.guidelineData || (local as any)?.guidelineData;
+        if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
+          guideSubQuestions = gd.guide_sub_questions;
+        }
+      } catch {
+        // 스킵
+      }
+      if (guideSubQuestions.length === 0) continue;
+      const subIdToDisplayCode = buildSubQuestionIdToDisplayCode(guideSubQuestions);
+      const perProblem = diagnosisResults[studentId]?.[problemId];
+      if (!perProblem || typeof perProblem !== "object") continue;
+      const levelsByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const feedbackByDisplayCode: Record<string, string> = {};
+      for (const subId of Object.keys(perProblem)) {
+        const dc = subIdToDisplayCode[subId];
+        if (!dc) continue;
+        const res = perProblem[subId];
+        if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
+          levelsByDisplayCode[dc] = res.level as "상" | "중" | "하";
+        }
+        if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
+      }
+      if (Object.keys(levelsByDisplayCode).length > 0) {
+        fullPerStudent[problemId] = {
+          problemId,
+          levelsByDisplayCode,
+          feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
+        };
+      }
+    }
+    const problemIds = Object.keys(fullPerStudent);
+    if (!problemIds.length) {
+      alert("해당 학생의 진단 결과를 리포트로 만들 수 없습니다. (문제별 가이드라인 필요)");
+      return;
+    }
+    if (Object.keys(fullPerStudent).length > Object.keys(studentProblemSummaries[studentId] ?? {}).length) {
+      setStudentProblemSummaries((prev) => ({
+        ...prev,
+        [studentId]: { ...(prev[studentId] ?? {}), ...fullPerStudent },
+      }));
+    }
+
+    // 이전에 이 학생 리포트를 연 적이 있으면 캐시된 결과만 표시 (API 호출 없음)
+    if (reportStudentId === studentId && reportData && reportData.problem_rows?.length >= problemIds.length) {
+      setReportStudentId(studentId);
+      setReportOpen(true);
+      setReportError(null);
       return;
     }
     setReportStudentId(studentId);
@@ -865,7 +922,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     setReportError(null);
     try {
       const savedReport = await api.getDiagnosisReport(studentId);
-      // 저장된 리포트는 현재 진단한 문제 수보다 적을 수 있음(예: 이전에 1문제만 저장됨). 문제 수가 현재와 같거나 많을 때만 사용
       const useSaved =
         savedReport &&
         savedReport.problem_rows?.length > 0 &&
@@ -886,8 +942,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         student_id: studentId,
         problem_summaries: problemIds.map((pid) => ({
           problem_id: pid,
-          levels_by_display_code: perStudent[pid].levelsByDisplayCode,
-          feedback_by_display_code: perStudent[pid].feedbackByDisplayCode ?? {},
+          levels_by_display_code: fullPerStudent[pid].levelsByDisplayCode,
+          feedback_by_display_code: fullPerStudent[pid].feedbackByDisplayCode ?? {},
         })),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
@@ -1414,7 +1470,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                     PDF 다운로드
                   </button>
                 )}
-                <button type="button" className={styles.reportCloseBtn} onClick={() => { setReportOpen(false); setReportStudentId(null); }}>
+                <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
                   닫기
                 </button>
               </div>
