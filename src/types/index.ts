@@ -41,6 +41,7 @@ export interface VerifyResult {
 }
 
 export interface AppContextType {
+  userId?: string | null;
   currentProblemId: string | null;
   setCurrentProblemId: (id: string | null) => void;
   currentCotData: CoTData | null;

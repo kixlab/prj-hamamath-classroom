@@ -352,7 +352,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     let cancelled = false;
     (async () => {
       try {
-        const { results } = await api.getDiagnosisResults();
+        const { results } = await api.getDiagnosisResults(userId);
         if (cancelled || !results || typeof results !== "object") return;
         if (Object.keys(results).length === 0) return;
         setDiagnosisResults((prev) => {
@@ -489,7 +489,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     const nextList = [...students, newStudent];
     setStudents(nextList);
     setCurrentStudentId(id);
-    api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name }))).catch((err) => console.warn("학생 목록 저장 실패:", err));
+    api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name })), userId).catch((err) => console.warn("학생 목록 저장 실패:", err));
   };
 
   const handleDeleteStudent = async (studentId: string, e: React.MouseEvent) => {
@@ -525,7 +525,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       setCurrentStudentId(nextList[0]?.id ?? "");
     }
     try {
-      await api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name })));
+      await api.saveStudentList(nextList.map((s) => ({ id: s.id, name: s.name })), userId);
     } catch (err: any) {
       console.error("학생 목록 저장 실패:", err);
       alert("삭제한 내용을 서버에 저장하지 못했습니다. 새로고침 시 목록이 다시 보일 수 있습니다. 다시 시도해 주세요.");
@@ -586,7 +586,15 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         });
       }
 
-      api.saveDiagnosisResults({ user_id: userId, results: next }).catch((err) => console.error("진단 결과 수정 저장 오류:", err));
+      const toSave: typeof next = {};
+      for (const sid of Object.keys(next)) {
+        toSave[sid] = {};
+        for (const pkey of Object.keys(next[sid] ?? {})) {
+          const serverKey = pkey === "__current__" ? (currentProblemId ?? pkey) : pkey;
+          if (serverKey) toSave[sid][serverKey] = next[sid][pkey];
+        }
+      }
+      api.saveDiagnosisResults({ user_id: userId, results: toSave }).catch((err) => console.error("진단 결과 수정 저장 오류:", err));
       return next;
     });
   };
@@ -691,10 +699,31 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           };
         });
       }
+
+      // 진단 결과 즉시 서버 저장 (다른 브라우저에서 복원되도록)
+      const nextResults: Record<string, Record<string, Record<string, { level: string; reason: string }>>> = {
+        ...diagnosisResults,
+        [currentStudentId]: {
+          ...(diagnosisResults[currentStudentId] ?? {}),
+          [currentProblemKey]: newResultsForStudent,
+        },
+      };
+      const toSaveResults: typeof nextResults = {};
+      for (const sid of Object.keys(nextResults)) {
+        toSaveResults[sid] = {};
+        for (const pkey of Object.keys(nextResults[sid] ?? {})) {
+          const sk = pkey === "__current__" ? (currentProblemId ?? pkey) : pkey;
+          if (sk) toSaveResults[sid][sk] = nextResults[sid][pkey];
+        }
+      }
+      api.saveDiagnosisResults({ user_id: userId, results: toSaveResults }).catch((err) => console.error("진단 결과 자동 저장 오류:", err));
     } finally {
       setBulkDiagnosing(false);
     }
   };
+
+  /** 서버 저장용 문제 ID (__current__ → 실제 문제 ID로 치환, 서버가 식별 가능하도록) */
+  const effectiveProblemIdForSave = currentProblemId ?? null;
 
   /** 학생 답안 전체 저장: 화면에 있는 모든 (학생 × 문제) 답안을 서버에 저장 */
   const handleSaveCurrentStudentAnswers = async () => {
@@ -705,7 +734,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       for (const problemId of Object.keys(byProblem)) {
         const answers = byProblem[problemId];
         if (answers && typeof answers === "object" && Object.keys(answers).length > 0) {
-          toSave.push({ studentId, problemId, answers });
+          const serverProblemId = problemId === "__current__" ? (effectiveProblemIdForSave ?? problemId) : problemId;
+          if (serverProblemId) toSave.push({ studentId, problemId: serverProblemId, answers });
         }
       }
     }
@@ -741,16 +771,24 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
       // 학생 목록 저장 (다른 브라우저에서 왼쪽 패널 복원용)
       try {
-        await api.saveStudentList(students.map((s) => ({ id: s.id, name: s.name })));
+        await api.saveStudentList(students.map((s) => ({ id: s.id, name: s.name })), userId);
         if (students.length > 0) parts.push("학생 목록");
       } catch (e) {
         console.warn("학생 목록 저장 실패:", e);
       }
 
-      // 진단 결과 전체 저장 (다른 브라우저 복원용)
+      // 진단 결과 전체 저장 (다른 브라우저 복원용). 문제 키 __current__ → 실제 문제 ID로 정규화
       const hasDiagnosisResults = diagnosisResults && typeof diagnosisResults === "object" && Object.keys(diagnosisResults).length > 0;
       if (hasDiagnosisResults) {
-        await api.saveDiagnosisResults({ user_id: userId, results: diagnosisResults });
+        const normalizedResults: Record<string, Record<string, Record<string, { level: string; reason: string }>>> = {};
+        for (const sid of Object.keys(diagnosisResults)) {
+          normalizedResults[sid] = {};
+          for (const problemKey of Object.keys(diagnosisResults[sid] ?? {})) {
+            const serverKey = problemKey === "__current__" ? (effectiveProblemIdForSave ?? problemKey) : problemKey;
+            if (serverKey) normalizedResults[sid][serverKey] = diagnosisResults[sid][problemKey];
+          }
+        }
+        await api.saveDiagnosisResults({ user_id: userId, results: normalizedResults });
         parts.push("진단 결과");
       }
 
@@ -921,7 +959,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     setReportLoading(true);
     setReportError(null);
     try {
-      const savedReport = await api.getDiagnosisReport(studentId);
+      const savedReport = await api.getDiagnosisReport(studentId, userId);
       const useSaved =
         savedReport &&
         savedReport.problem_rows?.length > 0 &&
@@ -955,6 +993,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         }
       });
       setReportFeedbackEdits(initialEdits);
+      // 리포트 서버 저장 (다른 브라우저에서 복원되도록)
+      api.saveDiagnosisReport({ user_id: userId, student_id: studentId, report: data }).catch((err) => console.error("리포트 저장 오류:", err));
     } catch (err: any) {
       console.error("학생 진단 리포트 생성 오류:", err);
       setReportError(err.message || "학생 진단 리포트를 불러오는 중 오류가 발생했습니다.");
@@ -993,11 +1033,32 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         }
       });
       setReportFeedbackEdits(initialEdits);
+      // 리포트 서버 저장 (다른 브라우저에서 복원되도록)
+      api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: data }).catch((err) => console.error("리포트 저장 오류:", err));
     } catch (err: any) {
       console.error("리포트 새로고침 오류:", err);
       setReportError(err.message ?? "리포트를 다시 생성하는 중 오류가 발생했습니다.");
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  /** 현재 리포트(피드백 수정 반영)를 서버에 저장 */
+  const handleSaveReportToServer = async () => {
+    const sid = reportStudentId ?? currentStudentId;
+    if (!reportData || !sid) return;
+    const step_rows = reportData.step_rows.map((r) => ({
+      ...r,
+      feedback_summary: (reportFeedbackEdits[r.display_code] ?? r.feedback_summary ?? "") || null,
+    }));
+    const reportToSave = { ...reportData, step_rows };
+    try {
+      await api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: reportToSave });
+      setSaveMessage("리포트를 저장했습니다.");
+      setTimeout(() => setSaveMessage(null), 2000);
+    } catch (err: any) {
+      console.error("리포트 저장 오류:", err);
+      alert(err?.message ?? "리포트 저장에 실패했습니다.");
     }
   };
 
@@ -1466,9 +1527,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                   {reportLoading ? "새로고침 중…" : "새로고침"}
                 </button>
                 {reportData && !reportLoading && !reportError && (
-                  <button type="button" className={styles.reportPdfBtn} onClick={handleDownloadReportPdf}>
-                    PDF 다운로드
-                  </button>
+                  <>
+                    <button type="button" className={styles.reportSaveBtn} onClick={handleSaveReportToServer} title="리포트 피드백 저장">
+                      리포트 저장
+                    </button>
+                    <button type="button" className={styles.reportPdfBtn} onClick={handleDownloadReportPdf}>
+                      PDF 다운로드
+                    </button>
+                  </>
                 )}
                 <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
                   닫기
@@ -1684,6 +1750,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                                     : prev
                                                 );
                                               }}
+                                              onBlur={() => handleSaveReportToServer()}
                                             />
                                           </div>
                                         </div>

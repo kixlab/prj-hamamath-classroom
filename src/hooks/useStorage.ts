@@ -46,6 +46,13 @@ export function getHistoryHeaders(): Record<string, string> {
   return encodeUserIdForHeader(getStoredUserId() ?? '');
 }
 
+/** 저장 API용: sessionStorage에 userId가 없어도 호출부에서 넘긴 userId로 헤더 생성 (Firebase 등 서버 저장 누락 방지) */
+export function getHistoryHeadersWithFallback(userIdFromCaller?: string | null): Record<string, string> {
+  const fromStorage = getHistoryHeaders();
+  if (fromStorage['X-User-Id']) return fromStorage;
+  return encodeUserIdForHeader(userIdFromCaller ?? '');
+}
+
 function getLastProblemKey(): string {
   const uid = getStoredUserId();
   return uid ? `${LAST_PROBLEM_KEY_PREFIX}_${uid}` : LAST_PROBLEM_KEY_PREFIX;
@@ -169,7 +176,8 @@ export function saveResult(
   subQData?: any | null,
   guidelineData?: GuidelineData | null,
   preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
-  rubrics?: any[] | null
+  rubrics?: any[] | null,
+  userId?: string | null
 ): void {
   const savedResults = getSavedResults();
   const existing = savedResults[problemId];
@@ -205,10 +213,10 @@ export function saveResult(
     localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
     localStorage.setItem(getLastProblemKey(), problemId);
     
-    // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리)
+    // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리). userId 있으면 헤더 폴백으로 사용
     fetch(getApiUrl('/api/v1/history/save'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getHistoryHeaders() },
+      headers: { 'Content-Type': 'application/json', ...getHistoryHeadersWithFallback(userId) },
       body: JSON.stringify(resultData),
     }).catch((err) => {
       console.error('서버 저장 실패:', err);

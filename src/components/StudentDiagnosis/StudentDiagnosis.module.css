@@ -1170,6 +1170,19 @@
   cursor: not-allowed;
 }
 
+.reportSaveBtn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-size: 0.8rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.reportSaveBtn:hover {
+  border-color: var(--color-primary);
+}
+
 .reportPdfBtn {
   padding: 6px 12px;
   border-radius: 999px;

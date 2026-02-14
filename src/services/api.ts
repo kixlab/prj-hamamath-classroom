@@ -1,4 +1,4 @@
-import { getHistoryHeaders, encodeUserIdForHeader, encodeForHeader } from "../hooks/useStorage";
+import { getHistoryHeaders, getHistoryHeadersWithFallback, encodeUserIdForHeader, encodeForHeader } from "../hooks/useStorage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -234,7 +234,7 @@ export const api = {
   }) {
     const response = await fetch(getApiUrl("/api/v1/student-answers/save"), {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(payload.user_id) },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
@@ -260,12 +260,12 @@ export const api = {
     return response.json();
   },
 
-  /** 학생 목록 저장 (다른 브라우저에서 복원용) */
-  async saveStudentList(students: Array<{ id: string; name: string }>): Promise<void> {
+  /** 학생 목록 저장 (다른 브라우저에서 복원용). userIdForHeader 있으면 헤더 폴백으로 사용 */
+  async saveStudentList(students: Array<{ id: string; name: string }>, userIdForHeader?: string): Promise<void> {
     const body = { students };
     const response = await fetch(getApiUrl("/api/v1/student-list"), {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(userIdForHeader) },
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -320,7 +320,7 @@ export const api = {
   }) {
     const response = await fetch(getApiUrl("/api/v1/diagnosis/results"), {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(payload.user_id) },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
@@ -332,12 +332,12 @@ export const api = {
     return response.json();
   },
 
-  /** 저장된 진단 결과 조회 (본인) — 다른 브라우저 복원용 */
-  async getDiagnosisResults(): Promise<{
+  /** 저장된 진단 결과 조회 (본인) — 다른 브라우저 복원용. userId 있으면 헤더 폴백으로 사용 */
+  async getDiagnosisResults(userId?: string): Promise<{
     results: Record<string, Record<string, Record<string, { level: string; reason: string }>>>;
   }> {
     const response = await fetch(getApiUrl("/api/v1/diagnosis/results"), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (response.status === 404) return { results: {} };
     if (!response.ok) {
@@ -373,7 +373,7 @@ export const api = {
   }) {
     const response = await fetch(getApiUrl("/api/v1/diagnosis/report"), {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(payload.user_id) },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
@@ -385,9 +385,10 @@ export const api = {
     return response.json();
   },
 
-  /** 저장된 진단 리포트 조회 (학생별) */
+  /** 저장된 진단 리포트 조회 (학생별). userId 있으면 헤더 폴백으로 사용 */
   async getDiagnosisReport(
-    studentId: string
+    studentId: string,
+    userId?: string
   ): Promise<{
     problem_rows: Array<{
       problem_id: string;
@@ -407,7 +408,7 @@ export const api = {
   } | null> {
     const params = new URLSearchParams({ student_id: studentId });
     const response = await fetch(getApiUrl(`/api/v1/diagnosis/report?${params}`), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (response.status === 404) return null;
     if (!response.ok) {

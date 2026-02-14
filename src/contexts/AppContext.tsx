@@ -13,9 +13,10 @@ export const useApp = (): AppContextType => {
 
 interface AppProviderProps {
   children: ReactNode;
+  userId?: string | null;
 }
 
-export const AppProvider = ({ children }: AppProviderProps) => {
+export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const [currentProblemId, setCurrentProblemId] = useState<string | null>(null);
   const [currentCotData, setCurrentCotData] = useState<CoTData | null>(null);
   const [currentSubQData, setCurrentSubQData] = useState<any | null>(null);
@@ -44,6 +45,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
   }, []);
 
   const value: AppContextType = {
+    userId,
     currentProblemId,
     setCurrentProblemId,
     currentCotData,

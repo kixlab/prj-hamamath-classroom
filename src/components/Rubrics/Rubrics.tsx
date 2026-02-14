@@ -103,7 +103,7 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 }
 
 export const Rubrics = () => {
-  const { currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId, finalizedGuidelineForRubric } = useApp();
+  const { userId, currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId, finalizedGuidelineForRubric } = useApp();
   /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 guideline */
   const guidelineForStep4 = finalizedGuidelineForRubric ?? currentGuidelineData;
   const rubrics = (currentRubrics ?? []) as RubricItem[];
@@ -111,8 +111,8 @@ export const Rubrics = () => {
 
   useEffect(() => {
     if (!currentProblemId || !currentRubrics?.length) return;
-    saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics);
-  }, [currentProblemId, currentRubrics]);
+    saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics, userId);
+  }, [currentProblemId, currentRubrics, userId]);
   const [generatingMessage, setGeneratingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
@@ -138,7 +138,7 @@ export const Rubrics = () => {
     try {
       // 확정 시 서버·사이드바에 저장 (다른 기기/새로고침 시에도 목록에 표시)
       if (currentProblemId && currentRubrics?.length) {
-        saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics);
+        saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics, userId);
       }
       logUserEvent("rubric_finalized", {
         count: rubrics.length,

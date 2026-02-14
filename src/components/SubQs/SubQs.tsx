@@ -37,6 +37,7 @@ interface Progress {
 
 export const SubQs = () => {
   const {
+    userId,
     currentCotData,
     currentGuidelineData,
     setCurrentGuidelineData,
@@ -54,8 +55,8 @@ export const SubQs = () => {
 
   useEffect(() => {
     if (!currentProblemId) return;
-    saveResult(currentProblemId, undefined, undefined, currentGuidelineData ?? undefined, preferredVersion, undefined);
-  }, [currentProblemId, currentGuidelineData, preferredVersion]);
+    saveResult(currentProblemId, undefined, undefined, currentGuidelineData ?? undefined, preferredVersion, undefined, userId);
+  }, [currentProblemId, currentGuidelineData, preferredVersion, userId]);
 
   const [progress, setProgress] = useState<Progress>({
     current: 0,
@@ -139,7 +140,7 @@ export const SubQs = () => {
         const problemId = finalizedPayload.problem_id ?? currentProblemId;
         if (problemId) {
           const guidelineToSave = { ...gd, guide_sub_questions: finalizedSubs };
-          saveResult(problemId, undefined, undefined, guidelineToSave, preferredVersion, undefined);
+          saveResult(problemId, undefined, undefined, guidelineToSave, preferredVersion, undefined, userId);
         }
         logUserEvent("sub_questions_finalized", {
           guide_sub_questions: finalizedSubs,
