@@ -288,6 +288,33 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     };
   }, [userId]);
 
+  // 서버에 저장된 진단 결과 불러와서 복원 (다른 브라우저/기기 동기화)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { results } = await api.getDiagnosisResults();
+        if (cancelled || !results || typeof results !== "object") return;
+        if (Object.keys(results).length === 0) return;
+        setDiagnosisResults((prev) => {
+          const next = JSON.parse(JSON.stringify(prev));
+          for (const sid of Object.keys(results)) {
+            if (!next[sid]) next[sid] = {};
+            for (const pid of Object.keys(results[sid] || {})) {
+              next[sid][pid] = { ...(next[sid][pid] ?? {}), ...(results[sid][pid] ?? {}) };
+            }
+          }
+          return next;
+        });
+      } catch (err) {
+        if (!cancelled) console.error("저장된 진단 결과 불러오기 오류:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   // 동일 로그인 id·문제·학생에 해당하는 저장 답안이 있으면 화면에 표시
   useEffect(() => {
     if (!problemIdForDiagnosis || !currentStudentId) return;
@@ -463,43 +490,70 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
   };
 
+  /** 학생 답안 전체 저장: 화면에 있는 모든 (학생 × 문제) 답안을 서버에 저장 */
   const handleSaveCurrentStudentAnswers = async () => {
-    if (!problemIdForDiagnosis) {
-      alert("먼저 진단할 문제를 선택해 주세요.");
-      return;
+    const toSave: Array<{ studentId: string; problemId: string; answers: Record<string, string> }> = [];
+    for (const studentId of Object.keys(studentAnswers)) {
+      const byProblem = studentAnswers[studentId];
+      if (!byProblem || typeof byProblem !== "object") continue;
+      for (const problemId of Object.keys(byProblem)) {
+        const answers = byProblem[problemId];
+        if (answers && typeof answers === "object" && Object.keys(answers).length > 0) {
+          toSave.push({ studentId, problemId, answers });
+        }
+      }
     }
-    if (!currentStudentId) {
-      alert("학생 정보가 없습니다.");
-      return;
-    }
-    const answersForStudent = studentAnswers[currentStudentId]?.[currentProblemKey] || {};
-    if (!Object.keys(answersForStudent).length) {
-      alert("저장할 학생 답안이 없습니다.");
+    if (toSave.length === 0) {
+      alert("저장할 학생 답안이 없습니다. 먼저 문제를 선택하고 답안을 입력해 주세요.");
       return;
     }
 
     setSaving(true);
     setSaveMessage(null);
+    let savedAnswers = 0;
+    const parts: string[] = [];
     try {
-      const currentStudent = students.find((s) => s.id === currentStudentId) || null;
-      await api.saveStudentAnswers({
-        problem_id: problemIdForDiagnosis,
-        user_id: userId,
-        student_id: currentStudentId,
-        student_name: currentStudent?.name,
-        answers: answersForStudent,
-      });
-      setSaveMessage("학생 답안을 저장했습니다.");
-      setCanDiagnose((prev) => ({
-        ...prev,
-        [currentStudentId]: {
-          ...(prev[currentStudentId] ?? {}),
-          [currentProblemKey]: true,
-        },
-      }));
+      for (const { studentId, problemId, answers } of toSave) {
+        const student = students.find((s) => s.id === studentId) || null;
+        await api.saveStudentAnswers({
+          problem_id: problemId,
+          user_id: userId,
+          student_id: studentId,
+          student_name: student?.name,
+          answers,
+        });
+        savedAnswers++;
+        setCanDiagnose((prev) => ({
+          ...prev,
+          [studentId]: {
+            ...(prev[studentId] ?? {}),
+            [problemId]: true,
+          },
+        }));
+      }
+      if (savedAnswers > 0) parts.push(`학생 답안 ${savedAnswers}건`);
+
+      // 진단 결과 전체 저장 (다른 브라우저 복원용)
+      const hasDiagnosisResults = diagnosisResults && typeof diagnosisResults === "object" && Object.keys(diagnosisResults).length > 0;
+      if (hasDiagnosisResults) {
+        await api.saveDiagnosisResults({ user_id: userId, results: diagnosisResults });
+        parts.push("진단 결과");
+      }
+
+      // 현재 학생의 진단 리포트가 있으면 저장
+      if (reportData && currentStudentId) {
+        await api.saveDiagnosisReport({
+          user_id: userId,
+          student_id: currentStudentId,
+          report: reportData,
+        });
+        parts.push("진단 리포트");
+      }
+
+      setSaveMessage(parts.length > 0 ? `${parts.join(", ")}을(를) 저장했습니다.` : "저장할 답안이 없습니다.");
     } catch (err: any) {
-      console.error("학생 답안 저장 오류:", err);
-      alert(err.message || "학생 답안을 저장하는 중 오류가 발생했습니다.");
+      console.error("학생 답안/진단 저장 오류:", err);
+      alert(err.message || "저장하는 중 오류가 발생했습니다.");
       setSaveMessage(null);
     } finally {
       setSaving(false);
@@ -566,6 +620,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     setReportLoading(true);
     setReportError(null);
     try {
+      // 서버에 저장된 진단 리포트가 있으면 먼저 사용 (다른 브라우저와 동기화)
+      const savedReport = await api.getDiagnosisReport(currentStudentId);
+      if (savedReport && savedReport.problem_rows?.length > 0) {
+        setReportData(savedReport);
+        setReportLoading(false);
+        return;
+      }
       const payload = {
         student_id: currentStudentId,
         problem_summaries: problemIds.map((pid) => ({

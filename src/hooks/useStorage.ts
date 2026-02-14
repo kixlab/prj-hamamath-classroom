@@ -104,14 +104,18 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
 }
 
 export async function deleteResult(problemId: string): Promise<void> {
+  const id = (problemId ?? '').trim();
+  if (!id) return;
+
   // localStorage에서 삭제
   const savedResults = getSavedResults();
-  delete savedResults[problemId];
+  delete savedResults[id];
   localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
 
-  // 서버에서도 삭제
+  // 서버에서도 삭제 (Firestore/파일)
   try {
-    const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
+    const url = getApiUrl(`/api/v1/history/${encodeURIComponent(id)}`);
+    const response = await fetch(url, {
       method: 'DELETE',
       headers: getHistoryHeaders(),
     });
