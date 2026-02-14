@@ -116,6 +116,13 @@
   background: #dc2626;
 }
 
+.buttonRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .submitBtn {
   background: var(--color-primary);
   color: white;
@@ -126,7 +133,25 @@
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
-  width: 100%;
+  flex: 1;
+  min-width: 140px;
+}
+
+.adminModeBtn {
+  padding: 12px 20px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.adminModeBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .submitBtn:hover:not(:disabled) {

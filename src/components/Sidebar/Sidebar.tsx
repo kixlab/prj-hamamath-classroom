@@ -35,6 +35,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     reset,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
+  const [listLoadError, setListLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     updateSavedResultsList();
@@ -45,6 +46,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
   }, [sidebarOpen, userId]);
 
   const updateSavedResultsList = async () => {
+    setListLoadError(null);
     if (!userId?.trim()) {
       setSavedResults([]);
       return;
@@ -55,6 +57,8 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
       serverResults = Array.isArray(data) ? data : [];
     } catch (err: any) {
       console.warn('저장 목록 조회 실패:', err);
+      const msg = err?.message || String(err);
+      setListLoadError(msg.includes('불러올 수 없습니다') ? msg : '저장 목록을 불러올 수 없습니다. (API 주소·CORS 확인)');
     }
 
     const allResults: SavedResultItem[] = serverResults.map((item) => {
@@ -196,10 +200,15 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
           </div>
           <div className={styles.sidebarSection}>
             <h3>저장된 결과</h3>
+            {listLoadError && (
+              <div className={styles.emptyMessage} style={{ color: 'var(--color-error, #c00)', fontSize: '13px', marginBottom: 8 }}>
+                {listLoadError}
+              </div>
+            )}
             <div className={styles.savedResultsList}>
-              {savedResults.length === 0 ? (
+              {savedResults.length === 0 && !listLoadError ? (
                 <div className={styles.emptyMessage}>저장된 결과가 없습니다.</div>
-              ) : (
+              ) : savedResults.length === 0 ? null : (
                 savedResults.map((item) => (
                   <div
                     key={item.problemId}

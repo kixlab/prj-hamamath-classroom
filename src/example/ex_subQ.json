@@ -1,0 +1,80 @@
+{
+  "main_problem": "35분 동안 115와 2분의 1L 의 물이 나오는 수도관이 있습니다. 이 수도관을 38분 동안 열어 크기가 같은 물통 10개를 채웠더니 9개가 꽉 차고 나머지 1개의 물통은 반만 찼습니다. 물통 1개의 들이는 얼마입니까?\n ",
+  "main_answer": "13과 5분의 1L",
+  "main_solution": "1. 수도관에서 38분 동안 나오는 물의 양을 계산합니다.\n2. 이 수도관은 35분 동안 115와 2분의 1L의 물이 나옵니다.\n3. 38분 동안 나오는 물의 양은 1분 동안 나오는 물의 양의 38배 입니다.\n4. 이 수도에서 38분 동안 나온 물의 양은 물통 9와 2분의 1 분량입니다.\n5. 1분 동안 수도에서 나온 물의 양은 33/10입니다.\n6. 38분 동안 수도에서 나온 물의 양은 125와 5분의 2L입니다.\n7. 물통에 반만큼 채운 물의 양을 ▢ 라고 할 때 9과 2분의 1의 양은 ▢×19입니다.\n8. 물통 절반에 해당하는 물의 양은 125와 5분의 2 ÷19 = 6과 5분의 3 입니다.\n9. 물통 1개의 들이는 6과 5분의 3 × 2 = 13과 5분의 1 입니다.",
+  "grade": "6학년",
+  "finalized_sub_questions": [
+    {
+      "sub_question_id": "1-1",
+      "step_id": 1,
+      "sub_skill_id": "1-1",
+      "step_name": "문제 이해",
+      "sub_skill_name": "핵심 정보 파악하기",
+      "final_question": "문제에서 수도관이 35분 동안 배출하는 물의 양과 38분 동안 물통을 채운 결과에 대한 정보를 구분하세요.",
+      "final_answer": "35분 동안 115와 2분의 1L의 물이 나옵니다.\n38분 동안 수도관을 열어 물통 10개 중 9개는 꽉 차고 1개는 반만 찼습니다."
+    },
+    {
+      "sub_question_id": "1-2",
+      "step_id": 1,
+      "sub_skill_id": "1-2",
+      "step_name": "문제 이해",
+      "sub_skill_name": "문제 요지 확인하기",
+      "final_question": "구해야 할 최종 결과가 무엇인지 적어보세요.",
+      "final_answer": "물통 1개의 들이"
+    },
+    {
+      "sub_question_id": "2-1",
+      "step_id": 2,
+      "sub_skill_id": "2-1",
+      "step_name": "정보 구조화",
+      "sub_skill_name": "조건 정리하기",
+      "final_question": "수도관이 38분 동안 배출한 물의 양을 물통의 개수로 표현해 보세요.",
+      "final_answer": "물통 9 와 2분의 1 개"
+    },
+    {
+      "sub_question_id": "2-2",
+      "step_id": 2,
+      "sub_skill_id": "2-2",
+      "step_name": "정보 구조화",
+      "sub_skill_name": "조건 연결하기",
+      "final_question": "물통의 절반에 해당하는 양을 ▢라고 할 때 뭍통의 9와 2분의 1에 해당하는 양은 ▢ 몇 개의 양과 같습니까?",
+      "final_answer": "19개"
+    },
+    {
+      "sub_question_id": "3-1",
+      "step_id": 3,
+      "sub_skill_id": "3-1",
+      "step_name": "수학적 표현",
+      "sub_skill_name": "지식 활용하기",
+      "final_question": "수도관이 35분 동안 배출한 물의 양을 구하는 식을 세우시오.",
+      "final_answer": "115와 2분의 1 ÷ 35"
+    },
+    {
+      "sub_question_id": "3-2",
+      "step_id": 3,
+      "sub_skill_id": "3-2",
+      "step_name": "수학적 표현",
+      "sub_skill_name": "식, 모델 세우기",
+      "final_question": "수도관이 38분 동안 배출한 물의 양을 구하기 위해 필요한 수학적 식을 세워보세요.",
+      "final_answer": "115와 2분의 1 ÷ 35× 38"
+    },
+    {
+      "sub_question_id": "4-1",
+      "step_id": 4,
+      "sub_skill_id": "4-1",
+      "step_name": "수학적 계산",
+      "sub_skill_name": "계산 실행하기",
+      "final_question": "물통의 절반의 양을 ▢라고 할 때 수도관이 38분 동안 배출한 물의 양은 ▢ 몇개의 양과 같은지 식으로 나타내고 물통 절반의 양을 께산하시오.",
+      "final_answer": "33/10 × 38 = ▢ × 19              ▢ = 6과 5분의 3"
+    },
+    {
+      "sub_question_id": "4-2",
+      "step_id": 4,
+      "sub_skill_id": "4-2",
+      "step_name": "수학적 계산",
+      "sub_skill_name": "결과 정리하기",
+      "final_question": "물통 1개의 들이를 구하기 위해, 물통 절반에 해당하는 물의 양을 두 배로 하여 계산한 결과를 적어보세요.",
+      "final_answer": "물통 절반에 해당하는 물의 양은 $6 \\frac{3}{5}$ \\, \\text{L}입니다.  \n  물통 1개의 들이는 $6 \\frac{3}{5} \\times 2 = 13 \\frac{1}{5}$ \\, \\text{L}입니다."
+    }
+  ]
+}
