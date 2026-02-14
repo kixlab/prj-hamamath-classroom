@@ -1,7 +1,7 @@
 import { useEffect, useState, MouseEvent } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { loadResult, deleteResult, clearAllResults, getSavedResults, saveResult, getHistoryHeaders } from '../../hooks/useStorage';
-import { getApiUrl } from '../../services/api';
+import { loadResult, deleteResult, clearAllResults, saveResult } from '../../hooks/useStorage';
+import { api } from '../../services/api';
 import { isAdmin } from '../../utils/admin';
 import styles from './Sidebar.module.css';
 
@@ -38,35 +38,27 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
 
   useEffect(() => {
     updateSavedResultsList();
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (sidebarOpen) updateSavedResultsList();
-  }, [sidebarOpen]);
+  }, [sidebarOpen, userId]);
 
   const updateSavedResultsList = async () => {
-    // 다른 기기/브라우저에서도 동일 ID로 같은 목록이 보이도록 서버를 단일 기준으로 사용
-    let serverResults: Array<{ problem_id: string; timestamp: string; has_cot?: boolean; has_subq?: boolean; has_guideline?: boolean }> = [];
+    if (!userId?.trim()) {
+      setSavedResults([]);
+      return;
+    }
+    let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string; has_cot?: boolean; has_subq?: boolean; has_guideline?: boolean }> = [];
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const resp = await fetch(getApiUrl('/api/v1/history/list'), {
-        signal: controller.signal,
-        headers: getHistoryHeaders(),
-      });
-      clearTimeout(timeoutId);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (Array.isArray(data)) serverResults = data;
-      }
+      const data = await api.getMyHistoryList(userId);
+      serverResults = Array.isArray(data) ? data : [];
     } catch (err: any) {
-      if (err?.name !== 'AbortError') {
-        console.warn('저장 목록 조회 실패:', err);
-      }
+      console.warn('저장 목록 조회 실패:', err);
     }
 
     const allResults: SavedResultItem[] = serverResults.map((item) => {
-      const pid = item.problem_id ?? (item as any).problemId;
+      const pid = item.problem_id ?? item.problemId ?? '';
       const ts = item.timestamp ?? '';
       const date = new Date(ts);
       const dateStr = date.toLocaleString('ko-KR', {

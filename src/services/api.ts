@@ -422,10 +422,14 @@ export const api = {
     return response.json();
   },
 
-  /** 현재 로그인한 사용자 자신의 저장 결과 목록 */
-  async getMyHistoryList(): Promise<any[]> {
+  /** 현재 로그인한 사용자 자신의 저장 결과 목록 (사이드바 등에서 사용). userId를 넘기면 해당 ID만 조회. */
+  async getMyHistoryList(userId?: string): Promise<any[]> {
+    const headers: Record<string, string> = userId?.trim()
+      ? { "X-User-Id": userId.trim() }
+      : getHistoryHeaders();
     const response = await fetch(getApiUrl("/api/v1/history/list"), {
-      headers: getHistoryHeaders(),
+      credentials: "include",
+      headers,
     });
     if (!response.ok) throw new Error("저장 결과 목록을 불러올 수 없습니다.");
     return response.json();
