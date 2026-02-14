@@ -1,9 +1,9 @@
-import { useEffect, useState, MouseEvent } from 'react';
-import { useApp } from '../../contexts/AppContext';
-import { loadResult, deleteResult, clearAllResults, saveResult } from '../../hooks/useStorage';
-import { api } from '../../services/api';
-import { isAdmin } from '../../utils/admin';
-import styles from './Sidebar.module.css';
+import { useEffect, useState, MouseEvent } from "react";
+import { useApp } from "../../contexts/AppContext";
+import { loadResult, deleteResult, clearAllResults, saveResult } from "../../hooks/useStorage";
+import { api } from "../../services/api";
+import { isAdmin } from "../../utils/admin";
+import styles from "./Sidebar.module.css";
 
 interface SavedResultItem {
   problemId: string;
@@ -19,22 +19,23 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: SidebarProps) => {
-  const { 
-    sidebarOpen, 
-    setSidebarOpen, 
-    currentProblemId, 
-    currentCotData, 
-    currentGuidelineData, 
-    setCurrentStep, 
-    setCurrentCotData, 
-    setCurrentSubQData, 
-    setCurrentGuidelineData, 
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    currentProblemId,
+    currentCotData,
+    currentGuidelineData,
+    setCurrentStep,
+    setCurrentCotData,
+    setCurrentSubQData,
+    setCurrentGuidelineData,
     setCurrentProblemId,
     setPreferredVersion,
     setCurrentRubrics,
     reset,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
+  const [listLoadError, setListLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     updateSavedResultsList();
@@ -45,6 +46,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
   }, [sidebarOpen, userId]);
 
   const updateSavedResultsList = async () => {
+    setListLoadError(null);
     if (!userId?.trim()) {
       setSavedResults([]);
       return;
@@ -54,24 +56,26 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
       const data = await api.getMyHistoryList(userId);
       serverResults = Array.isArray(data) ? data : [];
     } catch (err: any) {
-      console.warn('저장 목록 조회 실패:', err);
+      console.warn("저장 목록 조회 실패:", err);
+      const msg = err?.message || String(err);
+      setListLoadError(msg.includes("불러올 수 없습니다") ? msg : "저장 목록을 불러올 수 없습니다. (API 주소·CORS 확인)");
     }
 
     const allResults: SavedResultItem[] = serverResults.map((item) => {
-      const pid = item.problem_id ?? item.problemId ?? '';
-      const ts = item.timestamp ?? '';
+      const pid = item.problem_id ?? item.problemId ?? "";
+      const ts = item.timestamp ?? "";
       const date = new Date(ts);
-      const dateStr = date.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
+      const dateStr = date.toLocaleString("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
       });
       const status: string[] = [];
-      if (item.has_cot) status.push('CoT');
-      if (item.has_subq) status.push('하위문항');
-      if (item.has_guideline) status.push('Guideline');
+      if (item.has_cot) status.push("CoT");
+      if (item.has_subq) status.push("하위문항");
+      if (item.has_guideline) status.push("Guideline");
       return { problemId: pid, timestamp: ts, dateStr, status };
     });
 
@@ -94,14 +98,14 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
 
   const handleSaveCurrentResult = () => {
     if (!currentCotData) {
-      alert('저장할 결과가 없습니다. 먼저 문제를 풀어주세요.');
+      alert("저장할 결과가 없습니다. 먼저 문제를 풀어주세요.");
       return;
     }
 
     const problemId = currentProblemId || `manual_${Date.now()}`;
     saveResult(problemId, currentCotData, null, currentGuidelineData);
     setCurrentProblemId(problemId);
-    alert('현재 결과를 저장했습니다.');
+    alert("현재 결과를 저장했습니다.");
     updateSavedResultsList();
   };
 
@@ -115,7 +119,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
         setCurrentGuidelineData(result.guidelineData);
         if (setPreferredVersion) setPreferredVersion(result.preferredVersion || {});
         if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
-        
+
         if (result.guidelineData && result.cotData) {
           setCurrentStep(3);
         } else if (result.subQData && result.cotData) {
@@ -123,14 +127,14 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
         } else if (result.cotData) {
           setCurrentStep(2);
         }
-        
+
         setSidebarOpen(false);
       } else {
-        alert('저장된 결과를 불러올 수 없습니다.');
+        alert("저장된 결과를 불러올 수 없습니다.");
       }
     } catch (err) {
-      console.error('결과 불러오기 오류:', err);
-      alert('결과를 불러오는 중 오류가 발생했습니다.');
+      console.error("결과 불러오기 오류:", err);
+      alert("결과를 불러오는 중 오류가 발생했습니다.");
     }
   };
 
@@ -145,7 +149,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
   };
 
   const handleClearAllResults = async () => {
-    if (!window.confirm('모든 저장된 결과를 삭제하시겠습니까?')) return;
+    if (!window.confirm("모든 저장된 결과를 삭제하시겠습니까?")) return;
     // 서버에 있는 항목도 하나씩 삭제 후 로컬 초기화
     for (const item of savedResults) {
       const pid = item.problemId?.trim();
@@ -153,7 +157,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     }
     clearAllResults();
     await updateSavedResultsList();
-    alert('모든 결과가 삭제되었습니다.');
+    alert("모든 결과가 삭제되었습니다.");
   };
 
   const handleOpenDbViewer = () => {
@@ -168,13 +172,10 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
   return (
     <>
       {/* 사이드바 오버레이 */}
-      <div
-        className={`${styles.sidebarOverlay} ${sidebarOpen ? styles.show : ''}`}
-        onClick={handleOverlayClick}
-      />
+      <div className={`${styles.sidebarOverlay} ${sidebarOpen ? styles.show : ""}`} onClick={handleOverlayClick} />
 
       {/* 사이드바 */}
-      <div className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
+      <div className={`${styles.sidebar} ${sidebarOpen ? styles.open : ""}`}>
         <div className={styles.sidebarHeader}>
           <h2>메뉴</h2>
           <button className={styles.sidebarCloseBtn} onClick={handleClose}>
@@ -187,36 +188,34 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
             <button className={styles.btn} onClick={handleNewProblem}>
               문제 입력하기
             </button>
-            <button className={styles.btn} onClick={handleSaveCurrentResult} style={{ marginTop: '10px' }}>
+            <button className={styles.btn} onClick={handleSaveCurrentResult} style={{ marginTop: "10px" }}>
               현재 결과 저장하기
             </button>
-            <button className={styles.btn} onClick={handleOpenStudentDiagnosis} style={{ marginTop: '10px', background: '#111827' }}>
+            <button className={styles.btn} onClick={handleOpenStudentDiagnosis} style={{ marginTop: "10px", background: "#111827" }}>
               학생 진단하기
             </button>
           </div>
           <div className={styles.sidebarSection}>
             <h3>저장된 결과</h3>
+            {listLoadError && (
+              <div className={styles.emptyMessage} style={{ color: "var(--color-error, #c00)", fontSize: "13px", marginBottom: 8 }}>
+                {listLoadError}
+              </div>
+            )}
             <div className={styles.savedResultsList}>
-              {savedResults.length === 0 ? (
+              {savedResults.length === 0 && !listLoadError ? (
                 <div className={styles.emptyMessage}>저장된 결과가 없습니다.</div>
-              ) : (
+              ) : savedResults.length === 0 ? null : (
                 savedResults.map((item) => (
-                  <div
-                    key={item.problemId}
-                    className={styles.savedResultItem}
-                    onClick={() => handleLoadResult(item.problemId)}
-                  >
+                  <div key={item.problemId} className={styles.savedResultItem} onClick={() => handleLoadResult(item.problemId)}>
                     <div className={styles.savedResultItemInfo}>
                       <div className={styles.savedResultItemTitle}>{item.problemId}</div>
                       <div className={styles.savedResultItemMeta}>
-                        {item.dateStr} | {item.status.join(', ')}
+                        {item.dateStr} | {item.status.join(", ")}
                       </div>
                     </div>
                     <div className={styles.savedResultItemActions}>
-                      <button
-                        onClick={(e) => handleDeleteResult(item.problemId, e)}
-                        className={styles.deleteBtn}
-                      >
+                      <button onClick={(e) => handleDeleteResult(item.problemId, e)} className={styles.deleteBtn}>
                         삭제
                       </button>
                     </div>
@@ -225,7 +224,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
               )}
             </div>
             <div className={styles.sidebarActions}>
-              <button className={styles.btn} onClick={handleClearAllResults} style={{ background: 'var(--color-error)' }}>
+              <button className={styles.btn} onClick={handleClearAllResults} style={{ background: "var(--color-error)" }}>
                 모든 결과 초기화
               </button>
             </div>
@@ -233,7 +232,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
           {isAdmin(userId) && (
             <div className={styles.sidebarSection}>
               <h3>관리자</h3>
-              <button type="button" className={styles.btn} onClick={handleOpenDbViewer} style={{ background: 'var(--color-primary)' }}>
+              <button type="button" className={styles.btn} onClick={handleOpenDbViewer} style={{ background: "var(--color-primary)" }}>
                 DB 보기 (저장 결과)
               </button>
               <p className={styles.adminHint}>사용자별 완성된 하위문항·루브릭 데이터를 조회할 수 있습니다.</p>

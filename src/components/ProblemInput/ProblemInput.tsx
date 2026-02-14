@@ -3,6 +3,7 @@ import { useApp } from "../../contexts/AppContext";
 import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
+import { AdminModeModal } from "../AdminMode/AdminModeModal";
 import styles from "./ProblemInput.module.css";
 import example1Data from "../../../data/example1.json";
 import example1Image from "../../../data/example1.png";
@@ -58,6 +59,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     imageData: null,
     imgDescription: "",
   });
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
 
   /** 이미지 URL을 base64 data URL로 변환 (API는 base64만 허용) */
   const urlToBase64 = (url: string): Promise<string> =>
@@ -314,10 +316,17 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           )}
         </div>
 
-        <button type="submit" className={styles.submitBtn} disabled={!formData.problem || !formData.answer}>
-          문제 풀이하기
-        </button>
+        <div className={styles.buttonRow}>
+          <button type="submit" className={styles.submitBtn} disabled={!formData.problem || !formData.answer}>
+            문제 풀이하기
+          </button>
+          {/* 어떤 아이디로 로그인하든 항상 표시 */}
+          <button type="button" className={styles.adminModeBtn} onClick={() => setAdminModalOpen(true)}>
+            관리자 모드
+          </button>
+        </div>
       </form>
+      {adminModalOpen && <AdminModeModal onClose={() => setAdminModalOpen(false)} />}
     </div>
   );
 };
