@@ -135,6 +135,12 @@ export const SubQs = () => {
           guide_sub_questions: finalizedSubs,
         };
         setFinalizedGuidelineForRubric(finalizedPayload);
+        // 확정 시 서버·사이드바에 저장 (다른 기기/새로고침 시에도 목록에 표시)
+        const problemId = finalizedPayload.problem_id ?? currentProblemId;
+        if (problemId) {
+          const guidelineToSave = { ...gd, guide_sub_questions: finalizedSubs };
+          saveResult(problemId, undefined, undefined, guidelineToSave, preferredVersion, undefined);
+        }
         logUserEvent("sub_questions_finalized", {
           guide_sub_questions: finalizedSubs,
         });

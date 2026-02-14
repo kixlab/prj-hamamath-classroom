@@ -144,18 +144,24 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
 
   const handleDeleteResult = async (problemId: string, e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    if (window.confirm(`"${problemId}" 결과를 삭제하시겠습니까?`)) {
-      await deleteResult(problemId);
-      updateSavedResultsList();
-    }
+    if (!window.confirm(`"${problemId}" 결과를 삭제하시겠습니까?`)) return;
+    // 삭제 즉시 사이드바 목록에서 제거
+    setSavedResults((prev) => prev.filter((item) => item.problemId !== problemId));
+    await deleteResult(problemId);
+    // 서버와 동기화 (필요 시 목록 다시 조회)
+    updateSavedResultsList();
   };
 
-  const handleClearAllResults = () => {
-    if (window.confirm('모든 저장된 결과를 삭제하시겠습니까?')) {
-      clearAllResults();
-      updateSavedResultsList();
-      alert('모든 결과가 삭제되었습니다.');
+  const handleClearAllResults = async () => {
+    if (!window.confirm('모든 저장된 결과를 삭제하시겠습니까?')) return;
+    // 서버에 있는 항목도 하나씩 삭제 후 로컬 초기화
+    for (const item of savedResults) {
+      const pid = item.problemId?.trim();
+      if (pid) await deleteResult(pid);
     }
+    clearAllResults();
+    await updateSavedResultsList();
+    alert('모든 결과가 삭제되었습니다.');
   };
 
   const handleOpenDbViewer = () => {

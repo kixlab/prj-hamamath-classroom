@@ -136,6 +136,10 @@ export const Rubrics = () => {
     const confirmed = window.confirm("루브릭을 확정하시겠습니까? 확정 후에는 현재 상태를 기준으로 활용하게 됩니다.");
     if (!confirmed) return;
     try {
+      // 확정 시 서버·사이드바에 저장 (다른 기기/새로고침 시에도 목록에 표시)
+      if (currentProblemId && currentRubrics?.length) {
+        saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics);
+      }
       logUserEvent("rubric_finalized", {
         count: rubrics.length,
       });

@@ -279,6 +279,114 @@ export const api = {
     return response.json();
   },
 
+  /** 진단 결과 전체 저장 (다른 기기/브라우저에서 복원용)
+   * results: { [studentId]: { [problemId]: { [subQuestionId]: { level, reason } } } }
+   */
+  async saveDiagnosisResults(payload: {
+    user_id: string;
+    results: Record<string, Record<string, Record<string, { level: string; reason: string }>>>;
+  }) {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/results"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 결과를 저장하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 저장된 진단 결과 조회 (본인) — 다른 브라우저 복원용 */
+  async getDiagnosisResults(): Promise<{
+    results: Record<string, Record<string, Record<string, { level: string; reason: string }>>>;
+  }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/results"), {
+      headers: getHistoryHeaders(),
+    });
+    if (response.status === 404) return { results: {} };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 결과를 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 진단 리포트 저장 (학생별) — 다른 브라우저에서 바로 표시용 */
+  async saveDiagnosisReport(payload: {
+    user_id: string;
+    student_id: string;
+    report: {
+      problem_rows: Array<{
+        problem_id: string;
+        step_count: number;
+        high_count: number;
+        mid_count: number;
+        low_count: number;
+        average_level: "상" | "중" | "하" | "-";
+      }>;
+      step_rows: Array<{
+        display_code: string;
+        problem_count: number;
+        score_100?: number;
+        final_level: string;
+        feedback_summary?: string | null;
+      }>;
+    };
+  }) {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/report"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 리포트를 저장하는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 저장된 진단 리포트 조회 (학생별) */
+  async getDiagnosisReport(
+    studentId: string
+  ): Promise<{
+    problem_rows: Array<{
+      problem_id: string;
+      step_count: number;
+      high_count: number;
+      mid_count: number;
+      low_count: number;
+      average_level: "상" | "중" | "하" | "-";
+    }>;
+    step_rows: Array<{
+      display_code: string;
+      problem_count: number;
+      score_100?: number;
+      final_level: string;
+      feedback_summary?: string | null;
+    }>;
+  } | null> {
+    const params = new URLSearchParams({ student_id: studentId });
+    const response = await fetch(getApiUrl(`/api/v1/diagnosis/report?${params}`), {
+      headers: getHistoryHeaders(),
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 리포트를 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
   // 결과 불러오기
   async getResult(problemId: string) {
     const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
