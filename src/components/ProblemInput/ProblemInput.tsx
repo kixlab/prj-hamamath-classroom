@@ -112,9 +112,11 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     if (!canLoadLocal) return;
     const base = selectedProblem!.replace(/\.json$/i, "");
     const cotKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_cot.json`));
-    const subQKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`));
+    const subQKey =
+      Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`)) ??
+      Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_subQ.json`));
     if (!cotKey || !subQKey) {
-      setError(`해당 문제의 ${base}_cot.json 또는 ${base}_suqQ.json 파일이 data/에 없습니다.`);
+      setError(`해당 문제의 ${base}_cot.json 및 ${base}_suqQ.json(또는 _subQ.json) 파일이 data/에 없습니다.`);
       return;
     }
     setLoadLocalLoading(true);
@@ -429,7 +431,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             className={styles.loadLocalBtn}
             onClick={handleLoadLocal}
             disabled={!canLoadLocal || loadLocalLoading}
-            title={canLoadLocal ? "선택한 문제의 _cot.json, _suqQ.json을 로드해 2·3단계를 채웁니다" : "이 문제에는 해당 로컬 파일이 없습니다"}
+            title={canLoadLocal ? "선택한 문제의 _cot.json, _suqQ.json(또는 _subQ.json)을 로드해 2·3단계를 채웁니다" : "이 문제에는 해당 로컬 파일이 없습니다"}
           >
             {loadLocalLoading ? "불러오는 중…" : "문제 불러오기"}
           </button>
