@@ -1255,7 +1255,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                 return (
                   <div key={s.id} className={styles.studentListItemWrap}>
                     <button type="button" className={`${styles.studentListItem} ${isActiveStudent ? styles.studentListItemActive : ""}`} onClick={() => setCurrentStudentId(s.id)}>
-                      <div className={styles.studentListName} onClick={(e) => e.stopPropagation()}>
+                      <div className={styles.studentListName} onClick={(e) => isEditingName && e.stopPropagation()}>
                         {isEditingName ? (
                           <input
                             type="text"
@@ -1339,11 +1339,6 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                                 </option>
                               ))}
                             </select>
-                            {currentStudentId && (
-                              <span className={styles.studentIdBadge} title="손글씨 이미지 파일명 등에 사용되는 학생 ID">
-                                ID: {currentStudentId}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </header>
