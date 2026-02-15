@@ -357,25 +357,34 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         const { results } = await api.getDiagnosisResults(userId);
         if (cancelled || !results || typeof results !== "object") return;
         if (Object.keys(results).length === 0) return;
+        const saved = getSavedResults();
+        const savedProblemIds = new Set<string>(Object.keys(saved));
+
         setDiagnosisResults((prev) => {
           const next = JSON.parse(JSON.stringify(prev));
           for (const sid of Object.keys(results)) {
             if (!next[sid]) next[sid] = {};
             for (const pid of Object.keys(results[sid] || {})) {
+              if (!savedProblemIds.has(pid)) continue;
               next[sid][pid] = { ...(next[sid][pid] ?? {}), ...(results[sid][pid] ?? {}) };
+            }
+          }
+          // 이름 변경으로 제거된(이전) 문제 ID는 제거해 중복 표시 방지
+          for (const sid of Object.keys(next)) {
+            for (const pid of Object.keys(next[sid] || {})) {
+              if (!savedProblemIds.has(pid)) delete next[sid][pid];
             }
           }
           return next;
         });
 
-        // 진단 결과에 등장하는 모든 문제 ID 수집
+        // 진단 결과에 등장하는 문제 ID 중 현재 저장된 문제만 수집 (이름 변경 후 이전 ID 제외)
         const problemIds = new Set<string>();
         for (const sid of Object.keys(results)) {
           for (const pid of Object.keys(results[sid] || {})) {
-            problemIds.add(pid);
+            if (savedProblemIds.has(pid)) problemIds.add(pid);
           }
         }
-        const saved = getSavedResults();
         const builtSummaries: Record<string, Record<string, ProblemStepSummary>> = {};
         for (const problemId of problemIds) {
           if (cancelled) return;
@@ -423,6 +432,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
             const next = { ...prev };
             for (const sid of Object.keys(builtSummaries)) {
               next[sid] = { ...(next[sid] ?? {}), ...builtSummaries[sid] };
+            }
+            // 이름 변경으로 제거된 문제 ID는 요약에서 제거해 중복 표시 방지
+            for (const sid of Object.keys(next)) {
+              for (const pid of Object.keys(next[sid] ?? {})) {
+                if (!savedProblemIds.has(pid)) delete next[sid][pid];
+              }
             }
             return next;
           });
@@ -942,12 +957,15 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   const containerRef = useMathJax([activeId, activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
-  // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산
+  // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산 (저장된 문제만 표시 — 이름 변경 후 이전 ID 제외)
+  const savedProblemIdsForDisplay = new Set<string>(Object.keys(getSavedResults()));
   const summariesForCurrentStudent = studentProblemSummaries[currentStudentId] ?? {};
-  const summaryProblemIds = Object.keys(summariesForCurrentStudent);
+  const summaryProblemIds = Object.keys(summariesForCurrentStudent).filter((pid) => savedProblemIdsForDisplay.has(pid));
   const hasMultiProblemSummary = summaryProblemIds.length >= 2;
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
-  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
+  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {}).filter((pid) =>
+    savedProblemIdsForDisplay.has(pid)
+  );
 
   // 하: 0점 / 중: 1점 / 상: 2점
   type LevelType = "상" | "중" | "하";
@@ -1014,8 +1032,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
   /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출). 최초 제외하고는 이전 결과를 바로 표시 */
   const openReport = async (studentId: string) => {
-    // 진단 결과에 있는 모든 문제를 리포트에 반영 (studentProblemSummaries에 없는 문제는 여기서 채움)
-    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {});
+    const savedIds = new Set<string>(Object.keys(getSavedResults()));
+    // 진단 결과 중 현재 저장된 문제만 사용 (이름 변경 후 이전 ID 제외해 중복 방지)
+    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {}).filter((pid) => savedIds.has(pid));
     if (!diagnosisProblemIds.length) {
       alert("해당 학생에 대해 한 개 이상의 문제에 진단을 완료해 주세요.");
       return;
@@ -1128,7 +1147,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const handleRefreshReport = async () => {
     const sid = reportStudentId ?? currentStudentId;
     const perStudent = studentProblemSummaries[sid] ?? {};
-    const problemIds = Object.keys(perStudent);
+    const savedIds = new Set<string>(Object.keys(getSavedResults()));
+    const problemIds = Object.keys(perStudent).filter((pid) => savedIds.has(pid));
     if (!problemIds.length) {
       setReportError("진단한 문제가 없습니다. 먼저 문제를 선택하고 진단을 실행해 주세요.");
       return;
