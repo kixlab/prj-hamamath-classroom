@@ -1265,7 +1265,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                           />
                         ) : (
                           <>
-                            <span>{idx + 1}. {s.name}</span>
+                            <span>
+                              {idx + 1}. {s.name}
+                            </span>
                             <span className={styles.studentListId}>ID: {s.id}</span>
                           </>
                         )}
@@ -1343,140 +1345,144 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                           <div className={styles.studentAnswerRow}>
                             <div className={styles.studentAnswerColumn}>
                               <div className={styles.studentAllList}>
-                            {diagnosisItems.map((item) => {
-                              const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
-                              const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                              const isActive = activeItem?.id === item.id;
-                              const showAnswer = !!showAnswerById[item.id];
-                              const showRubric = !!showRubricById[item.id];
-                              const isEditingDiagnosis = !!editingDiagnosisById[item.id];
-                              return (
-                                <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
-                                  <div className={styles.studentAnswerHeader}>
-                                    <div className={styles.studentAnswerHeaderLeft}>
-                                      <span className={styles.studentAnswerCode}>{item.displayCode}</span>
-                                      <span className={styles.studentAnswerLabel}>
-                                        {item.stepName} - {item.subSkillName}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div
-                                    className={styles.studentAnswerQuestion}
-                                    dangerouslySetInnerHTML={{
-                                      __html: formatQuestion(item.question),
-                                    }}
-                                  />
-                                  <textarea
-                                    className={styles.studentTextarea}
-                                    rows={4}
-                                    placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
-                                    value={value}
-                                    onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
-                                  />
-                                  <div className={styles.studentAnswerToggles}>
-                                    {item.answer && (
-                                      <button
-                                        type="button"
-                                        className={`${styles.studentToggleBtn} ${showAnswer ? styles.studentToggleBtnActive : ""}`}
-                                        onClick={() =>
-                                          setShowAnswerById((prev) => ({
-                                            ...prev,
-                                            [item.id]: !prev[item.id],
-                                          }))
-                                        }
-                                      >
-                                        정답 보기
-                                      </button>
-                                    )}
-                                    {item.rubric && item.rubric.levels?.length > 0 && (
-                                      <button
-                                        type="button"
-                                        className={`${styles.studentToggleBtn} ${showRubric ? styles.studentToggleBtnActive : ""}`}
-                                        onClick={() =>
-                                          setShowRubricById((prev) => ({
-                                            ...prev,
-                                            [item.id]: !prev[item.id],
-                                          }))
-                                        }
-                                      >
-                                        루브릭 보기
-                                      </button>
-                                    )}
-                                  </div>
-                                  {showAnswer && item.answer && (
-                                    <div className={styles.studentAnswerSolution}>
-                                      <span className={styles.studentAnswerSolutionLabel}>정답</span>
-                                      <span
-                                        className={styles.studentAnswerSolutionText}
-                                        dangerouslySetInnerHTML={{
-                                          __html: formatAnswer(item.answer),
-                                        }}
-                                      />
-                                    </div>
-                                  )}
-                                  {showRubric && item.rubric && item.rubric.levels?.length > 0 && (
-                                    <div className={styles.studentRubricInline}>
-                                      {item.rubric.levels.map((lv: any) => {
-                                        const showTitle = typeof lv.title === "string" && lv.title.trim().length > 0 && lv.title.trim() !== (lv.description ?? "").trim();
-                                        return (
-                                          <div key={lv.level} className={styles.studentRubricLevel}>
-                                            <div className={styles.studentRubricLevelHeader}>
-                                              <span className={styles.studentRubricBadge}>{lv.level}</span>
-                                              {showTitle && <span className={styles.studentRubricTitle}>{lv.title}</span>}
-                                            </div>
-                                            {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
-                                              <ul className={styles.studentRubricBullets}>
-                                                {lv.bullets.map((b: string, i: number) => (
-                                                  <li key={i}>{b}</li>
-                                                ))}
-                                              </ul>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                  {result && (
-                                    <div className={styles.studentFeedbackPanel}>
-                                      <div className={styles.studentFeedbackHeader}>
-                                        <span className={styles.studentFeedbackTitle}>개별 진단 결과 ({item.displayCode})</span>
-                                        <div className={styles.studentFeedbackControls}>
-                                          {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>진단: {result.level}</span>}
-                                          <button type="button" className={styles.studentFeedbackEditBtn} onClick={() => setEditingDiagnosisById((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}>
-                                            {isEditingDiagnosis ? "편집 종료" : "편집"}
-                                          </button>
+                                {diagnosisItems.map((item) => {
+                                  const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
+                                  const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
+                                  const isActive = activeItem?.id === item.id;
+                                  const showAnswer = !!showAnswerById[item.id];
+                                  const showRubric = !!showRubricById[item.id];
+                                  const isEditingDiagnosis = !!editingDiagnosisById[item.id];
+                                  return (
+                                    <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
+                                      <div className={styles.studentAnswerHeader}>
+                                        <div className={styles.studentAnswerHeaderLeft}>
+                                          <span className={styles.studentAnswerCode}>{item.displayCode}</span>
+                                          <span className={styles.studentAnswerLabel}>
+                                            {item.stepName} - {item.subSkillName}
+                                          </span>
                                         </div>
                                       </div>
-                                      {isEditingDiagnosis ? (
-                                        <>
-                                          <label className={styles.studentFeedbackLevelLabel}>
-                                            진단 등급
-                                            <select className={styles.studentFeedbackLevelSelect} value={result.level} onChange={(e) => updateDiagnosisForItem(item, "level", e.target.value)}>
-                                              <option value="상">상</option>
-                                              <option value="중">중</option>
-                                              <option value="하">하</option>
-                                            </select>
-                                          </label>
-                                          <label className={styles.studentFeedbackBodyLabel}>
-                                            진단 피드백
-                                            <textarea
-                                              className={styles.studentFeedbackBodyInput}
-                                              rows={3}
-                                              value={result.reason ?? ""}
-                                              placeholder="이 하위문항에 대한 학생의 이해 수준, 오류 유형 등을 간단히 기록해 두세요."
-                                              onChange={(e) => updateDiagnosisForItem(item, "reason", e.target.value)}
-                                            />
-                                          </label>
-                                        </>
-                                      ) : (
-                                        <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : "피드백이 없습니다."}</p>
+                                      <div
+                                        className={styles.studentAnswerQuestion}
+                                        dangerouslySetInnerHTML={{
+                                          __html: formatQuestion(item.question),
+                                        }}
+                                      />
+                                      <textarea
+                                        className={styles.studentTextarea}
+                                        rows={4}
+                                        placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
+                                        value={value}
+                                        onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
+                                      />
+                                      <div className={styles.studentAnswerToggles}>
+                                        {item.answer && (
+                                          <button
+                                            type="button"
+                                            className={`${styles.studentToggleBtn} ${showAnswer ? styles.studentToggleBtnActive : ""}`}
+                                            onClick={() =>
+                                              setShowAnswerById((prev) => ({
+                                                ...prev,
+                                                [item.id]: !prev[item.id],
+                                              }))
+                                            }
+                                          >
+                                            정답 보기
+                                          </button>
+                                        )}
+                                        {item.rubric && item.rubric.levels?.length > 0 && (
+                                          <button
+                                            type="button"
+                                            className={`${styles.studentToggleBtn} ${showRubric ? styles.studentToggleBtnActive : ""}`}
+                                            onClick={() =>
+                                              setShowRubricById((prev) => ({
+                                                ...prev,
+                                                [item.id]: !prev[item.id],
+                                              }))
+                                            }
+                                          >
+                                            루브릭 보기
+                                          </button>
+                                        )}
+                                      </div>
+                                      {showAnswer && item.answer && (
+                                        <div className={styles.studentAnswerSolution}>
+                                          <span className={styles.studentAnswerSolutionLabel}>정답</span>
+                                          <span
+                                            className={styles.studentAnswerSolutionText}
+                                            dangerouslySetInnerHTML={{
+                                              __html: formatAnswer(item.answer),
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+                                      {showRubric && item.rubric && item.rubric.levels?.length > 0 && (
+                                        <div className={styles.studentRubricInline}>
+                                          {item.rubric.levels.map((lv: any) => {
+                                            const showTitle = typeof lv.title === "string" && lv.title.trim().length > 0 && lv.title.trim() !== (lv.description ?? "").trim();
+                                            return (
+                                              <div key={lv.level} className={styles.studentRubricLevel}>
+                                                <div className={styles.studentRubricLevelHeader}>
+                                                  <span className={styles.studentRubricBadge}>{lv.level}</span>
+                                                  {showTitle && <span className={styles.studentRubricTitle}>{lv.title}</span>}
+                                                </div>
+                                                {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
+                                                  <ul className={styles.studentRubricBullets}>
+                                                    {lv.bullets.map((b: string, i: number) => (
+                                                      <li key={i}>{b}</li>
+                                                    ))}
+                                                  </ul>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      {result && (
+                                        <div className={styles.studentFeedbackPanel}>
+                                          <div className={styles.studentFeedbackHeader}>
+                                            <span className={styles.studentFeedbackTitle}>개별 진단 결과 ({item.displayCode})</span>
+                                            <div className={styles.studentFeedbackControls}>
+                                              {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>진단: {result.level}</span>}
+                                              <button
+                                                type="button"
+                                                className={styles.studentFeedbackEditBtn}
+                                                onClick={() => setEditingDiagnosisById((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                              >
+                                                {isEditingDiagnosis ? "편집 종료" : "편집"}
+                                              </button>
+                                            </div>
+                                          </div>
+                                          {isEditingDiagnosis ? (
+                                            <>
+                                              <label className={styles.studentFeedbackLevelLabel}>
+                                                진단 등급
+                                                <select className={styles.studentFeedbackLevelSelect} value={result.level} onChange={(e) => updateDiagnosisForItem(item, "level", e.target.value)}>
+                                                  <option value="상">상</option>
+                                                  <option value="중">중</option>
+                                                  <option value="하">하</option>
+                                                </select>
+                                              </label>
+                                              <label className={styles.studentFeedbackBodyLabel}>
+                                                진단 피드백
+                                                <textarea
+                                                  className={styles.studentFeedbackBodyInput}
+                                                  rows={3}
+                                                  value={result.reason ?? ""}
+                                                  placeholder="이 하위문항에 대한 학생의 이해 수준, 오류 유형 등을 간단히 기록해 두세요."
+                                                  onChange={(e) => updateDiagnosisForItem(item, "reason", e.target.value)}
+                                                />
+                                              </label>
+                                            </>
+                                          ) : (
+                                            <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : "피드백이 없습니다."}</p>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                                  );
+                                })}
+                              </div>
 
                               <div className={styles.studentActions}>
                                 <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
@@ -1498,7 +1504,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
 
                             {currentStudentId && currentProblemKey && (
                               <div className={styles.studentHandwrittenPanel}>
-                                <h4 className={styles.studentHandwrittenTitle}>학생 손글씨 이미지</h4>
+                                <h4 className={styles.studentHandwrittenTitle}>학생 풀이 이미지</h4>
                                 <div className={styles.studentHandwrittenScroll}>
                                   {([1, 2] as const).map((slot) => {
                                     const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
