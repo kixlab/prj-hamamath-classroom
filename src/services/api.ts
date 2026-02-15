@@ -503,7 +503,7 @@ export const api = {
     newProblemId: string,
     userId?: string | null
   ): Promise<{ status: string; migrated_student_answers: number; migrated_diagnosis_students: number }> {
-    const response = await fetch(getApiUrl("/api/v1/history/rename"), {
+    const response = await fetch(getApiUrl("/api/v1/history/migrate-problem-id"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
