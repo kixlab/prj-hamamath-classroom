@@ -497,6 +497,69 @@ export const api = {
     return response.json();
   },
 
+  /** 손글씨 이미지 업로드 (해당 학생·문제, slot 1 또는 2). image는 data URL 또는 base64 문자열. */
+  async uploadHandwritten(
+    studentId: string,
+    problemId: string,
+    slot: 1 | 2,
+    imageDataUrl: string,
+    userId?: string | null
+  ): Promise<{ status: string; slot: number }> {
+    const response = await fetch(getApiUrl("/api/v1/handwritten/upload"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify({
+        student_id: studentId,
+        problem_id: problemId,
+        slot,
+        image: imageDataUrl,
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "이미지 업로드에 실패했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 손글씨 이미지 조회 (해당 학생·문제, slot1/slot2 base64 data URL) */
+  async getHandwritten(
+    studentId: string,
+    problemId: string,
+    userId?: string | null
+  ): Promise<{ slot1: string | null; slot2: string | null }> {
+    const params = new URLSearchParams({ student_id: studentId, problem_id: problemId });
+    const response = await fetch(getApiUrl(`/api/v1/handwritten?${params}`), {
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      throw new Error("이미지 조회에 실패했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 손글씨 이미지 삭제 (해당 학생·문제, slot 1 또는 2) */
+  async deleteHandwritten(
+    studentId: string,
+    problemId: string,
+    slot: 1 | 2,
+    userId?: string | null
+  ): Promise<{ status: string; deleted: boolean }> {
+    const params = new URLSearchParams({ student_id: studentId, problem_id: problemId, slot: String(slot) });
+    const response = await fetch(getApiUrl(`/api/v1/handwritten?${params}`), {
+      method: "DELETE",
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "이미지 삭제에 실패했습니다.");
+    }
+    return response.json();
+  },
+
   /** 문제 ID 변경: 서버의 학생 답안·진단 결과를 old_problem_id → new_problem_id 로 이전 */
   async renameProblemId(
     oldProblemId: string,

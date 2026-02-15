@@ -341,7 +341,10 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s;
 }
 
 .studentListDeleteBtn:hover {
@@ -389,6 +392,15 @@
   font-size: 0.7rem;
   font-weight: 400;
   color: var(--color-text-secondary);
+}
+
+.studentIdBadge {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
 }
 
 .studentListEditInput {
@@ -1279,11 +1291,126 @@
   border-left: 3px solid var(--color-border);
 }
 
+.studentAnswerRow {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 6px;
+}
+
+.studentAnswerColumn {
+  flex: 1;
+  min-width: 0;
+}
+
 .studentAllList {
   margin-top: 6px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.studentHandwrittenPanel {
+  flex-shrink: 0;
+  width: 500px;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studentHandwrittenTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.studentHandwrittenScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.studentHandwrittenSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studentHandwrittenImg {
+  width: 100%;
+  min-height: 200px;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.studentHandwrittenSlotActions {
+  display: flex;
+  gap: 8px;
+}
+
+.studentHandwrittenReplaceBtn,
+.studentHandwrittenRemoveBtn {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+}
+.studentHandwrittenReplaceBtn:hover,
+.studentHandwrittenRemoveBtn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.studentHandwrittenRemoveBtn {
+  color: var(--color-error, #c00);
+  border-color: var(--color-error, #c00);
+}
+.studentHandwrittenRemoveBtn:hover {
+  background: rgba(200, 0, 0, 0.08);
+}
+
+.studentHandwrittenUploadArea {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.studentHandwrittenUploadArea:hover {
+  border-color: var(--color-primary);
+  background: rgba(0, 100, 200, 0.04);
+}
+
+.studentHandwrittenUploadText {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.studentHandwrittenFileInput {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .studentAnswerBlock {

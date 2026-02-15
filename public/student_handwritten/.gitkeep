@@ -1,0 +1,4 @@
+# 해당 학생·해당 문제별 손글씨 이미지 (문제당 2장)
+# 파일명: {학생ID}_{문제ID}_1.png, _{문제ID}_2.png
+# 예: student-1_num1_json_1.png, student-1_num1_json_2.png
+# 학생ID/문제ID의 / . ? % * : 등은 _ 로 치환됨
