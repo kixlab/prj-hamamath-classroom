@@ -137,7 +137,7 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
   return null;
 }
 
-export async function deleteResult(problemId: string): Promise<void> {
+export async function deleteResult(problemId: string, userId?: string | null): Promise<void> {
   const id = (problemId ?? '').trim();
   if (!id) return;
 
@@ -146,12 +146,12 @@ export async function deleteResult(problemId: string): Promise<void> {
   delete savedResults[id];
   localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
 
-  // 서버에서도 삭제 (Firestore/파일)
+  // 서버에서도 삭제 (Firestore/파일). userId 있으면 헤더 폴백 사용
   try {
     const url = getApiUrl(`/api/v1/history/${encodeURIComponent(id)}`);
     const response = await fetch(url, {
       method: 'DELETE',
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (!response.ok && response.status !== 404) {
       console.error(`서버에서 결과를 삭제하는 중 오류 발생: ${response.status}`);
@@ -252,6 +252,29 @@ export function saveResult(
       alert('결과 저장 중 오류가 발생했습니다.');
     }
   }
+}
+
+/** 서버 저장까지 완료할 때까지 기다리는 저장. 문제 ID 변경 시 새 ID로 저장 후 구 ID 삭제할 때 사용 */
+export async function saveResultAsync(
+  problemId: string,
+  cotData?: CoTData | null,
+  subQData?: any | null,
+  guidelineData?: GuidelineData | null,
+  preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
+  rubrics?: any[] | null,
+  userId?: string | null
+): Promise<void> {
+  saveResult(problemId, cotData, subQData, guidelineData, preferredVersion, rubrics, userId);
+  const savedResults = getSavedResults();
+  const resultData = savedResults[problemId];
+  if (!resultData) return;
+  const url = getApiUrl('/api/v1/history/save');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHistoryHeadersWithFallback(userId) },
+    body: JSON.stringify(resultData),
+  });
+  if (!res.ok) throw new Error(`저장 실패: ${res.status}`);
 }
 
 // React Hook 버전 (기존 호환성 유지)

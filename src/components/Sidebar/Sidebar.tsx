@@ -1,6 +1,6 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { useApp } from "../../contexts/AppContext";
-import { loadResult, deleteResult, clearAllResults, saveResult } from "../../hooks/useStorage";
+import { loadResult, deleteResult, clearAllResults, saveResult, saveResultAsync } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { isAdmin } from "../../utils/admin";
 import styles from "./Sidebar.module.css";
@@ -143,9 +143,39 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     if (!window.confirm(`"${problemId}" 결과를 삭제하시겠습니까?`)) return;
     // 삭제 즉시 사이드바 목록에서 제거
     setSavedResults((prev) => prev.filter((item) => item.problemId !== problemId));
-    await deleteResult(problemId);
+    await deleteResult(problemId, userId);
     // 서버와 동기화 (필요 시 목록 다시 조회)
     updateSavedResultsList();
+  };
+
+  const handleRenameResult = async (oldId: string, e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    const newId = window.prompt("새 문제 ID를 입력하세요.", oldId);
+    if (newId == null) return;
+    const trimmed = newId.trim();
+    if (!trimmed) {
+      alert("문제 ID를 입력해 주세요.");
+      return;
+    }
+    if (trimmed === oldId) return;
+    if (savedResults.some((item) => item.problemId === trimmed) && !window.confirm(`"${trimmed}" ID가 이미 있습니다. 덮어쓸까요?`)) return;
+    try {
+      const result = await loadResult(oldId);
+      if (!result) {
+        alert("해당 결과를 불러올 수 없습니다.");
+        return;
+      }
+      await saveResultAsync(trimmed, result.cotData, result.subQData, result.guidelineData, result.preferredVersion ?? undefined, result.rubrics ?? undefined, userId);
+      await api.renameProblemId(oldId, trimmed, userId);
+      await deleteResult(oldId, userId);
+      setSavedResults((prev) => prev.map((item) => (item.problemId === oldId ? { ...item, problemId: trimmed } : item)));
+      if (currentProblemId === oldId) setCurrentProblemId(trimmed);
+      await updateSavedResultsList();
+      alert(`문제 이름이 "${trimmed}"(으)로 변경되었습니다.`);
+    } catch (err: any) {
+      console.error("문제 이름 변경 실패:", err);
+      alert("변경 중 오류가 발생했습니다. " + (err?.message ?? String(err)));
+    }
   };
 
   const handleClearAllResults = async () => {
@@ -153,7 +183,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     // 서버에 있는 항목도 하나씩 삭제 후 로컬 초기화
     for (const item of savedResults) {
       const pid = item.problemId?.trim();
-      if (pid) await deleteResult(pid);
+      if (pid) await deleteResult(pid, userId);
     }
     clearAllResults();
     await updateSavedResultsList();
@@ -215,6 +245,9 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
                       </div>
                     </div>
                     <div className={styles.savedResultItemActions}>
+                      <button onClick={(e) => handleRenameResult(item.problemId, e)} className={styles.renameBtn} title="문제 ID 변경">
+                        문제 이름 변경
+                      </button>
                       <button onClick={(e) => handleDeleteResult(item.problemId, e)} className={styles.deleteBtn}>
                         삭제
                       </button>

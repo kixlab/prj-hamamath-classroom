@@ -497,6 +497,30 @@ export const api = {
     return response.json();
   },
 
+  /** 문제 ID 변경: 서버의 학생 답안·진단 결과를 old_problem_id → new_problem_id 로 이전 */
+  async renameProblemId(
+    oldProblemId: string,
+    newProblemId: string,
+    userId?: string | null
+  ): Promise<{ status: string; migrated_student_answers: number; migrated_diagnosis_students: number }> {
+    const response = await fetch(getApiUrl("/api/v1/history/rename"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify({
+        old_problem_id: oldProblemId,
+        new_problem_id: newProblemId,
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "문제 ID 이전 중 오류가 발생했습니다.");
+    }
+    return response.json();
+  },
+
   // 학생 진단: 학생 답안 상/중/하 채점
   async diagnoseStudentAnswer(payload: {
     problem_id: string;
