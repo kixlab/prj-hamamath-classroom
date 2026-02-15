@@ -6,6 +6,7 @@ import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { api } from "../../services/api";
 import { getSavedResults } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
+import { compressImageDataUrl } from "../../utils/imageCompression";
 
 interface StudentDiagnosisProps {
   userId: string;
@@ -636,7 +637,14 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     }
     const reader = new FileReader();
     reader.onload = async () => {
-      const dataUrl = reader.result as string;
+      const rawDataUrl = reader.result as string;
+      let dataUrl: string;
+      try {
+        dataUrl = await compressImageDataUrl(rawDataUrl);
+      } catch (e) {
+        console.warn("이미지 압축 실패, 원본으로 전송:", e);
+        dataUrl = rawDataUrl;
+      }
       setHandwrittenUploads((prev) => {
         const byStudent = prev[currentStudentId] ?? {};
         const current = byStudent[currentProblemKey] ?? [null, null];

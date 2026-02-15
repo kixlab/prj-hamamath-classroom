@@ -519,6 +519,11 @@ export const api = {
       }),
     });
     if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error(
+          "이미지가 너무 커서 서버에서 거부되었습니다. 더 작은 이미지를 선택하거나, 해상도를 낮춘 뒤 다시 시도해 주세요."
+        );
+      }
       const err = await response.json().catch(() => ({}));
       throw new Error((err as { detail?: string }).detail || "이미지 업로드에 실패했습니다.");
     }

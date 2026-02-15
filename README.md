@@ -29,6 +29,7 @@ src/
 ## CSS 모듈 구조
 
 각 컴포넌트는 자체 CSS 모듈 파일을 가지고 있습니다:
+
 - `ComponentName.module.css` 형식
 - 컴포넌트별로 스타일이 분리되어 관리됨
 - CSS 클래스명이 자동으로 해시되어 충돌 방지
@@ -60,16 +61,19 @@ VITE_API_BASE_URL=http://localhost:8000
 - **백엔드 API**: `http://localhost:8000` — `/api` 요청은 Vite 프록시로 8000으로 전달됨
 
 백엔드 서버 실행:
+
 ```bash
 cd /Users/Doh/Desktop/prj-hamamath-server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **"저장 목록을 불러올 수 없습니다" 오류 시**
+
 - 백엔드가 8000 포트에서 실행 중인지 확인
 - 배포 환경에서는 빌드 시 `VITE_API_BASE_URL`을 백엔드 URL로 설정했는지 확인 (위 환경 변수 섹션 참고)
 
 **백엔드 (API) 참고 — 사용자 ID 헤더**
+
 - HTTP 헤더는 ISO-8859-1만 허용되므로, 한글 등이 포함된 사용자 ID는 프론트에서 Base64로 인코딩해 보냅니다.
 - `X-User-Id-Encoding: base64`가 있으면 `X-User-Id` 값을 Base64 디코딩한 UTF-8 문자열로 사용하면 됩니다. `X-Admin-View-User-Encoding: base64`도 동일하게 처리하면 됩니다.
 
