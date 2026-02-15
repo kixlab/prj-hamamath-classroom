@@ -857,6 +857,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         }
       }
       api.saveDiagnosisResults({ user_id: userId, results: toSaveResults }).catch((err) => console.error("진단 결과 자동 저장 오류:", err));
+
+      setSaveMessage("진단을 완료했습니다.");
     } finally {
       setBulkDiagnosing(false);
     }
@@ -945,7 +947,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
         parts.push("진단 리포트");
       }
 
-      setSaveMessage(parts.length > 0 ? `${parts.join(", ")}을(를) 저장했습니다.` : "저장할 답안이 없습니다.");
+      setSaveMessage(parts.length > 0 ? "저장이 완료되었습니다." : "저장할 답안이 없습니다.");
     } catch (err: any) {
       console.error("학생 답안/진단 저장 오류:", err);
       alert(err.message || "저장하는 중 오류가 발생했습니다.");
