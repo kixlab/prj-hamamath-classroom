@@ -310,12 +310,12 @@
 
 .studentListItemWrap {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .studentListItem {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   text-align: left;
   border-radius: 6px;
@@ -323,9 +323,13 @@
   background: transparent;
   padding: 6px 8px;
   cursor: pointer;
+}
+
+.studentListButtons {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
+  padding-left: 4px;
 }
 
 .studentListDeleteBtn {
@@ -375,6 +379,42 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.studentListId {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.studentListEditInput {
+  width: 100%;
+  min-width: 80px;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  background: var(--color-bg);
+}
+
+.studentListEditBtn {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.studentListEditBtn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: rgba(0, 100, 200, 0.06);
 }
 
 .studentListMeta {
