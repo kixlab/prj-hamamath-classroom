@@ -108,18 +108,20 @@
 }
 
 .layout {
-  margin-top: 12px;
+  margin-top: 16px;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 20px;
   align-items: flex-start;
 }
 
 .studentListColumn {
   min-width: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
+  padding: 12px 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   padding: 10px 12px;
 }
 
@@ -295,41 +297,55 @@
 }
 
 .studentListTitle {
-  margin: 0 0 6px;
-  font-size: 0.9rem;
+  margin: 0 0 10px;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--color-text);
+  padding: 0 2px;
 }
 
 .studentList {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .studentListItemWrap {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  border-radius: 8px;
+  padding: 4px;
+  transition: background 0.15s ease;
+}
+
+.studentListItemWrap:hover {
+  background: var(--color-bg-secondary);
 }
 
 .studentListItem {
   width: 100%;
   min-width: 0;
   text-align: left;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  padding: 6px 8px;
+  padding: 10px 10px;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.studentListItem:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .studentListButtons {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding-left: 4px;
+  flex-wrap: wrap;
 }
 
 .studentListDeleteBtn {
@@ -341,7 +357,10 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s;
 }
 
 .studentListDeleteBtn:hover {
@@ -371,8 +390,13 @@
 }
 
 .studentListItemActive {
-  background: var(--color-bg-secondary);
+  background: rgba(0, 100, 200, 0.08);
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.studentListItemWrap:has(.studentListItemActive) {
+  background: transparent;
 }
 
 .studentListName {
@@ -389,6 +413,15 @@
   font-size: 0.7rem;
   font-weight: 400;
   color: var(--color-text-secondary);
+}
+
+.studentIdBadge {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
 }
 
 .studentListEditInput {
@@ -520,32 +553,36 @@
 }
 
 .studentPanel {
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
-  padding: 12px 14px 14px;
+  padding: 16px 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .studentHeader {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .studentHeaderTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .studentTitle {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--color-text);
 }
@@ -553,7 +590,8 @@
 .studentControls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .leftHeaderRow {
@@ -674,44 +712,56 @@
 }
 
 .studentTextarea {
-  margin-top: 4px;
+  margin-top: 6px;
   width: 100%;
-  min-height: 120px;
-  padding: 10px 12px;
+  min-height: 100px;
+  padding: 12px 14px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   font-size: 0.9rem;
+  line-height: 1.5;
   font-family: inherit;
   resize: vertical;
   box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.studentTextarea::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.8;
 }
 
 .studentTextarea:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary-light);
+  box-shadow: 0 0 0 2px rgba(0, 100, 200, 0.2);
 }
 
 .studentActions {
-  margin-top: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .studentSaveBtn {
-  padding: 6px 14px;
-  border-radius: 999px;
+  padding: 10px 20px;
+  border-radius: 8px;
   border: none;
   background: var(--color-primary);
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
 }
 
 .studentSaveBtn:disabled {
-  opacity: 0.7;
-  cursor: default;
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .studentSaveBtn:not(:disabled):hover {
@@ -719,32 +769,41 @@
 }
 
 .studentDiagnoseBtn {
-  padding: 6px 14px;
-  border-radius: 999px;
+  padding: 10px 18px;
+  border-radius: 8px;
   border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--color-bg);
   color: var(--color-text);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.studentDiagnoseBtn:hover {
+.studentDiagnoseBtn:hover:not(:disabled) {
   border-color: var(--color-primary);
-  background: var(--color-bg);
+  background: rgba(0, 100, 200, 0.06);
+}
+
+.studentDiagnoseBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .studentSaveMessage {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--color-text-secondary);
+  margin-left: 4px;
 }
 
 .studentSummary {
-  margin-top: 16px;
+  margin-top: 20px;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border);
 }
 
 .studentSummaryTitle {
-  margin: 0 0 6px;
-  font-size: 0.9rem;
+  margin: 0 0 10px;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--color-text);
 }
@@ -752,24 +811,31 @@
 .studentSummaryRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .studentSummaryChip {
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
-  padding: 4px 10px;
-  font-size: 0.78rem;
+  padding: 8px 14px;
+  font-size: 0.82rem;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.studentSummaryChip:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-secondary);
 }
 
 .studentSummaryChipActive {
   border-color: var(--color-primary);
-  background: var(--color-bg-secondary);
+  background: rgba(0, 100, 200, 0.08);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .studentSummaryCode {
@@ -779,6 +845,7 @@
 
 .studentSummaryStatus {
   color: var(--color-text-secondary);
+  font-size: 0.8rem;
 }
 
 .studentFeedbackPanel {
@@ -1279,23 +1346,144 @@
   border-left: 3px solid var(--color-border);
 }
 
-.studentAllList {
-  margin-top: 6px;
+.studentAnswerRow {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 20px;
+  align-items: flex-start;
+  margin-top: 8px;
 }
 
-.studentAnswerBlock {
+.studentAnswerColumn {
+  flex: 1;
+  min-width: 0;
+}
+
+.studentAllList {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studentHandwrittenPanel {
+  flex-shrink: 0;
+  width: 500px;
+  max-width: 100%;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
-  padding: 8px 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studentHandwrittenTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.studentHandwrittenScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.studentHandwrittenSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studentHandwrittenImg {
+  width: 100%;
+  min-height: 200px;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.studentHandwrittenSlotActions {
+  display: flex;
+  gap: 8px;
+}
+
+.studentHandwrittenReplaceBtn,
+.studentHandwrittenRemoveBtn {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+}
+.studentHandwrittenReplaceBtn:hover,
+.studentHandwrittenRemoveBtn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.studentHandwrittenRemoveBtn {
+  color: var(--color-error, #c00);
+  border-color: var(--color-error, #c00);
+}
+.studentHandwrittenRemoveBtn:hover {
+  background: rgba(200, 0, 0, 0.08);
+}
+
+.studentHandwrittenUploadArea {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.studentHandwrittenUploadArea:hover {
+  border-color: var(--color-primary);
+  background: rgba(0, 100, 200, 0.04);
+}
+
+.studentHandwrittenUploadText {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.studentHandwrittenFileInput {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.studentAnswerBlock {
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  padding: 12px 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.studentAnswerBlock:hover {
+  border-color: rgba(0, 100, 200, 0.3);
 }
 
 .studentAnswerBlockActive {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary-light);
+  box-shadow: 0 0 0 2px rgba(0, 100, 200, 0.15);
+  background: var(--color-bg);
 }
 
 .studentAnswerHeader {
@@ -1303,49 +1491,52 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .studentAnswerHeaderLeft {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .studentAnswerCode {
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  font-size: 0.75rem;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--color-text);
+  border: none;
 }
 
 .studentAnswerLabel {
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: var(--color-text-secondary);
 }
 
 .studentAnswerResult {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--color-primary);
   font-weight: 600;
 }
 
 .studentAnswerQuestion {
-  font-size: 1.02rem;
-  color: var(--color-text-secondary);
-  margin-top: 2px;
-  margin-bottom: 4px;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  margin-top: 4px;
+  margin-bottom: 10px;
+  line-height: 1.55;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--color-border);
 }
 
 .studentAnswerToggles {
-  margin-top: 4px;
+  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .studentToggleBtn {

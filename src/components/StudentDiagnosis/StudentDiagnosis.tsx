@@ -254,6 +254,8 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const [reportFeedbackEdits, setReportFeedbackEdits] = useState<Record<string, string>>({});
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
+  /** 해당 학생·문제별 업로드한 손글씨 이미지 (data URL). [이미지1, 이미지2] */
+  const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, [string | null, string | null]>>>({});
 
   // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
   useEffect(() => {
@@ -458,6 +460,38 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     };
   }, [userId, problemIdForDiagnosis, currentStudentId]);
 
+  // 해당 학생·문제의 손글씨 이미지 서버에서 조회 (다른 브라우저 동기화)
+  useEffect(() => {
+    if (!problemIdForDiagnosis || !currentStudentId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.getHandwritten(currentStudentId, problemIdForDiagnosis, userId);
+        if (cancelled) return;
+        setHandwrittenUploads((prev) => ({
+          ...prev,
+          [currentStudentId]: {
+            ...(prev[currentStudentId] ?? {}),
+            [problemIdForDiagnosis]: [res.slot1 ?? null, res.slot2 ?? null],
+          },
+        }));
+      } catch {
+        if (!cancelled) {
+          setHandwrittenUploads((prev) => ({
+            ...prev,
+            [currentStudentId]: {
+              ...(prev[currentStudentId] ?? {}),
+              [problemIdForDiagnosis]: [null, null],
+            },
+          }));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, problemIdForDiagnosis, currentStudentId]);
+
   // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장 (다른 탭/같은 브라우저 복원용)
   useEffect(() => {
     try {
@@ -515,7 +549,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const handleAddStudent = () => {
     const name = window.prompt("추가할 학생의 이름을 입력해 주세요.", `학생 ${students.length + 1}`);
     if (!name || !name.trim()) return;
-    const id = `student-${Date.now()}`;
+    const nextNum =
+      students.reduce((max, s) => {
+        const m = /^student-(\d+)$/.exec(s.id);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0) + 1;
+    const id = `student-${nextNum}`;
     const newStudent = { id, name: name.trim() };
     const nextList = [...students, newStudent];
     setStudents(nextList);
@@ -574,6 +613,45 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   };
 
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
+
+  const handleHandwrittenUpload = async (slot: 1 | 2, file: File | null) => {
+    if (!currentStudentId || !currentProblemKey) return;
+    if (file && !file.type.startsWith("image/")) {
+      alert("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    if (!file) {
+      setHandwrittenUploads((prev) => {
+        const byStudent = prev[currentStudentId] ?? {};
+        const current = byStudent[currentProblemKey] ?? [null, null];
+        const next: [string | null, string | null] = slot === 1 ? [null, current[1]] : [current[0], null];
+        return { ...prev, [currentStudentId]: { ...byStudent, [currentProblemKey]: next } };
+      });
+      try {
+        await api.deleteHandwritten(currentStudentId, currentProblemKey, slot, userId);
+      } catch (err: any) {
+        console.warn("손글씨 이미지 서버 삭제 실패:", err);
+      }
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setHandwrittenUploads((prev) => {
+        const byStudent = prev[currentStudentId] ?? {};
+        const current = byStudent[currentProblemKey] ?? [null, null];
+        const next: [string | null, string | null] = slot === 1 ? [dataUrl, current[1]] : [current[0], dataUrl];
+        return { ...prev, [currentStudentId]: { ...byStudent, [currentProblemKey]: next } };
+      });
+      try {
+        await api.uploadHandwritten(currentStudentId, currentProblemKey, slot, dataUrl, userId);
+      } catch (err: any) {
+        console.warn("손글씨 이미지 서버 저장 실패:", err);
+        alert(err?.message ?? "이미지 저장에 실패했습니다. 다시 시도해 주세요.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleStudentAnswerChange = (id: string, value: string) => {
     setStudentAnswers((prev) => ({
@@ -1186,9 +1264,12 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                             aria-label="이름 수정"
                           />
                         ) : (
-                          <span>
-                            {idx + 1}. {s.name}
-                          </span>
+                          <>
+                            <span>
+                              {idx + 1}. {s.name}
+                            </span>
+                            <span className={styles.studentListId}>ID: {s.id}</span>
+                          </>
                         )}
                       </div>
                     </button>
@@ -1246,173 +1327,233 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
                             <select className={styles.studentSelect} value={currentStudentId} onChange={(e) => handleChangeStudent(e.target.value)}>
                               {students.map((s) => (
                                 <option key={s.id} value={s.id}>
-                                  {s.name}
+                                  {s.name} (ID: {s.id})
                                 </option>
                               ))}
                             </select>
+                            {currentStudentId && (
+                              <span className={styles.studentIdBadge} title="손글씨 이미지 파일명 등에 사용되는 학생 ID">
+                                ID: {currentStudentId}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        {activeItem && (
-                          <span className={styles.studentMeta}>
-                            선택된 진단 대상: {activeItem.id} · {activeItem.stepName} - {activeItem.subSkillName}
-                          </span>
-                        )}
                       </header>
 
                       {diagnosisItems.length > 0 ? (
                         <>
-                          <p className={styles.studentAllDesc}>아래에서 모든 하위문항에 대한 학생 답안을 한 번에 입력할 수 있습니다.</p>
-                          <div className={styles.studentAllList}>
-                            {diagnosisItems.map((item) => {
-                              const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
-                              const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                              const isActive = activeItem?.id === item.id;
-                              const showAnswer = !!showAnswerById[item.id];
-                              const showRubric = !!showRubricById[item.id];
-                              const isEditingDiagnosis = !!editingDiagnosisById[item.id];
-                              return (
-                                <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
-                                  <div className={styles.studentAnswerHeader}>
-                                    <div className={styles.studentAnswerHeaderLeft}>
-                                      <span className={styles.studentAnswerCode}>{item.displayCode}</span>
-                                      <span className={styles.studentAnswerLabel}>
-                                        {item.stepName} - {item.subSkillName}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div
-                                    className={styles.studentAnswerQuestion}
-                                    dangerouslySetInnerHTML={{
-                                      __html: formatQuestion(item.question),
-                                    }}
-                                  />
-                                  <textarea
-                                    className={styles.studentTextarea}
-                                    rows={4}
-                                    placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
-                                    value={value}
-                                    onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
-                                  />
-                                  <div className={styles.studentAnswerToggles}>
-                                    {item.answer && (
-                                      <button
-                                        type="button"
-                                        className={`${styles.studentToggleBtn} ${showAnswer ? styles.studentToggleBtnActive : ""}`}
-                                        onClick={() =>
-                                          setShowAnswerById((prev) => ({
-                                            ...prev,
-                                            [item.id]: !prev[item.id],
-                                          }))
-                                        }
-                                      >
-                                        정답 보기
-                                      </button>
-                                    )}
-                                    {item.rubric && item.rubric.levels?.length > 0 && (
-                                      <button
-                                        type="button"
-                                        className={`${styles.studentToggleBtn} ${showRubric ? styles.studentToggleBtnActive : ""}`}
-                                        onClick={() =>
-                                          setShowRubricById((prev) => ({
-                                            ...prev,
-                                            [item.id]: !prev[item.id],
-                                          }))
-                                        }
-                                      >
-                                        루브릭 보기
-                                      </button>
-                                    )}
-                                  </div>
-                                  {showAnswer && item.answer && (
-                                    <div className={styles.studentAnswerSolution}>
-                                      <span className={styles.studentAnswerSolutionLabel}>정답</span>
-                                      <span
-                                        className={styles.studentAnswerSolutionText}
-                                        dangerouslySetInnerHTML={{
-                                          __html: formatAnswer(item.answer),
-                                        }}
-                                      />
-                                    </div>
-                                  )}
-                                  {showRubric && item.rubric && item.rubric.levels?.length > 0 && (
-                                    <div className={styles.studentRubricInline}>
-                                      {item.rubric.levels.map((lv: any) => {
-                                        const showTitle = typeof lv.title === "string" && lv.title.trim().length > 0 && lv.title.trim() !== (lv.description ?? "").trim();
-                                        return (
-                                          <div key={lv.level} className={styles.studentRubricLevel}>
-                                            <div className={styles.studentRubricLevelHeader}>
-                                              <span className={styles.studentRubricBadge}>{lv.level}</span>
-                                              {showTitle && <span className={styles.studentRubricTitle}>{lv.title}</span>}
-                                            </div>
-                                            {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
-                                              <ul className={styles.studentRubricBullets}>
-                                                {lv.bullets.map((b: string, i: number) => (
-                                                  <li key={i}>{b}</li>
-                                                ))}
-                                              </ul>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                  {result && (
-                                    <div className={styles.studentFeedbackPanel}>
-                                      <div className={styles.studentFeedbackHeader}>
-                                        <span className={styles.studentFeedbackTitle}>개별 진단 결과 ({item.displayCode})</span>
-                                        <div className={styles.studentFeedbackControls}>
-                                          {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>진단: {result.level}</span>}
-                                          <button type="button" className={styles.studentFeedbackEditBtn} onClick={() => setEditingDiagnosisById((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}>
-                                            {isEditingDiagnosis ? "편집 종료" : "편집"}
-                                          </button>
+                          <div className={styles.studentAnswerRow}>
+                            <div className={styles.studentAnswerColumn}>
+                              <div className={styles.studentAllList}>
+                                {diagnosisItems.map((item) => {
+                                  const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
+                                  const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
+                                  const isActive = activeItem?.id === item.id;
+                                  const showAnswer = !!showAnswerById[item.id];
+                                  const showRubric = !!showRubricById[item.id];
+                                  const isEditingDiagnosis = !!editingDiagnosisById[item.id];
+                                  return (
+                                    <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
+                                      <div className={styles.studentAnswerHeader}>
+                                        <div className={styles.studentAnswerHeaderLeft}>
+                                          <span className={styles.studentAnswerCode}>{item.displayCode}</span>
+                                          <span className={styles.studentAnswerLabel}>
+                                            {item.stepName} - {item.subSkillName}
+                                          </span>
                                         </div>
                                       </div>
-                                      {isEditingDiagnosis ? (
-                                        <>
-                                          <label className={styles.studentFeedbackLevelLabel}>
-                                            진단 등급
-                                            <select className={styles.studentFeedbackLevelSelect} value={result.level} onChange={(e) => updateDiagnosisForItem(item, "level", e.target.value)}>
-                                              <option value="상">상</option>
-                                              <option value="중">중</option>
-                                              <option value="하">하</option>
-                                            </select>
-                                          </label>
-                                          <label className={styles.studentFeedbackBodyLabel}>
-                                            진단 피드백
-                                            <textarea
-                                              className={styles.studentFeedbackBodyInput}
-                                              rows={3}
-                                              value={result.reason ?? ""}
-                                              placeholder="이 하위문항에 대한 학생의 이해 수준, 오류 유형 등을 간단히 기록해 두세요."
-                                              onChange={(e) => updateDiagnosisForItem(item, "reason", e.target.value)}
-                                            />
-                                          </label>
-                                        </>
-                                      ) : (
-                                        <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : "피드백이 없습니다."}</p>
+                                      <div
+                                        className={styles.studentAnswerQuestion}
+                                        dangerouslySetInnerHTML={{
+                                          __html: formatQuestion(item.question),
+                                        }}
+                                      />
+                                      <textarea
+                                        className={styles.studentTextarea}
+                                        rows={4}
+                                        placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
+                                        value={value}
+                                        onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
+                                      />
+                                      <div className={styles.studentAnswerToggles}>
+                                        {item.answer && (
+                                          <button
+                                            type="button"
+                                            className={`${styles.studentToggleBtn} ${showAnswer ? styles.studentToggleBtnActive : ""}`}
+                                            onClick={() =>
+                                              setShowAnswerById((prev) => ({
+                                                ...prev,
+                                                [item.id]: !prev[item.id],
+                                              }))
+                                            }
+                                          >
+                                            정답 보기
+                                          </button>
+                                        )}
+                                        {item.rubric && item.rubric.levels?.length > 0 && (
+                                          <button
+                                            type="button"
+                                            className={`${styles.studentToggleBtn} ${showRubric ? styles.studentToggleBtnActive : ""}`}
+                                            onClick={() =>
+                                              setShowRubricById((prev) => ({
+                                                ...prev,
+                                                [item.id]: !prev[item.id],
+                                              }))
+                                            }
+                                          >
+                                            루브릭 보기
+                                          </button>
+                                        )}
+                                      </div>
+                                      {showAnswer && item.answer && (
+                                        <div className={styles.studentAnswerSolution}>
+                                          <span className={styles.studentAnswerSolutionLabel}>정답</span>
+                                          <span
+                                            className={styles.studentAnswerSolutionText}
+                                            dangerouslySetInnerHTML={{
+                                              __html: formatAnswer(item.answer),
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+                                      {showRubric && item.rubric && item.rubric.levels?.length > 0 && (
+                                        <div className={styles.studentRubricInline}>
+                                          {item.rubric.levels.map((lv: any) => {
+                                            const showTitle = typeof lv.title === "string" && lv.title.trim().length > 0 && lv.title.trim() !== (lv.description ?? "").trim();
+                                            return (
+                                              <div key={lv.level} className={styles.studentRubricLevel}>
+                                                <div className={styles.studentRubricLevelHeader}>
+                                                  <span className={styles.studentRubricBadge}>{lv.level}</span>
+                                                  {showTitle && <span className={styles.studentRubricTitle}>{lv.title}</span>}
+                                                </div>
+                                                {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
+                                                  <ul className={styles.studentRubricBullets}>
+                                                    {lv.bullets.map((b: string, i: number) => (
+                                                      <li key={i}>{b}</li>
+                                                    ))}
+                                                  </ul>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      {result && (
+                                        <div className={styles.studentFeedbackPanel}>
+                                          <div className={styles.studentFeedbackHeader}>
+                                            <span className={styles.studentFeedbackTitle}>개별 진단 결과 ({item.displayCode})</span>
+                                            <div className={styles.studentFeedbackControls}>
+                                              {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>진단: {result.level}</span>}
+                                              <button
+                                                type="button"
+                                                className={styles.studentFeedbackEditBtn}
+                                                onClick={() => setEditingDiagnosisById((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                              >
+                                                {isEditingDiagnosis ? "편집 종료" : "편집"}
+                                              </button>
+                                            </div>
+                                          </div>
+                                          {isEditingDiagnosis ? (
+                                            <>
+                                              <label className={styles.studentFeedbackLevelLabel}>
+                                                진단 등급
+                                                <select className={styles.studentFeedbackLevelSelect} value={result.level} onChange={(e) => updateDiagnosisForItem(item, "level", e.target.value)}>
+                                                  <option value="상">상</option>
+                                                  <option value="중">중</option>
+                                                  <option value="하">하</option>
+                                                </select>
+                                              </label>
+                                              <label className={styles.studentFeedbackBodyLabel}>
+                                                진단 피드백
+                                                <textarea
+                                                  className={styles.studentFeedbackBodyInput}
+                                                  rows={3}
+                                                  value={result.reason ?? ""}
+                                                  placeholder="이 하위문항에 대한 학생의 이해 수준, 오류 유형 등을 간단히 기록해 두세요."
+                                                  onChange={(e) => updateDiagnosisForItem(item, "reason", e.target.value)}
+                                                />
+                                              </label>
+                                            </>
+                                          ) : (
+                                            <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : "피드백이 없습니다."}</p>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                                  );
+                                })}
+                              </div>
 
-                          <div className={styles.studentActions}>
-                            <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
-                              {saving ? "저장 중..." : "학생 답안 전체 저장"}
-                            </button>
-                            {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
-                              <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
-                              </button>
+                              <div className={styles.studentActions}>
+                                <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
+                                  {saving ? "저장 중..." : "학생 답안 전체 저장"}
+                                </button>
+                                {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
+                                  <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
+                                    {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
+                                  </button>
+                                )}
+                                {canDiagnose[currentStudentId]?.[currentProblemKey] && diagnosisItems.length > 0 && false && (
+                                  <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
+                                    {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
+                                  </button>
+                                )}
+                                {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
+                              </div>
+                            </div>
+
+                            {currentStudentId && currentProblemKey && (
+                              <div className={styles.studentHandwrittenPanel}>
+                                <h4 className={styles.studentHandwrittenTitle}>학생 풀이 이미지</h4>
+                                <div className={styles.studentHandwrittenScroll}>
+                                  {([1, 2] as const).map((slot) => {
+                                    const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
+                                    const dataUrl = urls[slot - 1];
+                                    return (
+                                      <div key={slot} className={styles.studentHandwrittenSlot}>
+                                        {dataUrl ? (
+                                          <>
+                                            <img src={dataUrl} alt={`손글씨 ${slot}`} className={styles.studentHandwrittenImg} />
+                                            <div className={styles.studentHandwrittenSlotActions}>
+                                              <label className={styles.studentHandwrittenReplaceBtn}>
+                                                바꾸기
+                                                <input
+                                                  type="file"
+                                                  accept="image/*"
+                                                  className={styles.studentHandwrittenFileInput}
+                                                  onChange={(e) => {
+                                                    const f = e.target.files?.[0];
+                                                    if (f) handleHandwrittenUpload(slot, f);
+                                                    e.target.value = "";
+                                                  }}
+                                                />
+                                              </label>
+                                              <button type="button" className={styles.studentHandwrittenRemoveBtn} onClick={() => handleHandwrittenUpload(slot, null)}>
+                                                삭제
+                                              </button>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <label className={styles.studentHandwrittenUploadArea}>
+                                            <span className={styles.studentHandwrittenUploadText}>이미지 {slot} 업로드</span>
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className={styles.studentHandwrittenFileInput}
+                                              onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (f) handleHandwrittenUpload(slot, f);
+                                                e.target.value = "";
+                                              }}
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             )}
-                            {canDiagnose[currentStudentId]?.[currentProblemKey] && diagnosisItems.length > 0 && false && (
-                              <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
-                              </button>
-                            )}
-                            {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                           </div>
 
                           {/* 개별 문항 진단 결과 요약 배지는 요약 섹션과 카드 상단에서 충분히 표현되므로,

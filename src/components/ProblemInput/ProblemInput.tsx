@@ -5,13 +5,13 @@ import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { AdminModeModal } from "../AdminMode/AdminModeModal";
 import styles from "./ProblemInput.module.css";
-import example1Data from "../../../data/example1.json";
-import example1Image from "../../../data/example1.png";
-import example2Data from "../../../data/example2.json";
-import example2Image from "../../../data/example2.png";
+import example1Data from "../../../data/finalized_data/example1.json";
+import example1Image from "../../../data/finalized_data/example1.png";
+import example2Data from "../../../data/finalized_data/example2.json";
+import example2Image from "../../../data/finalized_data/example2.png";
 
-/** data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
-const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/*.json");
+/** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
+const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/finalized_data/*.json");
 
 /** 드롭다운에 표시할 문제: example1, example2, num1~num5 만 */
 const DROPDOWN_OPTIONS = ["num1.json", "num2.json", "num3.json", "num4.json", "num5.json"] as const;
@@ -114,7 +114,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     const cotKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_cot.json`));
     const subQKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`)) ?? Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_subQ.json`));
     if (!cotKey || !subQKey) {
-      setError(`해당 문제의 ${base}_cot.json 및 ${base}_suqQ.json(또는 _subQ.json) 파일이 data/에 없습니다.`);
+      setError(`해당 문제의 ${base}_cot.json 및 ${base}_suqQ.json(또는 _subQ.json) 파일이 data/finalized_data/에 없습니다.`);
       return;
     }
     const rubricKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_rubric.json`));
@@ -206,7 +206,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       return;
     }
 
-    // data/ 폴더의 로컬 JSON (num1, num2 등)
+    // data/finalized_data/ 폴더의 로컬 JSON (num1, num2 등)
     const dataKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(filename));
     if (dataKey) {
       try {
