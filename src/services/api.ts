@@ -246,11 +246,12 @@ export const api = {
     return response.json();
   },
 
-  /** 학생 목록 조회 (다른 브라우저에서 왼쪽 패널 복원용) */
+  /** 학생 목록 조회 (다른 브라우저에서 왼쪽 패널 복원용). 404면 빈 목록 반환 */
   async getStudentList(): Promise<{ students: Array<{ id: string; name: string }> }> {
     const response = await fetch(getApiUrl("/api/v1/student-list"), {
       headers: getHistoryHeaders(),
     });
+    if (response.status === 404) return { students: [] };
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
@@ -530,7 +531,7 @@ export const api = {
     return response.json();
   },
 
-  /** 손글씨 이미지 조회 (해당 학생·문제, slot1/slot2 base64 data URL) */
+  /** 손글씨 이미지 조회 (해당 학생·문제, slot1/slot2 base64 data URL). 404면 없음으로 반환 */
   async getHandwritten(
     studentId: string,
     problemId: string,
@@ -540,6 +541,7 @@ export const api = {
     const response = await fetch(getApiUrl(`/api/v1/handwritten?${params}`), {
       headers: getHistoryHeadersWithFallback(userId),
     });
+    if (response.status === 404) return { slot1: null, slot2: null };
     if (!response.ok) {
       throw new Error("이미지 조회에 실패했습니다.");
     }

@@ -856,7 +856,34 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           if (sk) toSaveResults[sid][sk] = nextResults[sid][pkey];
         }
       }
-      api.saveDiagnosisResults({ user_id: userId, results: toSaveResults }).catch((err) => console.error("진단 결과 자동 저장 오류:", err));
+      try {
+        await api.saveDiagnosisResults({ user_id: userId, results: toSaveResults });
+      } catch (err: any) {
+        console.error("진단 결과 자동 저장 오류:", err);
+        alert(err?.message ?? "진단 결과를 서버에 저장하지 못했습니다. 같은 계정으로 다른 브라우저에서 보려면 저장 버튼을 눌러 주세요.");
+      }
+
+      // 현재 학생 진단 리포트도 서버에 저장 (다른 브라우저에서 리포트까지 복원되도록)
+      if (Object.keys(levelOnlyByDisplayCode).length > 0 && userId?.trim()) {
+        const serverProblemKey = currentProblemKey === "__current__" ? (currentProblemId ?? currentProblemKey) : currentProblemKey;
+        const existingSummaries = studentProblemSummaries[currentStudentId] ?? {};
+        const mergedSummaries: Record<string, { levelsByDisplayCode: Record<string, "상" | "중" | "하">; feedbackByDisplayCode?: Record<string, string> }> = { ...existingSummaries };
+        mergedSummaries[serverProblemKey] = { levelsByDisplayCode: levelOnlyByDisplayCode, feedbackByDisplayCode: Object.keys(feedbackByDisplayCode ?? {}).length > 0 ? feedbackByDisplayCode : undefined };
+        try {
+          const reportPayload = {
+            student_id: currentStudentId,
+            problem_summaries: Object.entries(mergedSummaries).map(([pid, s]) => ({
+              problem_id: pid,
+              levels_by_display_code: s.levelsByDisplayCode,
+              feedback_by_display_code: s.feedbackByDisplayCode ?? {},
+            })),
+          };
+          const reportData = await api.generateStudentDiagnosisReport(reportPayload);
+          await api.saveDiagnosisReport({ user_id: userId, student_id: currentStudentId, report: reportData });
+        } catch (reportErr: any) {
+          console.warn("진단 후 리포트 자동 저장 실패:", reportErr);
+        }
+      }
 
       setSaveMessage("진단을 완료했습니다.");
     } finally {
@@ -965,9 +992,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
   const summaryProblemIds = Object.keys(summariesForCurrentStudent).filter((pid) => savedProblemIdsForDisplay.has(pid));
   const hasMultiProblemSummary = summaryProblemIds.length >= 2;
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
-  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {}).filter((pid) =>
-    savedProblemIdsForDisplay.has(pid)
-  );
+  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {}).filter((pid) => savedProblemIdsForDisplay.has(pid));
 
   // 하: 0점 / 중: 1점 / 상: 2점
   type LevelType = "상" | "중" | "하";
@@ -1103,9 +1128,9 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
     setReportLoading(true);
     setReportError(null);
     try {
+      // 다른 브라우저에서도 한 번 저장된 리포트를 보여주기 위해, 서버에 저장된 리포트를 우선 조회
       const savedReport = await api.getDiagnosisReport(studentId, userId);
-      const useSaved = savedReport && savedReport.problem_rows?.length > 0 && savedReport.problem_rows.length >= problemIds.length;
-      if (useSaved) {
+      if (savedReport && savedReport.problem_rows?.length > 0) {
         setReportData(savedReport);
         const initialEdits: Record<string, string> = {};
         (savedReport.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
