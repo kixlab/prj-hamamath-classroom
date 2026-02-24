@@ -299,7 +299,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     } catch (err) {
       console.error("저장된 학생 진단 상태를 불러오는 중 오류:", err);
     }
-  }, [userId]);
+  }, [userId, historyItems]);
 
   // 서버에 저장된 학생 목록 불러오기 (단일 소스: 삭제 반영·다른 브라우저 복원)
   useEffect(() => {
