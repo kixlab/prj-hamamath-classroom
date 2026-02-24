@@ -10,6 +10,7 @@ import { compressImageDataUrl } from "../../utils/imageCompression";
 
 interface StudentDiagnosisProps {
   userId: string;
+  historyRefreshToken?: number;
   onClose: () => void;
 }
 
@@ -61,7 +62,7 @@ function buildSubQuestionIdToDisplayCode(guideSubQuestions: Array<{ sub_question
   return map;
 }
 
-export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => {
+export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: StudentDiagnosisProps) => {
   const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
 
   const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -85,7 +86,7 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
       }
     };
     fetchHistory();
-  }, [userId, currentProblemId]);
+  }, [userId, currentProblemId, historyRefreshToken]);
 
   const problemIdForDiagnosis = selectedProblemId;
   const isCurrentProblemSelected = !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
@@ -339,6 +340,18 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           }
           return next;
         });
+        // 서버에서 답안을 불러온 (학생, 문제)는 진단 가능으로 표시 → 다른 브라우저(사파리 등)에서도 "전체 하위문항 진단" 버튼 노출
+        setCanDiagnose((prev) => {
+          const next = { ...prev };
+          for (const item of items) {
+            if (!item.student_id || !item.problem_id) continue;
+            const hasAnswers = item.answers && typeof item.answers === "object" && Object.keys(item.answers).length > 0;
+            if (!hasAnswers) continue;
+            if (!next[item.student_id]) next[item.student_id] = {};
+            next[item.student_id][item.problem_id] = true;
+          }
+          return next;
+        });
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안 목록 불러오기 오류:", err);
       }
@@ -465,6 +478,13 @@ export const StudentDiagnosis = ({ userId, onClose }: StudentDiagnosisProps) => 
           [currentStudentId]: {
             ...(prev[currentStudentId] ?? {}),
             [problemKey]: { ...(item.answers || {}) },
+          },
+        }));
+        setCanDiagnose((prev) => ({
+          ...prev,
+          [currentStudentId]: {
+            ...(prev[currentStudentId] ?? {}),
+            [problemKey]: true,
           },
         }));
       } catch (err) {

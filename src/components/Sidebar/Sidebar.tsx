@@ -16,9 +16,10 @@ interface SidebarProps {
   userId?: string | null;
   onOpenAdminDb?: () => void;
   onOpenStudentDiagnosis?: () => void;
+  onHistoryChanged?: () => void;
 }
 
-export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: SidebarProps) => {
+export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis, onHistoryChanged }: SidebarProps) => {
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -107,6 +108,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     setCurrentProblemId(problemId);
     alert("현재 결과를 저장했습니다.");
     updateSavedResultsList();
+    if (onHistoryChanged) onHistoryChanged();
   };
 
   const handleLoadResult = async (problemId: string) => {
@@ -146,6 +148,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis }: Sideb
     await deleteResult(problemId, userId);
     // 서버와 동기화 (필요 시 목록 다시 조회)
     updateSavedResultsList();
+    if (onHistoryChanged) onHistoryChanged();
   };
 
   const handleRenameResult = async (oldId: string, e: MouseEvent<HTMLButtonElement>) => {

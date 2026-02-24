@@ -25,6 +25,7 @@ interface AppContentProps {
 const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const [showAdminDbView, setShowAdminDbView] = useState(false);
   const [showStudentDiagnosis, setShowStudentDiagnosis] = useState(false);
+  const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const restoredOnce = useRef(false);
   const {
     currentProblemId,
@@ -110,9 +111,14 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
           userId={userId}
           onOpenAdminDb={() => setShowAdminDbView(true)}
           onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
+          onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
         />
         <div className={styles.container}>
-          <StudentDiagnosis userId={userId} onClose={() => setShowStudentDiagnosis(false)} />
+          <StudentDiagnosis
+            userId={userId}
+            historyRefreshToken={historyRefreshToken}
+            onClose={() => setShowStudentDiagnosis(false)}
+          />
         </div>
       </div>
     );
@@ -136,6 +142,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         userId={userId}
         onOpenAdminDb={() => setShowAdminDbView(true)}
         onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
+        onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
       />
       <div className={styles.container}>
         <WorkflowTabs />
