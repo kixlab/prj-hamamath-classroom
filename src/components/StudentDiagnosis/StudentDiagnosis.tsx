@@ -1575,6 +1575,24 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             {currentStudentId && currentProblemKey && (
                               <div className={styles.studentHandwrittenPanel}>
                                 <h4 className={styles.studentHandwrittenTitle}>학생 풀이 이미지</h4>
+                                {/* 두 장을 한 번에 업로드 */}
+                                <div className={styles.studentHandwrittenMultiUpload}>
+                                  <label className={styles.studentHandwrittenUploadArea}>
+                                    <span className={styles.studentHandwrittenUploadText}>이미지 2개 한 번에 업로드</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      className={styles.studentHandwrittenFileInput}
+                                      onChange={(e) => {
+                                        const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+                                        if (files[0]) handleHandwrittenUpload(1, files[0]);
+                                        if (files[1]) handleHandwrittenUpload(2, files[1]);
+                                        e.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                </div>
                                 <div className={styles.studentHandwrittenScroll}>
                                   {([1, 2] as const).map((slot) => {
                                     const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
