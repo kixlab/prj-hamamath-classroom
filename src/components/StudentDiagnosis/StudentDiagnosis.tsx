@@ -370,38 +370,23 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         const { results } = await api.getDiagnosisResults(userId);
         if (cancelled || !results || typeof results !== "object") return;
         if (Object.keys(results).length === 0) return;
-        const saved = getSavedResults();
-        const serverProblemIds = new Set<string>(
-          (historyItems || [])
-            .map((item: any) => item?.problem_id)
-            .filter((pid: any) => typeof pid === "string" && pid.trim().length > 0),
-        );
-        const localProblemIds = new Set<string>(Object.keys(saved));
-        const validProblemIds = new Set<string>([...Array.from(serverProblemIds), ...Array.from(localProblemIds)]);
 
         setDiagnosisResults((prev) => {
           const next = JSON.parse(JSON.stringify(prev));
           for (const sid of Object.keys(results)) {
             if (!next[sid]) next[sid] = {};
             for (const pid of Object.keys(results[sid] || {})) {
-              if (!validProblemIds.has(pid)) continue;
               next[sid][pid] = { ...(next[sid][pid] ?? {}), ...(results[sid][pid] ?? {}) };
-            }
-          }
-          // 이름 변경으로 제거된(이전) 문제 ID는 제거해 중복 표시 방지
-          for (const sid of Object.keys(next)) {
-            for (const pid of Object.keys(next[sid] || {})) {
-              if (!validProblemIds.has(pid)) delete next[sid][pid];
             }
           }
           return next;
         });
 
-        // 진단 결과에 등장하는 문제 ID 중 현재 사용 중인 문제만 수집 (이름 변경 후 이전 ID 제외)
+        // 진단 결과에 등장하는 문제 ID 수집
         const problemIds = new Set<string>();
         for (const sid of Object.keys(results)) {
           for (const pid of Object.keys(results[sid] || {})) {
-            if (validProblemIds.has(pid)) problemIds.add(pid);
+            problemIds.add(pid);
           }
         }
         const builtSummaries: Record<string, Record<string, ProblemStepSummary>> = {};
@@ -410,7 +395,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
           try {
             const result = await api.getResult(problemId);
-            const local = saved[problemId] || null;
+            const local = getSavedResults()[problemId] || null;
             const gd = (result as any)?.guidelineData || (local as any)?.guidelineData;
             if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
               guideSubQuestions = gd.guide_sub_questions;
@@ -451,12 +436,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             const next = { ...prev };
             for (const sid of Object.keys(builtSummaries)) {
               next[sid] = { ...(next[sid] ?? {}), ...builtSummaries[sid] };
-            }
-            // 이름 변경으로 제거된 문제 ID는 요약에서 제거해 중복 표시 방지
-            for (const sid of Object.keys(next)) {
-              for (const pid of Object.keys(next[sid] ?? {})) {
-                if (!validProblemIds.has(pid)) delete next[sid][pid];
-              }
             }
             return next;
           });
@@ -1012,23 +991,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   const containerRef = useMathJax([activeId, activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
-  // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산 (현재 사용 중인 문제만 표시 — 이름 변경 후 이전 ID 제외)
-  const savedResultsForDisplay = getSavedResults();
-  const serverProblemIdsForDisplay = new Set<string>(
-    (historyItems || [])
-      .map((item: any) => item?.problem_id)
-      .filter((pid: any) => typeof pid === "string" && pid.trim().length > 0),
-  );
-  const localProblemIdsForDisplay = new Set<string>(Object.keys(savedResultsForDisplay));
-  const validProblemIdsForDisplay = new Set<string>([
-    ...Array.from(serverProblemIdsForDisplay),
-    ...Array.from(localProblemIdsForDisplay),
-  ]);
+  // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산
   const summariesForCurrentStudent = studentProblemSummaries[currentStudentId] ?? {};
-  const summaryProblemIds = Object.keys(summariesForCurrentStudent).filter((pid) => validProblemIdsForDisplay.has(pid));
+  const summaryProblemIds = Object.keys(summariesForCurrentStudent);
   const hasMultiProblemSummary = summaryProblemIds.length >= 2;
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
-  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {}).filter((pid) => validProblemIdsForDisplay.has(pid));
+  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
 
   // 하: 0점 / 중: 1점 / 상: 2점
   type LevelType = "상" | "중" | "하";
