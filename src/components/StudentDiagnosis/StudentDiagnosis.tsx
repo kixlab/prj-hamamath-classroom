@@ -1063,9 +1063,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출). 최초 제외하고는 이전 결과를 바로 표시 */
   const openReport = async (studentId: string) => {
-    const savedIds = new Set<string>(Object.keys(getSavedResults()));
-    // 진단 결과 중 현재 저장된 문제만 사용 (이름 변경 후 이전 ID 제외해 중복 방지)
-    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {}).filter((pid) => savedIds.has(pid));
+    // 해당 학생에 대해 진단 결과가 있는 모든 문제 ID 사용
+    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {});
     if (!diagnosisProblemIds.length) {
       alert("해당 학생에 대해 한 개 이상의 문제에 진단을 완료해 주세요.");
       return;
@@ -1178,8 +1177,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const handleRefreshReport = async () => {
     const sid = reportStudentId ?? currentStudentId;
     const perStudent = studentProblemSummaries[sid] ?? {};
-    const savedIds = new Set<string>(Object.keys(getSavedResults()));
-    const problemIds = Object.keys(perStudent).filter((pid) => savedIds.has(pid));
+    // 현재 요약에 포함된 모든 문제를 대상으로 리포트 재계산
+    const problemIds = Object.keys(perStudent);
     if (!problemIds.length) {
       setReportError("진단한 문제가 없습니다. 먼저 문제를 선택하고 진단을 실행해 주세요.");
       return;
