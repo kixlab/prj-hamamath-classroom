@@ -1,44 +1,197 @@
-.problemInput {
-  padding: 32px;
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-  max-width: 100%;
-  margin: 0;
+.page {
+  padding: 20px 20px 32px;
+  background: var(--color-bg-secondary);
+  min-height: min(75vh, 800px);
 }
 
-.form {
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 16px;
 }
 
-.formGroup {
-  margin-bottom: 20px;
+/* ── 상단: 문제 ID · 학년 · 생성하기 ── */
+.topBar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px min-content;
+  gap: 16px;
+  align-items: end;
+  padding: 16px 18px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.formGroup label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-  color: var(--color-text);
-  font-size: 0.875rem;
+.topField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
-.problemIdRow {
+.topFieldGrade .input {
+  max-width: 120px;
+}
+
+.topLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.topIdControls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
-.problemIdRow .select {
-  min-width: 180px;
-  flex: 0 0 auto;
+.topIdControls .select {
+  flex: 1 1 200px;
+  min-width: 160px;
 }
 
-.problemIdRow .input {
+.topIdControls .input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.generateBtn {
+  padding: 10px 22px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.generateBtn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.generateBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.generateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 본문: 왼쪽(이미지) / 오른쪽(문제·모범답안·정답) ── */
+.contentGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.imageCol {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.imageCol .panel {
   flex: 1;
-  min-width: 160px;
+  min-height: 100%;
+}
+
+.fieldsCol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.panelProblem {
+  min-height: 200px;
+}
+
+.panelSolution {
+  min-height: 180px;
+}
+
+.panelAnswer {
+  min-height: 0;
+}
+
+.panelAnswer .panelBody {
+  justify-content: center;
+}
+
+.panelImage {
+  min-height: 420px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+.panelIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.panelIcon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  flex: 1;
+  min-width: 0;
+}
+
+.panelBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-height: 0;
 }
 
 .select,
@@ -47,9 +200,9 @@
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.9375rem;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: inherit;
@@ -60,115 +213,155 @@
 .textarea:focus {
   outline: none;
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
 }
 
 .textarea {
-  min-height: 100px;
   resize: vertical;
+  line-height: 1.55;
 }
 
-.fileInput {
-  width: 100%;
-  padding: 10px;
-  border: 1px dashed var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
+.textareaFill {
+  flex: 1;
+  min-height: 160px;
+  resize: none;
 }
 
-.fileInput:hover {
-  border-color: var(--color-primary);
-  background: var(--color-bg);
+.fileInputHidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.imagePreview {
-  margin-top: 10px;
+.imagePreviewBox {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  margin-bottom: 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
 }
 
-.imagePreview img {
-  max-width: 280px;
-  max-height: 240px;
+.imagePreviewImg {
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
   display: block;
 }
 
-.removeImageBtn {
-  padding: 6px 12px;
-  background: var(--color-error);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: background-color 0.2s;
-  align-self: flex-start;
+.imagePlaceholder {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 16px;
 }
 
-.removeImageBtn:hover {
-  background: #dc2626;
-}
-
-.buttonRow {
+.imageActions {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
 }
 
-.submitBtn {
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+.uploadBtn {
   flex: 1;
-  min-width: 140px;
-}
-
-.loadLocalBtn {
-  padding: 12px 20px;
-  font-size: 0.9375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
   font-weight: 500;
-  border-radius: 6px;
-  cursor: pointer;
+  color: var(--color-text);
   background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
-  transition: border-color 0.2s, color 0.2s;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
-.loadLocalBtn:hover:not(:disabled) {
+.uploadBtn:hover {
+  background: var(--color-bg);
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.loadLocalBtn:disabled {
-  opacity: 0.5;
+.uploadIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.removeImageBtn {
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.removeImageBtn:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+.removeImageBtn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.submitBtn:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+@media (max-width: 900px) {
+  .topBar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .topFieldGrade .input {
+    max-width: none;
+  }
+
+  .topActions {
+    justify-content: flex-end;
+  }
+
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .panelImage {
+    min-height: 240px;
+  }
+
+  .textareaFill {
+    min-height: 120px;
+  }
 }
 
-.submitBtn:active:not(:disabled) {
-  transform: scale(0.98);
-}
+@media (max-width: 520px) {
+  .page {
+    padding: 12px 10px 24px;
+  }
 
-.submitBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
+  .topActions {
+    align-items: stretch;
+  }
+
+  .generateBtn {
+    width: 100%;
+  }
+
+  .imageActions {
+    flex-direction: column;
+  }
 }
