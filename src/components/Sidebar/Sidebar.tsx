@@ -4,6 +4,7 @@ import { loadResult, deleteResult, clearAllResults, saveResult, saveResultAsync 
 import { api } from "../../services/api";
 import { isAdmin } from "../../utils/admin";
 import { useLocale } from "../../i18n/LocaleContext";
+import { AdminModeModal } from "../AdminMode/AdminModeModal";
 import styles from "./Sidebar.module.css";
 
 interface SavedResultItem {
@@ -39,6 +40,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis, onHisto
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
   const [listLoadError, setListLoadError] = useState<string | null>(null);
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
 
   useEffect(() => {
     updateSavedResultsList();
@@ -204,6 +206,11 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis, onHisto
     onOpenStudentDiagnosis?.();
   };
 
+  const handleOpenAdminMode = () => {
+    setSidebarOpen(false);
+    setAdminModalOpen(true);
+  };
+
   return (
     <>
       {/* 사이드바 오버레이 */}
@@ -228,6 +235,9 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis, onHisto
             </button>
             <button className={styles.btn} onClick={handleOpenStudentDiagnosis} style={{ marginTop: "10px", background: "#111827" }}>
               {t('sidebar.studentDiagnosis')}
+            </button>
+            <button type="button" className={styles.btn} onClick={handleOpenAdminMode} style={{ marginTop: "10px" }}>
+              {t('problemInput.adminMode')}
             </button>
           </div>
           <div className={styles.sidebarSection}>
@@ -278,6 +288,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onOpenStudentDiagnosis, onHisto
           )}
         </div>
       </div>
+      {adminModalOpen && <AdminModeModal onClose={() => setAdminModalOpen(false)} />}
     </>
   );
 };

@@ -1,15 +1,48 @@
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
+import type { Locale } from '../../i18n/translations';
 import styles from './Header.module.css';
 
 interface HeaderProps {
   onNewProblem: () => void;
   onShowUserIdPage?: () => void;
   userId?: string | null;
-  mode?: "workflow" | "diagnosis";
+  mode?: 'workflow' | 'diagnosis';
   onSelectWorkflow?: () => void;
   onSelectDiagnosis?: () => void;
 }
+
+function userInitial(userId: string): string {
+  const ch = userId.trim().charAt(0);
+  return ch ? ch.toUpperCase() : '?';
+}
+
+const ModeWorkflowIcon = () => (
+  <svg className={styles.modeIcon} viewBox="0 0 24 24" aria-hidden>
+    <path
+      d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ModeDiagnosisIcon = () => (
+  <svg className={styles.modeIcon} viewBox="0 0 24 24" aria-hidden>
+    <path
+      d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 export const Header = ({
   onNewProblem,
@@ -20,88 +53,164 @@ export const Header = ({
   onSelectDiagnosis,
 }: HeaderProps) => {
   const { sidebarOpen, setSidebarOpen } = useApp();
-  const { locale, toggleLocale, t } = useLocale();
+  const { locale, setLocale, t } = useLocale();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
 
   const handleHamburgerClick = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleGoHome = () => {
+    if (mode === 'diagnosis' && onSelectWorkflow) {
+      onSelectWorkflow();
+    } else {
+      onNewProblem();
+    }
+  };
+
   const handleLogout = () => {
+    setAccountOpen(false);
     if (typeof window !== 'undefined' && window.confirm(t('header.logoutConfirm'))) {
       onShowUserIdPage?.();
     }
   };
 
+  const handleLocaleChange = (next: Locale) => {
+    setLocale(next);
+  };
+
+  const closeAccountMenu = useCallback(() => setAccountOpen(false), []);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        closeAccountMenu();
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAccountMenu();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [accountOpen, closeAccountMenu]);
+
   return (
-    <div className={styles.header}>
+    <header className={styles.header}>
       <div className={styles.headerLeft}>
         <button
-          className={styles.hamburgerMenuBtn}
+          type="button"
+          className={styles.iconBtn}
           id="hamburgerMenuBtn"
           onClick={handleHamburgerClick}
           aria-label={t('header.openMenu')}
-          style={{ display: sidebarOpen ? 'none' : 'block' }}
+          aria-expanded={sidebarOpen}
+          style={{ visibility: sidebarOpen ? 'hidden' : 'visible' }}
         >
-          ☰
+          <svg className={styles.iconSvg} viewBox="0 0 24 24" aria-hidden>
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
         <button
           type="button"
-          className={`${styles.langToggleBtn} ${locale === 'en' ? styles.langToggleBtnActive : ''}`}
-          onClick={toggleLocale}
-          aria-label={locale === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')}
-          title={locale === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')}
+          className={styles.brandBtn}
+          onClick={handleGoHome}
+          aria-label={t('header.goHome')}
         >
-          <span className={styles.globeIcon} aria-hidden>
-            🌐
-          </span>
+          <span className={styles.brandTitle}>{t('header.titleShort')}</span>
         </button>
       </div>
-      <div className={styles.titleWrap}>
-        <button
-          type="button"
-          className={styles.titleBtn}
-          onClick={onShowUserIdPage}
-          aria-label={t('header.goToLogin')}
-        >
-          <h3 className={styles.title}>{t('header.title')}</h3>
-        </button>
-      </div>
-      <div className={styles.headerRight}>
+
+      <div className={styles.headerCenter}>
         {mode && onSelectWorkflow && onSelectDiagnosis ? (
-          <div className={styles.modeToggle}>
+          <div className={styles.modeToggle} role="tablist" aria-label={t('header.workflow')}>
             <button
               type="button"
-              className={`${styles.modeBtn} ${
-                mode === "workflow" ? styles.modeBtnActive : ""
-              }`}
+              role="tab"
+              aria-selected={mode === 'workflow'}
+              className={`${styles.modeBtn} ${mode === 'workflow' ? styles.modeBtnActive : ''}`}
               onClick={onSelectWorkflow}
             >
-              {t('header.workflow')}
+              <ModeWorkflowIcon />
+              <span className={styles.modeBtnLabel}>{t('header.workflow')}</span>
             </button>
             <button
               type="button"
-              className={`${styles.modeBtn} ${
-                mode === "diagnosis" ? styles.modeBtnActive : ""
-              }`}
+              role="tab"
+              aria-selected={mode === 'diagnosis'}
+              className={`${styles.modeBtn} ${mode === 'diagnosis' ? styles.modeBtnActive : ''}`}
               onClick={onSelectDiagnosis}
             >
-              {t('header.diagnosis')}
+              <ModeDiagnosisIcon />
+              <span className={styles.modeBtnLabel}>{t('header.diagnosis')}</span>
             </button>
           </div>
-        ) : (
-          <button className={styles.newProblemBtn} onClick={onNewProblem}>
-            {t('header.newProblem')}
-          </button>
-        )}
-        {userId && (
-          <>
-            <span className={styles.userIdLabel}>{userId}</span>
-            <button type="button" className={styles.logoutBtn} onClick={handleLogout}>
-              {t('header.logout')}
-            </button>
-          </>
-        )}
+        ) : null}
       </div>
-    </div>
+
+      <div className={styles.headerRight}>
+        {userId ? (
+          <div className={styles.accountWrap} ref={accountRef}>
+            <button
+              type="button"
+              className={styles.accountBtn}
+              onClick={() => setAccountOpen((o) => !o)}
+              aria-label={t('header.accountMenu')}
+              aria-expanded={accountOpen}
+              aria-haspopup="menu"
+              aria-controls={menuId}
+            >
+              <span className={styles.accountAvatar} aria-hidden>
+                {userInitial(userId)}
+              </span>
+              <span className={styles.accountId}>{userId}</span>
+              <svg className={styles.accountChevron} viewBox="0 0 24 24" aria-hidden>
+                <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+            {accountOpen && (
+              <div id={menuId} className={styles.accountMenu} role="menu">
+                <div className={styles.accountMenuUser} role="presentation">
+                  {userId}
+                </div>
+                <div className={styles.accountMenuSection}>
+                  <span className={styles.accountMenuLabel}>{t('header.language')}</span>
+                  <div className={styles.langToggle} role="group">
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={locale === 'ko'}
+                      className={`${styles.langBtn} ${locale === 'ko' ? styles.langBtnActive : ''}`}
+                      onClick={() => handleLocaleChange('ko')}
+                    >
+                      KO
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={locale === 'en'}
+                      className={`${styles.langBtn} ${locale === 'en' ? styles.langBtnActive : ''}`}
+                      onClick={() => handleLocaleChange('en')}
+                    >
+                      EN
+                    </button>
+                  </div>
+                </div>
+                <div className={styles.accountMenuDivider} role="separator" />
+                <button type="button" className={styles.accountMenuLogout} role="menuitem" onClick={handleLogout}>
+                  {t('header.logout')}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </header>
   );
 };

@@ -3,169 +3,311 @@
   top: 0;
   left: 0;
   right: 0;
-  background: var(--color-primary);
-  color: white;
-  padding: 10px 24px;
-  text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 1000;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   height: var(--header-height);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 4px;
+  min-width: 0;
+  justify-self: start;
 }
 
-.hamburgerMenuBtn {
-  position: relative;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 18px;
-  transition: background-color 0.2s;
-  flex-shrink: 0;
-}
-
-.hamburgerMenuBtn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.langToggleBtn {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  transition: background-color 0.2s;
-  flex-shrink: 0;
-}
-
-.langToggleBtn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.langToggleBtnActive {
-  background: rgba(255, 255, 255, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-}
-
-.globeIcon {
-  display: inline-block;
-}
-
-.titleWrap {
-  flex: 1;
+.headerCenter {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-}
-
-.titleBtn {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: inherit;
-  display: inline-block;
-}
-
-.titleBtn:hover .title {
-  text-decoration: underline;
-}
-
-.title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  text-align: center;
-  letter-spacing: -0.02em;
+  justify-self: center;
 }
 
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  min-width: 0;
+  justify-self: end;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.15s;
   flex-shrink: 0;
+}
+
+.iconBtn:hover {
+  background: var(--color-bg-secondary);
+}
+
+.iconSvg {
+  width: 20px;
+  height: 20px;
+}
+
+.brandBtn {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(200px, 28vw);
+  padding: 6px 8px;
+  margin-left: 2px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.brandBtn:hover {
+  background: var(--color-bg-secondary);
+}
+
+.brandTitle {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modeToggle {
   display: inline-flex;
-  padding: 2px;
+  padding: 3px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
 }
 
 .modeBtn {
-  min-width: 88px;
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 84px;
+  padding: 5px 12px;
   border-radius: 999px;
   border: none;
   background: transparent;
-  color: #e5e7eb;
-  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+
+.modeIcon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.modeBtnLabel {
+  line-height: 1.2;
+}
+
+.modeBtn:hover:not(.modeBtnActive) {
+  color: var(--color-text);
 }
 
 .modeBtnActive {
-  background: #f9fafb;
-  color: #111827;
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
-.userIdLabel {
+.accountWrap {
+  position: relative;
+}
+
+.accountBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(200px, 32vw);
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.accountBtn:hover,
+.accountBtn[aria-expanded='true'] {
+  background: var(--color-bg-secondary);
+  border-color: #d1d5db;
+}
+
+.accountAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.accountId {
   font-size: 0.8125rem;
-  opacity: 0.95;
-  max-width: 120px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.logoutBtn {
-  background: #dc2626;
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  padding: 4px 10px;
-  border-radius: 4px;
+.accountChevron {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.accountBtn[aria-expanded='true'] .accountChevron {
+  transform: rotate(180deg);
+}
+
+.accountMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 1001;
+}
+
+.accountMenuUser {
+  padding: 8px 10px 6px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  word-break: break-all;
+}
+
+.accountMenuSection {
+  padding: 6px 10px 8px;
+}
+
+.accountMenuLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.langToggle {
+  display: inline-flex;
+  width: 100%;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.langBtn {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s, color 0.15s;
 }
 
-.logoutBtn:hover {
-  background: #b91c1c;
+.langBtn:hover:not(.langBtnActive) {
+  color: var(--color-text);
 }
 
-.newProblemBtn {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+.langBtnActive {
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.accountMenuDivider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--color-border);
+}
+
+.accountMenuLogout {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 2px 6px 4px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
   font-weight: 500;
-  white-space: nowrap;
+  text-align: left;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s, color 0.15s;
 }
 
-.newProblemBtn:hover {
-  background: rgba(255, 255, 255, 0.3);
+.accountMenuLogout:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .header {
+    grid-template-columns: auto 1fr auto;
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .accountId {
+    display: none;
+  }
+
+  .accountBtn {
+    padding: 4px;
+    border-radius: 50%;
+  }
+
+  .modeBtn {
+    min-width: 72px;
+    padding: 5px 8px;
+    font-size: 0.75rem;
+  }
 }

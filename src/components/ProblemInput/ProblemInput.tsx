@@ -3,7 +3,6 @@ import { useApp } from "../../contexts/AppContext";
 import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
-import { AdminModeModal } from "../AdminMode/AdminModeModal";
 import { useLocale } from "../../i18n/LocaleContext";
 import styles from "./ProblemInput.module.css";
 import example1Data from "../../../data/finalized_data/example1.json";
@@ -103,7 +102,6 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     imageData: null,
     imgDescription: "",
   });
-  const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [loadLocalLoading, setLoadLocalLoading] = useState(false);
 
   /** num1~5 중 하나 선택 시 "문제 불러오기" 버튼 활성화 */
@@ -450,13 +448,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           >
             {loadLocalLoading ? t('problemInput.loadingProblem') : t('problemInput.loadProblem')}
           </button>
-          {/* 어떤 아이디로 로그인하든 항상 표시 */}
-          <button type="button" className={styles.adminModeBtn} onClick={() => setAdminModalOpen(true)}>
-            {t('problemInput.adminMode')}
-          </button>
         </div>
       </form>
-      {adminModalOpen && <AdminModeModal onClose={() => setAdminModalOpen(false)} />}
     </div>
   );
 };
