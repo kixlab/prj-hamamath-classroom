@@ -5,6 +5,7 @@ import { saveResult } from "../../hooks/useStorage";
 import { useMathJax } from "../../hooks/useMathJax";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
+import { formatCotStepGroup, formatCotSubSkill } from "../../i18n/translations";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -104,7 +105,7 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 }
 
 export const Rubrics = () => {
-  const { t, formatLevel } = useLocale();
+  const { t, locale, formatLevel } = useLocale();
   const { userId, currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId, finalizedGuidelineForRubric } = useApp();
   /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 guideline */
   const guidelineForStep4 = finalizedGuidelineForRubric ?? currentGuidelineData;
@@ -476,7 +477,7 @@ export const Rubrics = () => {
               <div className={styles.rubricHeader}>
                 <span className={styles.rubricId}>{rubric.sub_question_id}</span>
                 <span className={styles.rubricTitle}>
-                  {rubric.step_name} - {rubric.sub_skill_name}
+                  {formatCotStepGroup(rubric, locale)} - {formatCotSubSkill(rubric, locale)}
                 </span>
                 <span className={styles.rubricQuestionInline}>{preprocessLatex(rubric.question)}</span>
               </div>

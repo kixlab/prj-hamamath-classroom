@@ -146,7 +146,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
         onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
       />
-      <div className={styles.container}>
+      <div className={`${styles.container} ${styles.containerWithStepper}`}>
         <WorkflowTabs />
         <div className={styles.workflowContent}>
           {currentStep === 1 && (

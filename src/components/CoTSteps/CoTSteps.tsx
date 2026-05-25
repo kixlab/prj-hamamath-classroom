@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
+import { formatCotStepGroup, formatCotSubSkill } from '../../i18n/translations';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -9,7 +10,7 @@ import styles from './CoTSteps.module.css';
 
 export const CoTSteps = () => {
   const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const containerRef = useMathJax([currentCotData?.steps]);
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
@@ -79,9 +80,9 @@ export const CoTSteps = () => {
               <div className={styles.stepHeader}>
                 <div className={styles.stepNumber}>{index + 1}</div>
                 <div className={styles.stepTitle}>
-                  <h3>{step.step_name}</h3>
+                  <h3>{formatCotStepGroup(step, locale)}</h3>
                   <div className={styles.subSkill}>
-                    {step.sub_skill_name} ({step.sub_skill_id})
+                    {formatCotSubSkill(step, locale)} ({step.sub_skill_id})
                   </div>
                 </div>
               </div>

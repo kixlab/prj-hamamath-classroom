@@ -570,18 +570,18 @@ const en: Record<TranslationKey, string> = {
   "diagnosis.reportSaveFail": "Failed to save report.",
   "diagnosis.pdfError": "An error occurred while creating the PDF.",
 
-  "category.1": "Problem understanding",
+  "category.1": "Problem comprehension",
   "category.2": "Information structuring",
   "category.3": "Mathematical expression",
-  "category.4": "Mathematical calculation",
-  "category.1-1": "Identify key information",
-  "category.1-2": "Confirm problem gist",
-  "category.2-1": "Organize conditions",
-  "category.2-2": "Connect conditions",
-  "category.3-1": "Apply knowledge",
-  "category.3-2": "Set up expressions/models",
-  "category.4-1": "Perform calculation",
-  "category.4-2": "Organize results",
+  "category.4": "Mathematical computation",
+  "category.1-1": "Identifying key information",
+  "category.1-2": "Identifying the problem goal",
+  "category.2-1": "Organizing conditions",
+  "category.2-2": "Connecting conditions",
+  "category.3-1": "Applying mathematical knowledge",
+  "category.3-2": "Constructing mathematical expressions or models",
+  "category.4-1": "Executing calculations",
+  "category.4-2": "Interpreting and organizing results",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = { ko, en };
@@ -619,4 +619,45 @@ export function formatGrade(level: string, locale: Locale): string {
 export function formatCategory(code: string, locale: Locale): string {
   const key = `category.${code}` as TranslationKey;
   return translations[locale][key] ?? code;
+}
+
+function stepGroupCode(subSkillId?: string): string | undefined {
+  if (!subSkillId) return undefined;
+  const [group] = subSkillId.split("-");
+  return group || undefined;
+}
+
+type CotStepLabels = {
+  sub_skill_id?: string;
+  sub_question_id?: string;
+  step_name?: string;
+  step_name_en?: string;
+  sub_skill_name?: string;
+};
+
+function categoryCode(step: CotStepLabels): string | undefined {
+  return step.sub_skill_id ?? step.sub_question_id;
+}
+
+/** CoT·하위문항 카드의 대단계 제목 (문제 이해 등) */
+export function formatCotStepGroup(step: CotStepLabels, locale: Locale): string {
+  if (locale === "en" && step.step_name_en?.trim()) {
+    return step.step_name_en.trim();
+  }
+  const group = stepGroupCode(categoryCode(step));
+  if (group) {
+    const label = formatCategory(group, locale);
+    if (label !== group) return label;
+  }
+  return step.step_name?.trim() || group || "";
+}
+
+/** CoT·하위문항 카드의 세부 역량 제목 */
+export function formatCotSubSkill(step: CotStepLabels, locale: Locale): string {
+  const code = categoryCode(step);
+  if (code) {
+    const label = formatCategory(code, locale);
+    if (label !== code) return label;
+  }
+  return step.sub_skill_name?.trim() || code || "";
 }

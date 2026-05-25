@@ -7,6 +7,7 @@ import { exportPdfFromGuideline } from "../../utils/exportPdf";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer, formatVerificationResult } from "../../utils/formatting";
 import { useLocale } from "../../i18n/LocaleContext";
+import { formatCotStepGroup, formatCotSubSkill } from "../../i18n/translations";
 import styles from "./SubQs.module.css";
 
 const IconCheck = () => (
@@ -37,7 +38,7 @@ interface Progress {
 }
 
 export const SubQs = () => {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const {
     userId,
     currentCotData,
@@ -931,7 +932,7 @@ export const SubQs = () => {
               <div className={styles.subQuestionHeader}>
                 <span className={styles.subQuestionId}>{subQ.sub_question_id}</span>
                 <span className={styles.subQuestionTitle}>
-                  {subQ.step_name} - {subQ.sub_skill_name}
+                  {formatCotStepGroup(subQ, locale)} - {formatCotSubSkill(subQ, locale)}
                 </span>
               </div>
 
