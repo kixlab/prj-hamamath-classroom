@@ -6,6 +6,7 @@ import { logUserEvent } from "../../services/eventLogger";
 import { exportPdfFromGuideline } from "../../utils/exportPdf";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer, formatVerificationResult } from "../../utils/formatting";
+import { useLocale } from "../../i18n/LocaleContext";
 import styles from "./SubQs.module.css";
 
 const IconCheck = () => (
@@ -36,6 +37,7 @@ interface Progress {
 }
 
 export const SubQs = () => {
+  const { t } = useLocale();
   const {
     userId,
     currentCotData,
@@ -113,7 +115,7 @@ export const SubQs = () => {
 
   // 3단계 확정: 컨펌 후 선택 반영된 하위문항 JSON 저장 → Word/PDF/루브릭 생성하기 버튼 노출
   const handleFinalize = () => {
-    const confirmed = window.confirm("하위문항을 확정하시겠습니까? 확정 후 Word·PDF 다운로드와 루브릭 생성이 가능합니다.");
+    const confirmed = window.confirm(t('subq.confirmFinalize'));
     if (!confirmed) return;
     try {
       const gd = currentGuidelineData as any;
@@ -383,7 +385,7 @@ export const SubQs = () => {
   const generateNextStepB = async () => {
     logUserEvent("confirm_next_clicked", {});
     if (!currentCotData || !(currentCotData as any).steps) {
-      setError("CoT 데이터가 없습니다.");
+      setError(t('subq.noCotData'));
       return;
     }
 
@@ -403,7 +405,7 @@ export const SubQs = () => {
       const considerations = (currentCotData as any).considerations || [];
 
       if (!matchedSubjectArea) {
-        setProgress({ current: 0, total: 8, currentStep: "수학 영역 매칭 중..." });
+        setProgress({ current: 0, total: 8, currentStep: t('subq.matchingSubject') });
         const achievementData = await api.matchSubjectArea({
           main_problem: (currentCotData as any).problem,
           main_answer: (currentCotData as any).answer,
@@ -424,7 +426,7 @@ export const SubQs = () => {
       setProgress({
         current: index + 1,
         total: 8,
-        currentStep: `${stepId} 단계 처리 중...`,
+        currentStep: t('subq.stepProcessing', { stepId }),
       });
 
       // 이전 단계들에서 재생성 문항이 있다면 재생성 문항을 우선 사용
@@ -503,7 +505,7 @@ export const SubQs = () => {
         previousSubQuestions,
       });
     } catch (err: any) {
-      setError(err.message || "오류가 발생했습니다.");
+      setError(err.message || t('common.errorGeneric'));
     } finally {
       setIsGeneratingSteps(false);
     }
@@ -512,7 +514,7 @@ export const SubQs = () => {
   const generateRemainingStepsB = async () => {
     logUserEvent("rest_auto_generate_clicked", {});
     if (!currentCotData || !(currentCotData as any).steps) {
-      setError("CoT 데이터가 없습니다.");
+      setError(t('subq.noCotData'));
       return;
     }
     const steps = (currentCotData as any).steps;
@@ -542,7 +544,7 @@ export const SubQs = () => {
       for (let i = bCurrentIndex; i < totalSteps; i++) {
         const cotStep = steps[i];
         const stepId = stepOrder[i];
-        setProgress({ current: i + 1, total: totalSteps, currentStep: `${stepId} 단계 처리 중...` });
+        setProgress({ current: i + 1, total: totalSteps, currentStep: t('subq.stepProcessing', { stepId }) });
 
         const previousForGeneration = guideSubQuestions.map((q) => {
           const hasReQ = !!(q.re_sub_question && q.re_sub_question.trim().length > 0);
@@ -625,7 +627,7 @@ export const SubQs = () => {
         });
       }
     } catch (err: any) {
-      setError(err.message || "오류가 발생했습니다.");
+      setError(err.message || t('common.errorGeneric'));
     } finally {
       setIsGeneratingSteps(false);
     }
@@ -751,7 +753,7 @@ export const SubQs = () => {
       if (index >= 0 && index < cotSteps.length) {
         cotStep = cotSteps[index];
       } else {
-        setError(`CoT 단계를 찾을 수 없습니다: ${subqId}`);
+        setError(t('subq.cotStepNotFound', { id: subqId }));
         return;
       }
     }
@@ -806,7 +808,7 @@ export const SubQs = () => {
         [subqId]: false,
       }));
     } catch (err: any) {
-      setError(err.message || "오류가 발생했습니다.");
+      setError(err.message || t('common.errorGeneric'));
     } finally {
       setLoading(false);
       setRegeneratingStates((prev) => ({
@@ -822,7 +824,7 @@ export const SubQs = () => {
         {(loading || isGeneratingSteps) && (
           <div className={styles.loading}>
             <div className={styles.spinner}></div>
-            <div>로딩 중...</div>
+            <div>{t('common.loading')}</div>
             {progress.total > 0 && (
               <div className={styles.progress}>
                 {progress.currentStep} ({progress.current}/{progress.total})
@@ -833,7 +835,7 @@ export const SubQs = () => {
         {error && <div className={styles.error}>{error}</div>}
         {!loading && !error && !isGeneratingSteps && (
           <div className={styles.emptyState}>
-            <p>하위문항이 생성되지 않았습니다.</p>
+            <p>{t('subq.notGenerated')}</p>
             <button
               className={styles.generateButton}
               onClick={() => {
@@ -845,7 +847,7 @@ export const SubQs = () => {
                 generateNextStepB();
               }}
             >
-              하위문항 생성하기
+              {t('subq.generateSubq')}
             </button>
           </div>
         )}
@@ -865,7 +867,7 @@ export const SubQs = () => {
     try {
       await api.exportWordFromGuideline(currentCotData as any, finalizedGuidelineForRubric, {}, currentProblemId);
     } catch (err: any) {
-      alert(err.message || "워드 파일 생성 중 오류가 발생했습니다.");
+      alert(err.message || t('subq.wordExportError'));
     }
   };
 
@@ -874,7 +876,7 @@ export const SubQs = () => {
     try {
       await exportPdfFromGuideline(currentCotData as any, finalizedGuidelineForRubric, {}, currentProblemId);
     } catch (err: any) {
-      alert(err.message || "PDF 생성 중 오류가 발생했습니다.");
+      alert(err.message || t('subq.pdfExportError'));
     }
   };
 
@@ -883,7 +885,7 @@ export const SubQs = () => {
       {loading && (
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
-          <div>로딩 중...</div>
+          <div>{t('common.loading')}</div>
           {progress.total > 0 && (
             <div className={styles.progress}>
               {progress.currentStep} ({progress.current}/{progress.total})
@@ -939,11 +941,11 @@ export const SubQs = () => {
                     {showOriginalCard && (
                       <div className={`${styles.originalQuestionBox} ${effectiveSelectedVersion === "original" ? styles.selected : ""}`}>
                         <div className={styles.questionLabelRow}>
-                          <div className={styles.questionLabel}>원본 문항</div>
+                          <div className={styles.questionLabel}>{t('subq.originalQuestion')}</div>
                           <div className={styles.questionActions}>
                             {!isOriginalEditing && (
                               <button className={styles.editToggleBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
-                                편집
+                                {t('common.edit')}
                               </button>
                             )}
                             {showRegenerated && !hideUnselected && (
@@ -962,8 +964,8 @@ export const SubQs = () => {
                                     [subQ.sub_question_id]: true,
                                   }));
                                 }}
-                                title={effectiveSelectedVersion === "original" ? "선택됨" : "이 문항 선택"}
-                                aria-label={effectiveSelectedVersion === "original" ? "선택됨" : "이 문항 선택"}
+                                title={effectiveSelectedVersion === "original" ? t('subq.selected') : t('subq.selectThis')}
+                                aria-label={effectiveSelectedVersion === "original" ? t('subq.selected') : t('subq.selectThis')}
                               >
                                 <IconCheck />
                               </button>
@@ -977,16 +979,16 @@ export const SubQs = () => {
                               type="text"
                               className={styles.editInput}
                               defaultValue={originalAnswer}
-                              placeholder="정답을 입력하세요"
+                              placeholder={t('problemInput.answerPlaceholder')}
                               data-subq-id={subQ.sub_question_id}
                               data-type="original-answer"
                             />
                             <div className={styles.editActions}>
                               <button className={styles.cancelBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
-                                취소
+                                {t('common.cancel')}
                               </button>
                               <button className={styles.saveBtn} onClick={() => handleSaveOriginalEdit(subQ.sub_question_id)}>
-                                저장
+                                {t('common.save')}
                               </button>
                             </div>
                           </div>
@@ -995,7 +997,7 @@ export const SubQs = () => {
                             <div className={styles.questionContent}>{formatQuestion(originalQuestion)}</div>
                             {originalAnswer && (
                               <div className={styles.answerContent}>
-                                <strong>정답:</strong> <span dangerouslySetInnerHTML={{ __html: formatAnswer(originalAnswer) }} />
+                                <strong>{t('common.answerColon')}</strong> <span dangerouslySetInnerHTML={{ __html: formatAnswer(originalAnswer) }} />
                               </div>
                             )}
                           </div>
@@ -1005,11 +1007,11 @@ export const SubQs = () => {
                     {showRegeneratedCard && (
                       <div className={`${styles.regeneratedQuestionBox} ${effectiveSelectedVersion === "regenerated" ? styles.selected : ""}`}>
                         <div className={styles.questionLabelRow}>
-                          <div className={styles.questionLabel}>재생성 문항</div>
+                          <div className={styles.questionLabel}>{t('subq.regeneratedQuestion')}</div>
                           <div className={styles.questionActions}>
                             {!isRegeneratedEditing && (
                               <button className={styles.editToggleBtn} onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}>
-                                편집
+                                {t('common.edit')}
                               </button>
                             )}
                             {showRegenerated && !hideUnselected && (
@@ -1028,8 +1030,8 @@ export const SubQs = () => {
                                     [subQ.sub_question_id]: true,
                                   }));
                                 }}
-                                title={effectiveSelectedVersion === "regenerated" ? "선택됨" : "이 문항 선택"}
-                                aria-label={effectiveSelectedVersion === "regenerated" ? "선택됨" : "이 문항 선택"}
+                                title={effectiveSelectedVersion === "regenerated" ? t('subq.selected') : t('subq.selectThis')}
+                                aria-label={effectiveSelectedVersion === "regenerated" ? t('subq.selected') : t('subq.selectThis')}
                               >
                                 <IconCheck />
                               </button>
@@ -1043,16 +1045,16 @@ export const SubQs = () => {
                               type="text"
                               className={styles.editInput}
                               defaultValue={regeneratedAnswer}
-                              placeholder="정답을 입력하세요"
+                              placeholder={t('problemInput.answerPlaceholder')}
                               data-subq-id={subQ.sub_question_id}
                               data-type="regenerated-answer"
                             />
                             <div className={styles.editActions}>
                               <button className={styles.cancelBtn} onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}>
-                                취소
+                                {t('common.cancel')}
                               </button>
                               <button className={styles.saveBtn} onClick={() => handleSaveRegeneratedEdit(subQ.sub_question_id)}>
-                                저장
+                                {t('common.save')}
                               </button>
                             </div>
                           </div>
@@ -1061,7 +1063,7 @@ export const SubQs = () => {
                             <div className={styles.questionContent}>{formatQuestion(regeneratedQuestion)}</div>
                             {regeneratedAnswer && (
                               <div className={styles.answerContent}>
-                                <strong>정답:</strong> <span dangerouslySetInnerHTML={{ __html: formatAnswer(regeneratedAnswer) }} />
+                                <strong>{t('common.answerColon')}</strong> <span dangerouslySetInnerHTML={{ __html: formatAnswer(regeneratedAnswer) }} />
                               </div>
                             )}
                           </div>
@@ -1073,10 +1075,10 @@ export const SubQs = () => {
                   <>
                     <div className={styles.originalQuestionBox}>
                       <div className={styles.questionLabelRow}>
-                        <div className={styles.questionLabel}>원본 문항</div>
+                        <div className={styles.questionLabel}>{t('subq.originalQuestion')}</div>
                         {!isOriginalEditing && (
                           <button className={styles.editToggleBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
-                            편집
+                            {t('common.edit')}
                           </button>
                         )}
                       </div>
@@ -1087,16 +1089,16 @@ export const SubQs = () => {
                             type="text"
                             className={styles.editInput}
                             defaultValue={originalAnswer}
-                            placeholder="정답을 입력하세요"
+                            placeholder={t('problemInput.answerPlaceholder')}
                             data-subq-id={subQ.sub_question_id}
                             data-type="original-answer"
                           />
                           <div className={styles.editActions}>
                             <button className={styles.cancelBtn} onClick={() => toggleOriginalEdit(subQ.sub_question_id)}>
-                              취소
+                              {t('common.cancel')}
                             </button>
                             <button className={styles.saveBtn} onClick={() => handleSaveOriginalEdit(subQ.sub_question_id)}>
-                              저장
+                              {t('common.save')}
                             </button>
                           </div>
                         </div>
@@ -1105,7 +1107,7 @@ export const SubQs = () => {
                           <div className={styles.questionContent}>{formatQuestion(originalQuestion)}</div>
                           {originalAnswer && (
                             <div className={styles.answerContent}>
-                              <strong>정답:</strong> <span dangerouslySetInnerHTML={{ __html: formatAnswer(originalAnswer) }} />
+                              <strong>{t('common.answerColon')}</strong> <span dangerouslySetInnerHTML={{ __html: formatAnswer(originalAnswer) }} />
                             </div>
                           )}
                         </div>
@@ -1113,10 +1115,10 @@ export const SubQs = () => {
                     </div>
                     <div className={styles.regeneratedQuestionBox}>
                       <div className={styles.questionLabelRow}>
-                        <div className={styles.questionLabel}>재생성 문항</div>
+                        <div className={styles.questionLabel}>{t('subq.regeneratedQuestion')}</div>
                       </div>
                       <div className={styles.displayMode}>
-                        <div className={styles.questionContent}>{isRegenerating ? "준비중" : "재생성한 문항이 없습니다"}</div>
+                        <div className={styles.questionContent}>{isRegenerating ? t('subq.preparing') : t('subq.noRegenerated')}</div>
                       </div>
                     </div>
                   </>
@@ -1127,11 +1129,11 @@ export const SubQs = () => {
                 <div className={styles.actionRowItem}>
                   <button className={styles.actionBtn} onClick={() => toggleVerification(subQ.sub_question_id)}>
                     <span>🔍</span>
-                    <span>검증 결과 보기</span>
+                    <span>{t('subq.viewVerification')}</span>
                   </button>
                   <button className={styles.actionBtnFeedback} onClick={() => toggleFeedback(subQ.sub_question_id)}>
                     <span>💬</span>
-                    <span>피드백</span>
+                    <span>{t('common.feedback')}</span>
                   </button>
                   {isFeedbackOpen && (
                     <button
@@ -1147,12 +1149,12 @@ export const SubQs = () => {
                       {isRegenerating ? (
                         <>
                           <span className={styles.spinnerInline} aria-hidden />
-                          <span>처리 중...</span>
+                          <span>{t('common.processing')}</span>
                         </>
                       ) : (
                         <>
                           <span>🔄</span>
-                          <span>재생성</span>
+                          <span>{t('common.regenerate')}</span>
                         </>
                       )}
                     </button>
@@ -1201,10 +1203,10 @@ export const SubQs = () => {
                         {(() => {
                           const currentlyShown = !!showRegenerated;
                           const hideUnselectedNow = !!hideUnselected;
-                          if (!currentlyShown) return "문항 재생성";
-                          if (currentlyShown && !hideUnselectedNow) return "문항 숨기기";
-                          if (currentlyShown && hideUnselectedNow) return "문항 비교하기";
-                          return "문항 재생성";
+                          if (!currentlyShown) return t('subq.regenerateQuestion');
+                          if (currentlyShown && !hideUnselectedNow) return t('subq.hideQuestion');
+                          if (currentlyShown && hideUnselectedNow) return t('subq.compareQuestion');
+                          return t('subq.regenerateQuestion');
                         })()}
                       </span>
                     </button>
@@ -1220,10 +1222,10 @@ export const SubQs = () => {
                     return (
                       <div className={styles.actionRowWorkflow}>
                         <button className={styles.generateButton} onClick={() => generateNextStepB()}>
-                          확정 후 다음 문항 생성
+                          {t('subq.confirmNext')}
                         </button>
                         <button className={styles.generateButton} onClick={() => generateRemainingStepsB()}>
-                          확정 후 나머지 문항 자동 생성
+                          {t('subq.confirmRestAuto')}
                         </button>
                       </div>
                     );
@@ -1232,10 +1234,10 @@ export const SubQs = () => {
 
               {isFeedbackOpen && (
                 <div className={styles.feedbackInput}>
-                  <textarea className={`${styles.feedbackTextarea} feedback-textarea-${subQ.sub_question_id}`} rows={3} placeholder="수정 요청사항을 입력하세요." disabled={isRegenerating} />
+                  <textarea className={`${styles.feedbackTextarea} feedback-textarea-${subQ.sub_question_id}`} rows={3} placeholder={t('subq.feedbackPlaceholder')} disabled={isRegenerating} />
                   <div className={styles.feedbackActions}>
                     <button className={styles.cancelBtn} onClick={() => toggleFeedback(subQ.sub_question_id)} disabled={isRegenerating}>
-                      취소
+                      {t('common.cancel')}
                     </button>
                     <button
                       className={styles.submitBtn}
@@ -1250,10 +1252,10 @@ export const SubQs = () => {
                       {isRegenerating ? (
                         <>
                           <span className={styles.spinnerInline} aria-hidden />
-                          처리 중...
+                          {t('common.processing')}
                         </>
                       ) : (
-                        "입력"
+                        t('common.submit')
                       )}
                     </button>
                   </div>
@@ -1264,7 +1266,7 @@ export const SubQs = () => {
                 <div className={styles.verificationResult}>
                   {hasRegenerated && (
                     <div className={styles.verificationSection}>
-                      <div className={styles.verificationTitle}>원본 문항 검증 결과</div>
+                      <div className={styles.verificationTitle}>{t('subq.originalVerification')}</div>
                       <div
                         dangerouslySetInnerHTML={{
                           __html: formatVerificationResult(subQ.verification_result),
@@ -1274,7 +1276,7 @@ export const SubQs = () => {
                   )}
                   {hasRegenerated && (
                     <div className={styles.verificationSection}>
-                      <div className={styles.verificationTitle}>재생성 문항 검증 결과</div>
+                      <div className={styles.verificationTitle}>{t('subq.regeneratedVerification')}</div>
                       <div
                         dangerouslySetInnerHTML={{
                           __html: formatVerificationResult(subQ.re_verification_result),
@@ -1298,7 +1300,7 @@ export const SubQs = () => {
         {isGeneratingSteps && !loading && (
           <div className={styles.loadingPlaceholderCard}>
             <div className={styles.spinner}></div>
-            <div>로딩 중...</div>
+            <div>{t('common.loading')}</div>
             {progress.total > 0 && (
               <div className={styles.progress}>
                 {progress.currentStep} ({progress.current}/{progress.total})
@@ -1310,24 +1312,24 @@ export const SubQs = () => {
       {showFinalizeButton && (
         <div className={styles.finalizeRow}>
           <button type="button" className={styles.downloadBtn} onClick={handleDownloadJson}>
-            JSON 다운로드
+            {t('common.jsonDownload')}
           </button>
 
           <button type="button" className={styles.finalizeBtn} onClick={handleFinalize}>
-            하위문항 확정하기
+            {t('subq.finalize')}
           </button>
         </div>
       )}
       {showFinalizeButton && finalizedGuidelineForRubric != null && (
         <div className={styles.exportWordRow}>
           <button type="button" className={styles.exportWordBtn} onClick={handleExportWord}>
-            Word 다운로드
+            {t('common.wordDownload')}
           </button>
           <button type="button" className={styles.exportPdfBtn} onClick={handleExportPdf}>
-            PDF 다운로드
+            {t('common.pdfDownload')}
           </button>
           <button type="button" className={styles.rubricGoBtn} onClick={handleGoToRubric}>
-            루브릭 생성하기
+            {t('subq.goToRubric')}
           </button>
         </div>
       )}

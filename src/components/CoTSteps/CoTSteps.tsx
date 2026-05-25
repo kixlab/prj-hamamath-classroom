@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import { useLocale } from '../../i18n/LocaleContext';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -8,6 +9,7 @@ import styles from './CoTSteps.module.css';
 
 export const CoTSteps = () => {
   const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
+  const { t } = useLocale();
   const containerRef = useMathJax([currentCotData?.steps]);
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
@@ -93,10 +95,10 @@ export const CoTSteps = () => {
                   />
                   <div className={styles.editActions}>
                     <button type="button" className={styles.cancelBtn} onClick={cancelEdit}>
-                      취소
+                      {t('common.cancel')}
                     </button>
                     <button type="button" className={styles.saveBtn} onClick={saveEdit}>
-                      저장
+                      {t('common.save')}
                     </button>
                   </div>
                 </div>
@@ -104,7 +106,7 @@ export const CoTSteps = () => {
                 <div className={styles.stepContentRow}>
                   <div className={styles.stepContent}>{step.step_content}</div>
                   <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>
-                    편집
+                    {t('common.edit')}
                   </button>
                 </div>
               )}
@@ -117,7 +119,7 @@ export const CoTSteps = () => {
           className={styles.generateButton}
           onClick={handleGenerateGuideline}
         >
-          하위문항 생성하기
+          {t('cot.generateSubq')}
         </button>
       </div>
     </>

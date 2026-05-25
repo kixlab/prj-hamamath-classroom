@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import styles from "./StudentDiagnosis.module.css";
 import { useApp } from "../../contexts/AppContext";
+import { useLocale } from "../../i18n/LocaleContext";
+import { translations } from "../../i18n/translations";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { api } from "../../services/api";
@@ -64,6 +66,18 @@ function buildSubQuestionIdToDisplayCode(guideSubQuestions: Array<{ sub_question
 
 export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: StudentDiagnosisProps) => {
   const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
+  const { t, formatLevel, formatGrade, formatCategory, locale } = useLocale();
+
+  const defaultStudentName = useCallback((n: number) => t("diagnosis.studentDefault", { n }), [t]);
+
+  const isDefaultStudentName = useCallback((id: string, name: string) => {
+    const m = /^student-(\d+)$/.exec(id);
+    if (!m) return false;
+    const n = m[1];
+    const koDefault = translations.ko["diagnosis.studentDefault"].replace("{n}", n);
+    const enDefault = translations.en["diagnosis.studentDefault"].replace("{n}", n);
+    return name === koDefault || name === enDefault;
+  }, []);
 
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
@@ -211,6 +225,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const activeItem = activeItemIndex >= 0 ? diagnosisItems[activeItemIndex] : (diagnosisItems[0] ?? null);
 
   const [students, setStudents] = useState<StudentInfo[]>([{ id: "student-1", name: "학생 1" }]);
+
+  useEffect(() => {
+    setStudents((prev) =>
+      prev.map((s) => (isDefaultStudentName(s.id, s.name) ? { ...s, name: defaultStudentName(parseInt(/^student-(\d+)$/.exec(s.id)![1], 10)) } : s)),
+    );
+  }, [locale, defaultStudentName, isDefaultStudentName]);
   const [currentStudentId, setCurrentStudentId] = useState<string>("student-1");
   // studentAnswers[studentId][problemKey][subQuestionId] = answer
   const [studentAnswers, setStudentAnswers] = useState<Record<string, Record<string, Record<string, string>>>>({});
@@ -310,7 +330,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         if (cancelled) return;
         if (Array.isArray(serverStudents)) {
           const list = serverStudents.filter((s: any) => s && s.id).map((s: any) => ({ id: s.id, name: s.name || s.id }));
-          setStudents(list.length > 0 ? list : [{ id: "student-1", name: "학생 1" }]);
+          setStudents(list.length > 0 ? list : [{ id: "student-1", name: defaultStudentName(1) }]);
         }
       } catch (err) {
         if (!cancelled) console.warn("학생 목록 불러오기 오류:", err);
@@ -319,7 +339,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, defaultStudentName]);
 
   // 서버에 저장된 학생 답안 불러와서 복원 (다른 브라우저/기기에서도 접근 가능). 학생 목록은 건드리지 않음(삭제 반영 유지).
   useEffect(() => {
@@ -563,12 +583,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       );
     } catch (err: any) {
       console.warn("학생 목록 저장 실패:", err);
-      alert("이름 저장에 실패했습니다. 다시 시도해 주세요.");
+      alert(t("diagnosis.saveNameFail"));
     }
   };
 
   const handleAddStudent = () => {
-    const name = window.prompt("추가할 학생의 이름을 입력해 주세요.", `학생 ${students.length + 1}`);
+    const name = window.prompt(t("diagnosis.addStudentPrompt"), defaultStudentName(students.length + 1));
     if (!name || !name.trim()) return;
     const nextNum =
       students.reduce((max, s) => {
@@ -591,10 +611,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const handleDeleteStudent = async (studentId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (students.length <= 1) {
-      alert("마지막 학생은 삭제할 수 없습니다.");
+      alert(t("diagnosis.cannotDeleteLast"));
       return;
     }
-    if (!window.confirm(`"${students.find((s) => s.id === studentId)?.name ?? studentId}" 학생을 목록에서 삭제할까요?`)) return;
+    if (!window.confirm(t("diagnosis.deleteStudentConfirm", { name: students.find((s) => s.id === studentId)?.name ?? studentId }))) return;
     const nextList = students.filter((s) => s.id !== studentId);
     setStudents(nextList);
     setStudentAnswers((prev) => {
@@ -627,7 +647,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       );
     } catch (err: any) {
       console.error("학생 목록 저장 실패:", err);
-      alert("삭제한 내용을 서버에 저장하지 못했습니다. 새로고침 시 목록이 다시 보일 수 있습니다. 다시 시도해 주세요.");
+      alert(t("diagnosis.deleteSaveFail"));
       setStudents(students);
       setCurrentStudentId(currentStudentId);
     }
@@ -638,7 +658,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const handleHandwrittenUpload = async (slot: 1 | 2, file: File | null) => {
     if (!currentStudentId || !currentProblemKey) return;
     if (file && !file.type.startsWith("image/")) {
-      alert("이미지 파일만 업로드할 수 있습니다.");
+      alert(t("diagnosis.imagesOnly"));
       return;
     }
     if (!file) {
@@ -675,7 +695,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         await api.uploadHandwritten(currentStudentId, currentProblemKey, slot, dataUrl, userId);
       } catch (err: any) {
         console.warn("손글씨 이미지 서버 저장 실패:", err);
-        alert(err?.message ?? "이미지 저장에 실패했습니다. 다시 시도해 주세요.");
+        alert(err?.message ?? t("diagnosis.imageSaveFail"));
       }
     };
     reader.readAsDataURL(file);
@@ -747,11 +767,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // 현재 학생의 모든 하위문항(답안이 있는 것만)을 한 번에 진단
   const handleRunDiagnosisForAll = async () => {
     if (!currentStudentId) {
-      alert("학생 정보를 먼저 선택해 주세요.");
+      alert(t("diagnosis.selectStudentFirst"));
       return;
     }
     if (!diagnosisItems.length) {
-      alert("진단할 하위문항이 없습니다.");
+      alert(t("diagnosis.noSubqToDiagnose"));
       return;
     }
 
@@ -761,9 +781,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
     if (!targetItems.length) {
       if (itemsWithAnswer.length > 0) {
-        alert("답안은 입력되었으나, 이 문제에 대한 루브릭이 없습니다. 문항 생성 4단계에서 루브릭을 저장한 뒤 다시 시도해 주세요.");
+        alert(t("diagnosis.noRubric"));
       } else {
-        alert("답안이 입력된 하위문항이 없습니다. 먼저 학생 답안을 입력해 주세요.");
+        alert(t("diagnosis.noAnsweredSubq"));
       }
       return;
     }
@@ -865,7 +885,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         await api.saveDiagnosisResults({ user_id: userId, results: toSaveResults });
       } catch (err: any) {
         console.error("진단 결과 자동 저장 오류:", err);
-        alert(err?.message ?? "진단 결과를 서버에 저장하지 못했습니다. 같은 계정으로 다른 브라우저에서 보려면 저장 버튼을 눌러 주세요.");
+        alert(err?.message ?? t("diagnosis.saveResultsFail"));
       }
 
       // 현재 학생 진단 리포트도 서버에 저장 (다른 브라우저에서 리포트까지 복원되도록)
@@ -890,7 +910,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         }
       }
 
-      setSaveMessage("진단을 완료했습니다.");
+      setSaveMessage(t("diagnosis.diagnosisDone"));
     } finally {
       setBulkDiagnosing(false);
     }
@@ -914,7 +934,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }
     }
     if (toSave.length === 0) {
-      alert("저장할 학생 답안이 없습니다. 먼저 문제를 선택하고 답안을 입력해 주세요.");
+      alert(t("diagnosis.noAnswersToSave"));
       return;
     }
 
@@ -941,7 +961,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           },
         }));
       }
-      if (savedAnswers > 0) parts.push(`학생 답안 ${savedAnswers}건`);
+      if (savedAnswers > 0) parts.push(t("diagnosis.savedAnswers", { n: savedAnswers }));
 
       // 학생 목록 저장 (다른 브라우저에서 왼쪽 패널 복원용)
       try {
@@ -949,7 +969,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           students.map((s) => ({ id: s.id, name: s.name })),
           userId,
         );
-        if (students.length > 0) parts.push("학생 목록");
+        if (students.length > 0) parts.push(t("diagnosis.savedStudentList"));
       } catch (e) {
         console.warn("학생 목록 저장 실패:", e);
       }
@@ -966,7 +986,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           }
         }
         await api.saveDiagnosisResults({ user_id: userId, results: normalizedResults });
-        parts.push("진단 결과");
+        parts.push(t("diagnosis.savedResults"));
       }
 
       // 현재 학생의 진단 리포트가 있으면 저장
@@ -976,13 +996,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           student_id: currentStudentId,
           report: reportData,
         });
-        parts.push("진단 리포트");
+        parts.push(t("diagnosis.savedReport"));
       }
 
-      setSaveMessage(parts.length > 0 ? "저장이 완료되었습니다." : "저장할 답안이 없습니다.");
+      setSaveMessage(parts.length > 0 ? t("diagnosis.saveComplete") : t("diagnosis.nothingToSave"));
     } catch (err: any) {
       console.error("학생 답안/진단 저장 오류:", err);
-      alert(err.message || "저장하는 중 오류가 발생했습니다.");
+      alert(err.message || t("diagnosis.saveError"));
       setSaveMessage(null);
     } finally {
       setSaving(false);
@@ -1007,28 +1027,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return "하";
   };
 
-  // 문제 풀이 단계(이미지 기준): 1=문제 이해, 2=정보 구조화, 3=수학적 표현, 4=수학적 계산
-  const STEP_GROUP_LABELS: Record<string, string> = {
-    "1": "문제 이해",
-    "2": "정보 구조화",
-    "3": "수학적 표현",
-    "4": "수학적 계산",
-  };
-  // 세부 역량(이미지 기준)
-  const STEP_DETAIL_LABELS: Record<string, string> = {
-    "1-1": "핵심 정보 파악하기",
-    "1-2": "문제 요지 확인하기",
-    "2-1": "조건 정리하기",
-    "2-2": "조건 연결하기",
-    "3-1": "지식 활용하기",
-    "3-2": "식, 모델 세우기",
-    "4-1": "계산 실행하기",
-    "4-2": "결과 정리하기",
-  };
   const getStepGroupInfo = (displayCode: string) => {
     const [group] = displayCode.split("-");
-    const stageLabel = STEP_GROUP_LABELS[group] || `${group}단계`;
-    const detailLabel = STEP_DETAIL_LABELS[displayCode] || stageLabel;
+    const formattedGroup = formatCategory(group);
+    const stageLabel = formattedGroup !== group ? formattedGroup : locale === "ko" ? `${group}단계` : `Stage ${group}`;
+    const formattedDetail = formatCategory(displayCode);
+    const detailLabel = formattedDetail !== displayCode ? formattedDetail : stageLabel;
     return { group, stageLabel, detailLabel };
   };
   // 100점 만점을 5등급 한글: 상(80+), 중상(60+), 중(40+), 중하(20+), 하(20 미만) — 화면·PDF 통일
@@ -1055,9 +1059,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       ]),
     );
     try {
-      await exportDiagnosisReportPdf(reportData, students.find((s) => s.id === sid)?.name ?? "학생", sid, summariesForPdf);
+      await exportDiagnosisReportPdf(reportData, students.find((s) => s.id === sid)?.name ?? t("diagnosis.student"), sid, summariesForPdf);
     } catch (err: any) {
-      alert(err?.message || "PDF 생성 중 오류가 발생했습니다.");
+      alert(err?.message || t("diagnosis.pdfError"));
     }
   };
 
@@ -1066,7 +1070,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     // 해당 학생에 대해 진단 결과가 있는 모든 문제 ID 사용
     const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {});
     if (!diagnosisProblemIds.length) {
-      alert("해당 학생에 대해 한 개 이상의 문제에 진단을 완료해 주세요.");
+      alert(t("diagnosis.completeOneProblem"));
       return;
     }
     let fullPerStudent: Record<string, ProblemStepSummary> = { ...(studentProblemSummaries[studentId] ?? {}) };
@@ -1109,7 +1113,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
     const problemIds = Object.keys(fullPerStudent);
     if (!problemIds.length) {
-      alert("해당 학생의 진단 결과를 리포트로 만들 수 없습니다. (문제별 가이드라인 필요)");
+      alert(t("diagnosis.reportBuildFail"));
       return;
     }
     if (Object.keys(fullPerStudent).length > Object.keys(studentProblemSummaries[studentId] ?? {}).length) {
@@ -1166,7 +1170,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       api.saveDiagnosisReport({ user_id: userId, student_id: studentId, report: data }).catch((err) => console.error("리포트 저장 오류:", err));
     } catch (err: any) {
       console.error("학생 진단 리포트 생성 오류:", err);
-      setReportError(err.message || "학생 진단 리포트를 불러오는 중 오류가 발생했습니다.");
+      setReportError(err.message || t("diagnosis.reportLoadError"));
       setReportData(null);
     } finally {
       setReportLoading(false);
@@ -1180,7 +1184,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     // 현재 요약에 포함된 모든 문제를 대상으로 리포트 재계산
     const problemIds = Object.keys(perStudent);
     if (!problemIds.length) {
-      setReportError("진단한 문제가 없습니다. 먼저 문제를 선택하고 진단을 실행해 주세요.");
+      setReportError(t("diagnosis.noDiagnosedProblems"));
       return;
     }
     setReportLoading(true);
@@ -1207,7 +1211,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: data }).catch((err) => console.error("리포트 저장 오류:", err));
     } catch (err: any) {
       console.error("리포트 새로고침 오류:", err);
-      setReportError(err.message ?? "리포트를 다시 생성하는 중 오류가 발생했습니다.");
+      setReportError(err.message ?? t("diagnosis.reportRefreshError"));
     } finally {
       setReportLoading(false);
     }
@@ -1224,11 +1228,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     const reportToSave = { ...reportData, step_rows };
     try {
       await api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: reportToSave });
-      setSaveMessage("리포트를 저장했습니다.");
+      setSaveMessage(t("diagnosis.reportSaved"));
       setTimeout(() => setSaveMessage(null), 2000);
     } catch (err: any) {
       console.error("리포트 저장 오류:", err);
-      alert(err?.message ?? "리포트 저장에 실패했습니다.");
+      alert(err?.message ?? t("diagnosis.reportSaveFail"));
     }
   };
 
@@ -1236,20 +1240,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     <div className={styles.page} ref={containerRef}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <h1 className={styles.title}>학생 진단하기</h1>
+          <h1 className={styles.title}>{t("diagnosis.title")}</h1>
         </div>
       </header>
 
       <main className={styles.main}>
         <section className={styles.mainProblemSection}>
           <div className={styles.mainProblemHeaderRow}>
-            <h3 className={styles.mainProblemTitle}>메인 문제</h3>
+            <h3 className={styles.mainProblemTitle}>{t("diagnosis.mainProblem")}</h3>
             {historyItems.length > 0 && (
               <div className={styles.problemSelectWrap}>
                 <label className={styles.problemSelectLabel}>
-                  문제 선택
+                  {t("diagnosis.selectProblemLabel")}
                   <select className={styles.problemSelect} value={selectedProblemId ?? ""} onChange={(e) => setSelectedProblemId(e.target.value || null)}>
-                    <option value="">문제를 선택해 주세요</option>
+                    <option value="">{t("diagnosis.selectProblem")}</option>
                     {historyItems.map((item: any) => (
                       <option key={item.problem_id} value={item.problem_id}>
                         {item.problem_id}
@@ -1266,20 +1270,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                 <div className={styles.mainProblemContent} dangerouslySetInnerHTML={{ __html: formatQuestion(mainProblem) }} />
                 {mainAnswer && (
                   <div className={styles.mainProblemAnswer}>
-                    <span className={styles.mainProblemAnswerLabel}>정답:</span> <span className={styles.mainProblemAnswerText} dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
+                    <span className={styles.mainProblemAnswerLabel}>{t("common.answerColon")}</span> <span className={styles.mainProblemAnswerText} dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
                   </div>
                 )}
                 {(grade || subjectArea) && (
                   <div className={styles.mainProblemMeta}>
                     {grade && (
                       <span className={styles.metaItem}>
-                        <span className={styles.metaLabel}>학년</span>
+                        <span className={styles.metaLabel}>{t("problemInput.grade")}</span>
                         <span className={styles.metaValue}>{grade}</span>
                       </span>
                     )}
                     {subjectArea && (
                       <span className={styles.metaItem}>
-                        <span className={styles.metaLabel}>수학 영역</span>
+                        <span className={styles.metaLabel}>{t("app.subjectArea").replace(/:$/, "")}</span>
                         <span className={styles.metaValue}>{subjectArea}</span>
                       </span>
                     )}
@@ -1287,17 +1291,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                 )}
               </>
             ) : (
-              <p className={styles.mainProblemEmpty}>선택한 문제의 데이터가 없습니다.</p>
+              <p className={styles.mainProblemEmpty}>{t("diagnosis.noProblemData")}</p>
             )
           ) : (
-            <p className={styles.mainProblemEmpty}>먼저 상단에서 문제를 선택해 주세요.</p>
+            <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemFirst")}</p>
           )}
         </section>
 
         <div className={styles.layout}>
           {/* 좌측: 학생 리스트 패널 */}
           <aside className={styles.studentListColumn}>
-            <h3 className={styles.studentListTitle}>학생 목록</h3>
+            <h3 className={styles.studentListTitle}>{t("diagnosis.studentList")}</h3>
             <div className={styles.studentList}>
               {students.map((s, idx) => {
                 const isActiveStudent = currentStudentId === s.id;
@@ -1319,7 +1323,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             }}
                             onClick={(e) => e.stopPropagation()}
                             autoFocus
-                            aria-label="이름 수정"
+                            aria-label={t("diagnosis.editName")}
                           />
                         ) : (
                           <>
@@ -1340,24 +1344,24 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             e.stopPropagation();
                             startEditStudentName(s.id);
                           }}
-                          title="이름 수정"
-                          aria-label={`${s.name} 이름 수정`}
+                          title={t("diagnosis.editName")}
+                          aria-label={`${s.name} ${t("diagnosis.editName")}`}
                         >
-                          이름 수정
+                          {t("diagnosis.editName")}
                         </button>
                       )}
                       <button
                         type="button"
                         className={styles.studentListReportBtn}
                         onClick={() => openReport(s.id)}
-                        title="진단 리포트"
-                        aria-label={`${s.name} 진단 리포트`}
+                        title={t("diagnosis.report")}
+                        aria-label={t("diagnosis.reportAria", { name: s.name })}
                         disabled={!Object.keys(studentProblemSummaries[s.id] ?? {}).length}
                       >
-                        리포트
+                        {t("diagnosis.report")}
                       </button>
-                      <button type="button" className={styles.studentListDeleteBtn} onClick={(e) => handleDeleteStudent(s.id, e)} title="학생 삭제" aria-label={`${s.name} 삭제`}>
-                        삭제
+                      <button type="button" className={styles.studentListDeleteBtn} onClick={(e) => handleDeleteStudent(s.id, e)} title={t("diagnosis.deleteStudent")} aria-label={t("diagnosis.deleteStudentAria", { name: s.name })}>
+                        {t("diagnosis.remove")}
                       </button>
                     </div>
                   </div>
@@ -1365,7 +1369,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               })}
             </div>
             <button type="button" className={styles.addStudentBtn} onClick={handleAddStudent}>
-              + 학생 추가
+              {t("diagnosis.addStudent")}
             </button>
           </aside>
 
@@ -1375,12 +1379,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
                   {!problemIdForDiagnosis ? (
-                    <p className={styles.mainProblemEmpty}>상단에서 진단할 문제를 선택해 주세요.</p>
+                    <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemTop")}</p>
                   ) : (
                     <>
                       <header className={styles.studentHeader}>
                         <div className={styles.studentHeaderTop}>
-                          <h3 className={styles.studentTitle}>학생 답안 입력</h3>
+                          <h3 className={styles.studentTitle}>{t("diagnosis.studentAnswers")}</h3>
                           <div className={styles.studentControls}>
                             <select className={styles.studentSelect} value={currentStudentId} onChange={(e) => handleChangeStudent(e.target.value)}>
                               {students.map((s) => (
@@ -1424,7 +1428,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                       <textarea
                                         className={styles.studentTextarea}
                                         rows={4}
-                                        placeholder="이 하위문항에 대한 학생 답안을 입력해 주세요."
+                                        placeholder={t("diagnosis.answerPlaceholder")}
                                         value={value}
                                         onChange={(e) => handleStudentAnswerChange(item.id, e.target.value)}
                                       />
@@ -1440,7 +1444,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                               }))
                                             }
                                           >
-                                            정답 보기
+                                            {t("diagnosis.showAnswer")}
                                           </button>
                                         )}
                                         {item.rubric && item.rubric.levels?.length > 0 && (
@@ -1454,13 +1458,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                               }))
                                             }
                                           >
-                                            루브릭 보기
+                                            {t("diagnosis.showRubric")}
                                           </button>
                                         )}
                                       </div>
                                       {showAnswer && item.answer && (
                                         <div className={styles.studentAnswerSolution}>
-                                          <span className={styles.studentAnswerSolutionLabel}>정답</span>
+                                          <span className={styles.studentAnswerSolutionLabel}>{t("common.answer")}</span>
                                           <span
                                             className={styles.studentAnswerSolutionText}
                                             dangerouslySetInnerHTML={{
@@ -1476,7 +1480,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                             return (
                                               <div key={lv.level} className={styles.studentRubricLevel}>
                                                 <div className={styles.studentRubricLevelHeader}>
-                                                  <span className={styles.studentRubricBadge}>{lv.level}</span>
+                                                  <span className={styles.studentRubricBadge}>{formatLevel(lv.level)}</span>
                                                   {showTitle && <span className={styles.studentRubricTitle}>{lv.title}</span>}
                                                 </div>
                                                 {Array.isArray(lv.bullets) && lv.bullets.length > 0 && (
@@ -1494,41 +1498,41 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                       {result && (
                                         <div className={styles.studentFeedbackPanel}>
                                           <div className={styles.studentFeedbackHeader}>
-                                            <span className={styles.studentFeedbackTitle}>개별 진단 결과 ({item.displayCode})</span>
+                                            <span className={styles.studentFeedbackTitle}>{t("diagnosis.individualResult", { code: item.displayCode })}</span>
                                             <div className={styles.studentFeedbackControls}>
-                                              {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>진단: {result.level}</span>}
+                                              {!isEditingDiagnosis && <span className={styles.studentFeedbackLevelDisplay}>{t("diagnosis.diagnosed", { level: formatLevel(result.level) })}</span>}
                                               <button
                                                 type="button"
                                                 className={styles.studentFeedbackEditBtn}
                                                 onClick={() => setEditingDiagnosisById((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
                                               >
-                                                {isEditingDiagnosis ? "편집 종료" : "편집"}
+                                                {isEditingDiagnosis ? t("common.endEdit") : t("common.edit")}
                                               </button>
                                             </div>
                                           </div>
                                           {isEditingDiagnosis ? (
                                             <>
                                               <label className={styles.studentFeedbackLevelLabel}>
-                                                진단 등급
+                                                {t("diagnosis.diagnosisGradeLabel")}
                                                 <select className={styles.studentFeedbackLevelSelect} value={result.level} onChange={(e) => updateDiagnosisForItem(item, "level", e.target.value)}>
-                                                  <option value="상">상</option>
-                                                  <option value="중">중</option>
-                                                  <option value="하">하</option>
+                                                  <option value="상">{formatLevel("상")}</option>
+                                                  <option value="중">{formatLevel("중")}</option>
+                                                  <option value="하">{formatLevel("하")}</option>
                                                 </select>
                                               </label>
                                               <label className={styles.studentFeedbackBodyLabel}>
-                                                진단 피드백
+                                                {t("diagnosis.diagnosisFeedbackLabel")}
                                                 <textarea
                                                   className={styles.studentFeedbackBodyInput}
                                                   rows={3}
                                                   value={result.reason ?? ""}
-                                                  placeholder="이 하위문항에 대한 학생의 이해 수준, 오류 유형 등을 간단히 기록해 두세요."
+                                                  placeholder={t("diagnosis.feedbackPlaceholder")}
                                                   onChange={(e) => updateDiagnosisForItem(item, "reason", e.target.value)}
                                                 />
                                               </label>
                                             </>
                                           ) : (
-                                            <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : "피드백이 없습니다."}</p>
+                                            <p className={styles.studentFeedbackBodyReadonly}>{result.reason?.trim() ? result.reason : t("diagnosis.noFeedback")}</p>
                                           )}
                                         </div>
                                       )}
@@ -1539,16 +1543,16 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
                               <div className={styles.studentActions}>
                                 <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
-                                  {saving ? "저장 중..." : "학생 답안 전체 저장"}
+                                  {saving ? t("diagnosis.saving") : t("diagnosis.saveAllAnswers")}
                                 </button>
                                 {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
                                   <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                    {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
+                                    {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
                                   </button>
                                 )}
                                 {canDiagnose[currentStudentId]?.[currentProblemKey] && diagnosisItems.length > 0 && false && (
                                   <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                    {bulkDiagnosing ? "전체 진단 중..." : "전체 하위문항 진단"}
+                                    {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
                                   </button>
                                 )}
                                 {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
@@ -1557,11 +1561,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
                             {currentStudentId && currentProblemKey && (
                               <div className={styles.studentHandwrittenPanel}>
-                                <h4 className={styles.studentHandwrittenTitle}>학생 풀이 이미지</h4>
+                                <h4 className={styles.studentHandwrittenTitle}>{t("diagnosis.handwrittenTitle")}</h4>
                                 {/* 두 장을 한 번에 업로드 */}
                                 <div className={styles.studentHandwrittenMultiUpload}>
                                   <label className={styles.studentHandwrittenUploadArea}>
-                                    <span className={styles.studentHandwrittenUploadText}>이미지 2개 한 번에 업로드</span>
+                                    <span className={styles.studentHandwrittenUploadText}>{t("diagnosis.uploadTwoImages")}</span>
                                     <input
                                       type="file"
                                       accept="image/*"
@@ -1584,10 +1588,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                       <div key={slot} className={styles.studentHandwrittenSlot}>
                                         {dataUrl ? (
                                           <>
-                                            <img src={dataUrl} alt={`손글씨 ${slot}`} className={styles.studentHandwrittenImg} />
+                                            <img src={dataUrl} alt={t("diagnosis.handwritingAlt", { n: slot })} className={styles.studentHandwrittenImg} />
                                             <div className={styles.studentHandwrittenSlotActions}>
                                               <label className={styles.studentHandwrittenReplaceBtn}>
-                                                바꾸기
+                                                {t("diagnosis.replace")}
                                                 <input
                                                   type="file"
                                                   accept="image/*"
@@ -1600,13 +1604,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                                 />
                                               </label>
                                               <button type="button" className={styles.studentHandwrittenRemoveBtn} onClick={() => handleHandwrittenUpload(slot, null)}>
-                                                삭제
+                                                {t("diagnosis.remove")}
                                               </button>
                                             </div>
                                           </>
                                         ) : (
                                           <label className={styles.studentHandwrittenUploadArea}>
-                                            <span className={styles.studentHandwrittenUploadText}>이미지 {slot} 업로드</span>
+                                            <span className={styles.studentHandwrittenUploadText}>{t("diagnosis.uploadImage", { n: slot })}</span>
                                             <input
                                               type="file"
                                               accept="image/*"
@@ -1631,7 +1635,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           별도의 상세 피드백 박스는 표시하지 않습니다. */}
                         </>
                       ) : (
-                        <p className={styles.empty}>먼저 상단에서 문제를 선택하고, 좌측에서 하위문항을 불러와 주세요.</p>
+                        <p className={styles.empty}>{t("diagnosis.loadSubqFirst")}</p>
                       )}
                     </>
                   )}
@@ -1641,7 +1645,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
             {diagnosisItems.length > 0 && (
               <section className={styles.studentSummary}>
-                <h3 className={styles.studentSummaryTitle}>현재 학생 문항 요약</h3>
+                <h3 className={styles.studentSummaryTitle}>{t("diagnosis.summaryTitle")}</h3>
                 <div className={styles.studentSummaryRow}>
                   {diagnosisItems.map((item) => {
                     const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
@@ -1650,7 +1654,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                     return (
                       <button key={item.id} type="button" className={`${styles.studentSummaryChip} ${isActive ? styles.studentSummaryChipActive : ""}`} onClick={() => setActiveId(item.id)}>
                         <span className={styles.studentSummaryCode}>{item.displayCode}</span>
-                        <span className={styles.studentSummaryStatus}>{result ? `진단: ${result.level}` : hasAnswer ? "답안 입력" : "미입력"}</span>
+                        <span className={styles.studentSummaryStatus}>{result ? t("diagnosis.statusDiagnosed", { level: formatLevel(result.level) }) : hasAnswer ? t("diagnosis.statusAnswered") : t("diagnosis.statusEmpty")}</span>
                       </button>
                     );
                   })}
@@ -1660,20 +1664,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
             {hasMultiProblemSummary && (
               <section className={styles.problemSummarySection}>
-                <h3 className={styles.problemSummaryTitle}>이 학생의 문제별 진단 요약</h3>
+                <h3 className={styles.problemSummaryTitle}>{t("diagnosis.problemSummaryTitle")}</h3>
                 <div className={styles.problemSummaryTables}>
                   {/* 문제별 요약 표 */}
                   <div className={styles.problemSummaryBlock}>
-                    <h4 className={styles.problemSummarySubTitle}>문제별 수준 요약</h4>
+                    <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.levelSummary")}</h4>
                     <table className={styles.problemSummaryTable}>
                       <thead>
                         <tr>
-                          <th>문제 ID</th>
-                          <th>진단한 단계 수</th>
-                          <th>상</th>
-                          <th>중</th>
-                          <th>하</th>
-                          <th>평균 수준</th>
+                          <th>{t("diagnosis.problemId")}</th>
+                          <th>{t("diagnosis.diagnosedStepCount")}</th>
+                          <th>{formatLevel("상")}</th>
+                          <th>{formatLevel("중")}</th>
+                          <th>{formatLevel("하")}</th>
+                          <th>{t("diagnosis.averageLevel")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1693,7 +1697,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <td>{high}</td>
                               <td>{mid}</td>
                               <td>{low}</td>
-                              <td>{avgLevel}</td>
+                              <td>{avgLevel === "-" ? "-" : formatLevel(avgLevel)}</td>
                             </tr>
                           );
                         })}
@@ -1703,7 +1707,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
                   {/* 단계별 최종 수준 표 */}
                   <div className={styles.problemSummaryBlock}>
-                    <h4 className={styles.problemSummarySubTitle}>단계별 최종 수준 (여러 문제 기준)</h4>
+                    <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.stageSummary")}</h4>
                     {(() => {
                       const perStepAgg: Record<
                         string,
@@ -1734,16 +1738,16 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                         });
 
                       if (!rows.length) {
-                        return <p className={styles.problemSummaryEmpty}>아직 요약할 단계 진단 결과가 없습니다.</p>;
+                        return <p className={styles.problemSummaryEmpty}>{t("diagnosis.noStageSummary")}</p>;
                       }
 
                       return (
                         <table className={styles.problemSummaryTable}>
                           <thead>
                             <tr>
-                              <th>단계 코드</th>
-                              <th>진단한 문제 수</th>
-                              <th>최종 수준</th>
+                              <th>{t("diagnosis.stageCode")}</th>
+                              <th>{t("diagnosis.diagnosedProblemCount")}</th>
+                              <th>{t("diagnosis.finalLevel")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1751,7 +1755,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <tr key={r.code}>
                                 <td>{r.code}</td>
                                 <td>{r.count}</td>
-                                <td>{r.level}</td>
+                                <td>{formatLevel(r.level)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1771,47 +1775,50 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           <div className={styles.reportModal}>
             <header className={styles.reportHeader}>
               <div>
-                <h2 className={styles.reportTitle}>학생 진단 리포트</h2>
+                <h2 className={styles.reportTitle}>{t("diagnosis.reportTitle")}</h2>
                 <p className={styles.reportSubtitle}>
-                  {students.find((s) => s.id === reportStudentId)?.name ?? "학생"} · 진단한 문제 수 {reportSummaryProblemIds.length}개
+                  {t("diagnosis.reportMeta", {
+                    name: students.find((s) => s.id === reportStudentId)?.name ?? t("diagnosis.student"),
+                    count: reportSummaryProblemIds.length,
+                  })}
                 </p>
               </div>
               <div className={styles.reportHeaderActions}>
-                <button type="button" className={styles.reportRefreshBtn} onClick={handleRefreshReport} disabled={reportLoading} title="문제가 추가되었을 때 리포트를 다시 계산합니다">
-                  {reportLoading ? "새로고침 중…" : "새로고침"}
+                <button type="button" className={styles.reportRefreshBtn} onClick={handleRefreshReport} disabled={reportLoading} title={t("diagnosis.refreshTitle")}>
+                  {reportLoading ? t("diagnosis.refreshing") : t("diagnosis.refresh")}
                 </button>
                 {reportData && !reportLoading && !reportError && (
                   <>
-                    <button type="button" className={styles.reportSaveBtn} onClick={handleSaveReportToServer} title="리포트 피드백 저장">
-                      리포트 저장
+                    <button type="button" className={styles.reportSaveBtn} onClick={handleSaveReportToServer} title={t("diagnosis.saveReport")}>
+                      {t("diagnosis.saveReport")}
                     </button>
                     <button type="button" className={styles.reportPdfBtn} onClick={handleDownloadReportPdf}>
-                      PDF 다운로드
+                      {t("common.pdfDownload")}
                     </button>
                   </>
                 )}
                 <button type="button" className={styles.reportCloseBtn} onClick={() => setReportOpen(false)}>
-                  닫기
+                  {t("common.close")}
                 </button>
               </div>
             </header>
 
             <div className={styles.reportBody}>
               <div className={styles.problemSummaryBlock}>
-                <h4 className={styles.problemSummarySubTitle}>문제별 수준 요약</h4>
-                {reportLoading && <p className={styles.problemSummaryEmpty}>리포트를 불러오는 중입니다...</p>}
+                <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.levelSummary")}</h4>
+                {reportLoading && <p className={styles.problemSummaryEmpty}>{t("diagnosis.loadingReport")}</p>}
                 {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
                 {!reportLoading && !reportError && reportData && (
                   <>
                     <table className={styles.problemSummaryTable}>
                       <thead>
                         <tr>
-                          <th>문제 ID</th>
-                          <th>진단한 단계 수</th>
-                          <th>상</th>
-                          <th>중</th>
-                          <th>하</th>
-                          <th>평균 등급</th>
+                          <th>{t("diagnosis.problemId")}</th>
+                          <th>{t("diagnosis.diagnosedStepCount")}</th>
+                          <th>{formatLevel("상")}</th>
+                          <th>{formatLevel("중")}</th>
+                          <th>{formatLevel("하")}</th>
+                          <th>{t("diagnosis.averageGrade")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1819,7 +1826,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           const total = row.high_count + row.mid_count + row.low_count || 0;
                           const sum = total > 0 ? row.high_count * 2 + row.mid_count * 1 + row.low_count * 0 : 0;
                           const score_100 = total > 0 ? (sum / (total * 2)) * 100 : 0;
-                          const grade = total > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
+                          const gradeKo = total > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
                           return (
                             <tr key={row.problem_id}>
                               <td>{row.problem_id}</td>
@@ -1827,7 +1834,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <td>{row.high_count}</td>
                               <td>{row.mid_count}</td>
                               <td>{row.low_count}</td>
-                              <td>{grade}</td>
+                              <td>{formatGrade(gradeKo)}</td>
                             </tr>
                           );
                         })}
@@ -1838,23 +1845,23 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                         const total = row.high_count + row.mid_count + row.low_count || 0;
                         const sum = total > 0 ? row.high_count * 2 + row.mid_count * 1 + row.low_count * 0 : 0;
                         const score_100 = total > 0 ? (sum / (total * 2)) * 100 : 0;
-                        const grade = total > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
+                        const gradeKo = total > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
                         return (
                           <div key={`graph-${row.problem_id}`} className={styles.reportGraphItem}>
                             <div className={styles.reportGraphHeader}>
                               <span className={styles.reportGraphTitle}>{row.problem_id}</span>
                               <div className={styles.reportGraphHeaderRight}>
-                                <span className={styles.reportGraphLevelBadge}>{grade}</span>
-                                <span className={styles.reportGraphScoreText}>{Math.round(score_100)}점</span>
+                                <span className={styles.reportGraphLevelBadge}>{formatGrade(gradeKo)}</span>
+                                <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
                               </div>
                             </div>
                             <div className={styles.reportGraphBar}>
                               <div className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`} style={{ width: `${score_100}%` }} />
                             </div>
                             <div className={styles.reportGraphLegend}>
-                              <span>상 {row.high_count}</span>
-                              <span>중 {row.mid_count}</span>
-                              <span>하 {row.low_count}</span>
+                              <span>{t("diagnosis.countHigh", { n: row.high_count })}</span>
+                              <span>{t("diagnosis.countMid", { n: row.mid_count })}</span>
+                              <span>{t("diagnosis.countLow", { n: row.low_count })}</span>
                             </div>
                           </div>
                         );
@@ -1866,24 +1873,23 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
               <div className={styles.problemSummaryBlock}>
                 <h4 className={styles.problemSummarySubTitle}>
-                  단계별 최종 수준
-                  {reportData ? ` (진단한 문제 수: ${reportData.problem_rows.length}개)` : " (여러 문제 기준)"}
+                  {reportData ? t("diagnosis.stageSummaryReport", { count: reportData.problem_rows.length }) : t("diagnosis.stageSummary")}
                 </h4>
-                {reportLoading && <p className={styles.problemSummaryEmpty}>리포트를 불러오는 중입니다...</p>}
+                {reportLoading && <p className={styles.problemSummaryEmpty}>{t("diagnosis.loadingReport")}</p>}
                 {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
                 {!reportLoading && !reportError && reportData && (
                   <>
                     {reportData.step_rows.length === 0 ? (
-                      <p className={styles.problemSummaryEmpty}>아직 요약할 단계 진단 결과가 없습니다.</p>
+                      <p className={styles.problemSummaryEmpty}>{t("diagnosis.noStageSummary")}</p>
                     ) : (
                       <>
                         <table className={styles.problemSummaryTable}>
                           <thead>
                             <tr>
-                              <th className={styles.reportTableThStage}>문제 풀이 단계</th>
-                              <th>세부 역량</th>
-                              <th>점수(100)</th>
-                              <th>최종 등급</th>
+                              <th className={styles.reportTableThStage}>{t("diagnosis.problemSolvingStage")}</th>
+                              <th>{t("diagnosis.subSkill")}</th>
+                              <th>{t("diagnosis.score100")}</th>
+                              <th>{t("diagnosis.finalGrade")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1911,7 +1917,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                     }
                                   });
                                   const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
-                                  const grade = stepCount > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
+                                  const gradeKo = stepCount > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
                                   const isFirst = idx === 0;
                                   const span = (byGroup[g] || []).length;
                                   return (
@@ -1926,7 +1932,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                         <span className={styles.stepAbilityText}>{info.detailLabel}</span>
                                       </td>
                                       <td>{stepCount > 0 ? Math.round(score_100) : "-"}</td>
-                                      <td>{grade}</td>
+                                      <td>{formatGrade(gradeKo)}</td>
                                     </tr>
                                   );
                                 }),
@@ -1947,7 +1953,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             return order.map((g) => {
                               const rows = byGroup[g] || [];
                               if (rows.length === 0) return null;
-                              const stageLabel = STEP_GROUP_LABELS[g] || `${g}단계`;
+                              const stageLabel = getStepGroupInfo(`${g}-1`).stageLabel;
                               const groupClass = g === "1" ? styles.reportStepGroup1 : g === "2" ? styles.reportStepGroup2 : g === "3" ? styles.reportStepGroup3 : styles.reportStepGroup4;
                               return (
                                 <div key={`graph-group-${g}`} className={styles.reportGraphGroup}>
@@ -1967,7 +1973,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                         }
                                       });
                                       const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
-                                      const grade = stepCount > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
+                                      const gradeKo = stepCount > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
                                       const feedbackValue = reportFeedbackEdits[row.display_code] ?? row.feedback_summary ?? "";
                                       return (
                                         <div key={`step-graph-${row.display_code}`} className={styles.reportGraphItem}>
@@ -1976,20 +1982,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                               {row.display_code} · {info.detailLabel}
                                             </span>
                                             <div className={styles.reportGraphHeaderRight}>
-                                              <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>{grade}</span>
-                                              <span className={styles.reportGraphScoreText}>{Math.round(score_100)}점</span>
+                                              <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>{formatGrade(gradeKo)}</span>
+                                              <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
                                             </div>
                                           </div>
                                           <div className={styles.reportGraphBar}>
                                             <div className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`} style={{ width: `${score_100}%` }} />
                                           </div>
                                           <div className={styles.reportGraphFeedbackEdit}>
-                                            <label className={styles.reportGraphFeedbackLabel}>리포트용 단계별 피드백</label>
+                                            <label className={styles.reportGraphFeedbackLabel}>{t("diagnosis.stageFeedback")}</label>
                                             <textarea
                                               className={styles.reportGraphFeedbackTextarea}
                                               rows={3}
                                               value={feedbackValue}
-                                              placeholder="이 단계에 대한 학생의 강점·보완점 등을 간단히 적어 주세요."
+                                              placeholder={t("diagnosis.stageFeedbackPlaceholder")}
                                               onChange={(e) => {
                                                 const value = e.target.value;
                                                 setReportFeedbackEdits((prev) => ({ ...prev, [row.display_code]: value }));

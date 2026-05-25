@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
 import { isUserIdAllowed } from "../../services/accessControl";
+import { useLocale } from "../../i18n/LocaleContext";
 import styles from "./UserIdPage.module.css";
 
 export const USER_ID_STORAGE_KEY = "hamamath_user_id";
@@ -9,6 +10,7 @@ interface UserIdPageProps {
 }
 
 export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
+  const { t } = useLocale();
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
@@ -17,7 +19,7 @@ export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
     e.preventDefault();
     const trimmed = value.trim();
     if (!trimmed) {
-      setError("아이디를 입력해 주세요.");
+      setError(t('login.emptyId'));
       return;
     }
     setError("");
@@ -27,11 +29,11 @@ export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
       if (allowed) {
         onSuccess(trimmed);
       } else {
-        setError("허용된 사용자가 아닙니다. 관리자에게 문의하세요.");
+        setError(t('login.notAllowed'));
       }
     } catch (err) {
       console.error("허용 목록 확인 실패:", err);
-      setError("접속 권한 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      setError(t('login.checkError'));
     } finally {
       setChecking(false);
     }
@@ -40,16 +42,16 @@ export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
   return (
     <div className={styles.wrap}>
       <div className={styles.card}>
-        <h1 className={styles.title}>아이디를 입력해 주세요</h1>
+        <h1 className={styles.title}>{t('login.title')}</h1>
         <form className={styles.form} onSubmit={handleSubmit}>
           <label htmlFor="user-id" className={styles.label}>
-            아이디
+            {t('login.label')}
           </label>
           <input
             id="user-id"
             type="text"
             className={styles.input}
-            placeholder="아이디 입력"
+            placeholder={t('login.placeholder')}
             value={value}
             onChange={(e) => {
               setValue(e.target.value);
@@ -60,7 +62,7 @@ export const UserIdPage = ({ onSuccess }: UserIdPageProps) => {
           />
           {error && <p className={styles.error}>{error}</p>}
           <button type="submit" className={styles.submitBtn} disabled={!value.trim() || checking}>
-            {checking ? "확인 중..." : "입장"}
+            {checking ? t('login.checking') : t('login.enter')}
           </button>
         </form>
       </div>

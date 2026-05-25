@@ -4,6 +4,7 @@ import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { AdminModeModal } from "../AdminMode/AdminModeModal";
+import { useLocale } from "../../i18n/LocaleContext";
 import styles from "./ProblemInput.module.css";
 import example1Data from "../../../data/finalized_data/example1.json";
 import example1Image from "../../../data/finalized_data/example1.png";
@@ -18,14 +19,14 @@ const DROPDOWN_OPTIONS = ["num1.json", "num2.json", "num3.json", "num4.json", "n
 const isNum1To5 = (v: string) => DROPDOWN_OPTIONS.includes(v as any);
 
 /** _cot.json 형식(steps에 step_content만) → 앱 CoTData 형식 */
-function normalizeCotFromFile(cot: Record<string, unknown>): Record<string, unknown> {
+function normalizeCotFromFile(cot: Record<string, unknown>, stepTitle: (index: number) => string): Record<string, unknown> {
   const steps = cot.steps as Array<{ step_content?: string; step_number?: number; step_title?: string }> | undefined;
   if (!Array.isArray(steps)) return cot;
   return {
     ...cot,
     steps: steps.map((s, i) => ({
       step_number: s.step_number ?? i + 1,
-      step_title: s.step_title ?? `단계 ${i + 1}`,
+      step_title: s.step_title ?? stepTitle(i + 1),
       step_content: s.step_content ?? "",
     })),
   };
@@ -87,6 +88,7 @@ interface FormData {
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const { userId, setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId, setCurrentRubrics } = useApp();
+  const { t } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
   /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
@@ -114,7 +116,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     const cotKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_cot.json`));
     const subQKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_suqQ.json`)) ?? Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_subQ.json`));
     if (!cotKey || !subQKey) {
-      setError(`해당 문제의 ${base}_cot.json 및 ${base}_suqQ.json(또는 _subQ.json) 파일이 data/finalized_data/에 없습니다.`);
+      setError(t('problemInput.localFilesMissing', { base }));
       return;
     }
     const rubricKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(`${base}_rubric.json`));
@@ -126,7 +128,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       const results = await Promise.all(loadPromises);
       const cotRaw = (results[0] as any).default as Record<string, unknown>;
       const subQRaw = (results[1] as any).default as Record<string, unknown>;
-      const cotData = normalizeCotFromFile(cotRaw) as any;
+      const cotData = normalizeCotFromFile(cotRaw, (n) => t('problemInput.stepTitle', { n })) as any;
       const guidelineData = guidelineFromSubQFile(subQRaw, base + ".json") as any;
       const problemId = selectedProblem || base + ".json";
 
@@ -148,7 +150,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentStep(rubrics?.length ? 4 : 3);
       saveResult(problemId, cotData, null, guidelineData, null, rubrics, userId);
     } catch (err: any) {
-      setError(err?.message ?? "로컬 문제 불러오기 실패");
+      setError(err?.message ?? t('problemInput.localLoadFail'));
     } finally {
       setLoadLocalLoading(false);
     }
@@ -333,7 +335,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       saveResult(problemId, cotDataWithExtras, null, null, null, null, userId);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
-      setError(err.message || "오류가 발생했습니다.");
+      setError(err.message || t('common.errorGeneric'));
     } finally {
       setLoading(false);
     }
@@ -343,7 +345,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     <div className={styles.problemInput}>
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.formGroup}>
-          <label htmlFor="problemSelect">문제 ID</label>
+          <label htmlFor="problemSelect">{t('problemInput.problemId')}</label>
           <div className={styles.problemIdRow}>
             <select
               id="problemSelect"
@@ -354,7 +356,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               }}
               className={styles.select}
             >
-              <option value="">직접 입력하기</option>
+              <option value="">{t('problemInput.customEntry')}</option>
               {problemList.map((file) => (
                 <option key={file} value={file}>
                   {file.replace(".json", "")}
@@ -374,62 +376,62 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 id="customProblemId"
                 value={customProblemId}
                 onChange={(e) => setCustomProblemId(e.target.value)}
-                placeholder="문제 ID 입력 (예: 초3 1번)"
+                placeholder={t('problemInput.customIdPlaceholder')}
                 className={styles.input}
-                aria-label="직접 입력 문제 ID"
+                aria-label={t('problemInput.customIdAria')}
               />
             )}
           </div>
         </div>
 
         <div className={styles.formGroup}>
-          <label htmlFor="problem">문제</label>
+          <label htmlFor="problem">{t('problemInput.problem')}</label>
           <textarea
             id="problem"
             value={formData.problem}
             onChange={(e) => setFormData((prev) => ({ ...prev, problem: e.target.value }))}
             required
-            placeholder="수학 문제를 입력하세요"
+            placeholder={t('problemInput.problemPlaceholder')}
             className={styles.textarea}
           />
         </div>
 
         <div className={styles.formGroup}>
-          <label htmlFor="answer">정답</label>
+          <label htmlFor="answer">{t('problemInput.answer')}</label>
           <input
             type="text"
             id="answer"
             value={formData.answer}
             onChange={(e) => setFormData((prev) => ({ ...prev, answer: e.target.value }))}
-            placeholder="정답을 입력하세요"
+            placeholder={t('problemInput.answerPlaceholder')}
             className={styles.input}
           />
         </div>
 
         <div className={styles.formGroup}>
-          <label htmlFor="solution">모범답안</label>
+          <label htmlFor="solution">{t('problemInput.solution')}</label>
           <textarea
             id="solution"
             value={formData.solution}
             onChange={(e) => setFormData((prev) => ({ ...prev, solution: e.target.value }))}
-            placeholder="모범답안을 입력하세요"
+            placeholder={t('problemInput.solutionPlaceholder')}
             className={styles.textarea}
           />
         </div>
 
         <div className={styles.formGroup}>
-          <label htmlFor="grade">학년</label>
-          <input type="text" id="grade" value={formData.grade} onChange={(e) => setFormData((prev) => ({ ...prev, grade: e.target.value }))} placeholder="예: 3학년" className={styles.input} />
+          <label htmlFor="grade">{t('problemInput.grade')}</label>
+          <input type="text" id="grade" value={formData.grade} onChange={(e) => setFormData((prev) => ({ ...prev, grade: e.target.value }))} placeholder={t('problemInput.gradePlaceholder')} className={styles.input} />
         </div>
 
         <div className={styles.formGroup}>
-          <label htmlFor="imageUpload">문제 이미지 업로드</label>
+          <label htmlFor="imageUpload">{t('problemInput.imageUpload')}</label>
           <input type="file" id="imageUpload" accept="image/*" onChange={handleImageUpload} className={styles.fileInput} />
           {formData.imagePreview && (
             <div className={styles.imagePreview}>
-              <img src={formData.imagePreview} alt="이미지 미리보기" />
+              <img src={formData.imagePreview} alt={t('problemInput.imagePreview')} />
               <button type="button" onClick={handleRemoveImage} className={styles.removeImageBtn}>
-                이미지 제거
+                {t('problemInput.removeImage')}
               </button>
             </div>
           )}
@@ -437,20 +439,20 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
         <div className={styles.buttonRow}>
           <button type="submit" className={styles.submitBtn} disabled={!formData.problem || !formData.answer}>
-            문제 풀이하기
+            {t('problemInput.solve')}
           </button>
           <button
             type="button"
             className={styles.loadLocalBtn}
             onClick={handleLoadLocal}
             disabled={!canLoadLocal || loadLocalLoading}
-            title={canLoadLocal ? "선택한 문제의 _cot.json, _suqQ.json(또는 _subQ.json)을 로드해 2·3단계를 채웁니다" : "이 문제에는 해당 로컬 파일이 없습니다"}
+            title={canLoadLocal ? t('problemInput.loadLocalTitle') : t('problemInput.loadLocalDisabled')}
           >
-            {loadLocalLoading ? "불러오는 중…" : "문제 불러오기"}
+            {loadLocalLoading ? t('problemInput.loadingProblem') : t('problemInput.loadProblem')}
           </button>
           {/* 어떤 아이디로 로그인하든 항상 표시 */}
           <button type="button" className={styles.adminModeBtn} onClick={() => setAdminModalOpen(true)}>
-            관리자 모드
+            {t('problemInput.adminMode')}
           </button>
         </div>
       </form>

@@ -1,14 +1,16 @@
 import styles from './WorkflowTabs.module.css';
 import { useApp } from '../../contexts/AppContext';
+import { useLocale } from '../../i18n/LocaleContext';
 
 export const WorkflowTabs = () => {
   const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
+  const { t } = useLocale();
 
   const tabs = [
-    { step: 1, label: '문제 입력' },
-    { step: 2, label: '8단계 풀이과정' },
-    { step: 3, label: '하위문항 생성' },
-    { step: 4, label: '루브릭 생성' },
+    { step: 1, label: t('workflow.tab.problem') },
+    { step: 2, label: t('workflow.tab.cot') },
+    { step: 3, label: t('workflow.tab.subq') },
+    { step: 4, label: t('workflow.tab.rubric') },
   ];
 
   // 탭 활성화 조건: 2·3번은 CoT 있으면 가능. 4번은 루브릭 최초 생성 전에는 3번 탭에서 "하위문항 확정하기"를 눌러야만 진입 가능.

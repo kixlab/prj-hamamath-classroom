@@ -1,4 +1,5 @@
 import { useApp } from '../../contexts/AppContext';
+import { useLocale } from '../../i18n/LocaleContext';
 import styles from './Header.module.css';
 
 interface HeaderProps {
@@ -19,36 +20,50 @@ export const Header = ({
   onSelectDiagnosis,
 }: HeaderProps) => {
   const { sidebarOpen, setSidebarOpen } = useApp();
+  const { locale, toggleLocale, t } = useLocale();
 
   const handleHamburgerClick = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
   const handleLogout = () => {
-    if (typeof window !== 'undefined' && window.confirm('로그아웃 하시겠습니까?')) {
+    if (typeof window !== 'undefined' && window.confirm(t('header.logoutConfirm'))) {
       onShowUserIdPage?.();
     }
   };
 
   return (
     <div className={styles.header}>
-      <button
-        className={styles.hamburgerMenuBtn}
-        id="hamburgerMenuBtn"
-        onClick={handleHamburgerClick}
-        aria-label="메뉴 열기"
-        style={{ display: sidebarOpen ? 'none' : 'block' }}
-      >
-        ☰
-      </button>
+      <div className={styles.headerLeft}>
+        <button
+          className={styles.hamburgerMenuBtn}
+          id="hamburgerMenuBtn"
+          onClick={handleHamburgerClick}
+          aria-label={t('header.openMenu')}
+          style={{ display: sidebarOpen ? 'none' : 'block' }}
+        >
+          ☰
+        </button>
+        <button
+          type="button"
+          className={`${styles.langToggleBtn} ${locale === 'en' ? styles.langToggleBtnActive : ''}`}
+          onClick={toggleLocale}
+          aria-label={locale === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')}
+          title={locale === 'ko' ? t('header.switchToEnglish') : t('header.switchToKorean')}
+        >
+          <span className={styles.globeIcon} aria-hidden>
+            🌐
+          </span>
+        </button>
+      </div>
       <div className={styles.titleWrap}>
         <button
           type="button"
           className={styles.titleBtn}
           onClick={onShowUserIdPage}
-          aria-label="아이디 입력 페이지로 이동"
+          aria-label={t('header.goToLogin')}
         >
-          <h3 className={styles.title}>AI 기반 수학 사고 과정 진단</h3>
+          <h3 className={styles.title}>{t('header.title')}</h3>
         </button>
       </div>
       <div className={styles.headerRight}>
@@ -61,7 +76,7 @@ export const Header = ({
               }`}
               onClick={onSelectWorkflow}
             >
-              문항 생성
+              {t('header.workflow')}
             </button>
             <button
               type="button"
@@ -70,19 +85,19 @@ export const Header = ({
               }`}
               onClick={onSelectDiagnosis}
             >
-              학생 진단
+              {t('header.diagnosis')}
             </button>
           </div>
         ) : (
           <button className={styles.newProblemBtn} onClick={onNewProblem}>
-            문제 입력하기
+            {t('header.newProblem')}
           </button>
         )}
         {userId && (
           <>
             <span className={styles.userIdLabel}>{userId}</span>
             <button type="button" className={styles.logoutBtn} onClick={handleLogout}>
-              로그아웃
+              {t('header.logout')}
             </button>
           </>
         )}
