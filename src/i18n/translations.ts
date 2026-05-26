@@ -1,5 +1,12 @@
 export type Locale = "ko" | "en";
 
+/** Verifier API `language` 필드 (기본 ko, 영어 en) */
+export type VerifierLanguage = "ko" | "en";
+
+export function toVerifierLanguage(locale: Locale): VerifierLanguage {
+  return locale === "en" ? "en" : "ko";
+}
+
 export type TranslationKey = keyof typeof ko;
 
 const ko = {
@@ -105,7 +112,8 @@ const ko = {
   "subq.originalQuestion": "원본 문항",
   "subq.regeneratedQuestion": "재생성 문항",
   "subq.selected": "선택됨",
-  "subq.selectThis": "이 문항 선택",
+  "subq.selectThis": "선택",
+  "subq.selectVersionHint": "확정에 사용할 문항을 선택하세요.",
   "subq.preparing": "준비중",
   "subq.noRegenerated": "재생성한 문항이 없습니다",
   "subq.viewVerification": "검증 결과 보기",
@@ -117,6 +125,7 @@ const ko = {
   "subq.feedbackPlaceholder": "수정 요청사항을 입력하세요.",
   "subq.originalVerification": "원본 문항 검증 결과",
   "subq.regeneratedVerification": "재생성 문항 검증 결과",
+  "subq.noVerification": "검증 결과가 없습니다.",
   "subq.confirmFinalize": "하위문항을 확정하시겠습니까? 확정 후 Word·PDF 다운로드와 루브릭 생성이 가능합니다.",
   "subq.finalize": "하위문항 확정하기",
   "subq.goToRubric": "루브릭 생성하기",
@@ -398,7 +407,8 @@ const en: Record<TranslationKey, string> = {
   "subq.originalQuestion": "Original item",
   "subq.regeneratedQuestion": "Regenerated item",
   "subq.selected": "Selected",
-  "subq.selectThis": "Select this item",
+  "subq.selectThis": "Select",
+  "subq.selectVersionHint": "Select which item to use when finalizing.",
   "subq.preparing": "Preparing",
   "subq.noRegenerated": "No regenerated item",
   "subq.viewVerification": "View verification",
@@ -410,6 +420,7 @@ const en: Record<TranslationKey, string> = {
   "subq.feedbackPlaceholder": "Enter revision requests.",
   "subq.originalVerification": "Original item verification",
   "subq.regeneratedVerification": "Regenerated item verification",
+  "subq.noVerification": "No verification results.",
   "subq.confirmFinalize": "Finalize sub-questions? After finalizing, Word/PDF download and rubric creation will be available.",
   "subq.finalize": "Finalize sub-questions",
   "subq.goToRubric": "Create rubric",

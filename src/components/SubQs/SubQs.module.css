@@ -294,6 +294,14 @@
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+.comparePanelSelectable {
+  cursor: pointer;
+}
+
+.comparePanelSelectable:hover {
+  border-color: #94a3b8;
+}
+
 .comparePanelActive {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 1px var(--color-primary);
@@ -301,28 +309,35 @@
 
 .comparePanelHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
+  cursor: default;
 }
 
-.compareSelectBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
+.comparePanelHeaderMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
 }
 
-.compareSelectBtn:hover .compareLabel {
-  color: var(--color-primary);
+.comparePanelHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.selectVersionHint {
+  margin: 0 0 10px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
 }
 
 .compareLabel {
@@ -343,6 +358,31 @@
 
 .comparePanelBody {
   padding: 12px 14px;
+}
+
+.comparePanelFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.feedbackPanelInline {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.feedbackPanelInline .feedbackTextarea {
+  margin-bottom: 8px;
+}
+
+.verificationPanelInline {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .singlePanelHeader {
@@ -478,19 +518,35 @@
   color: var(--color-text-secondary);
 }
 
-.verificationBlock {
-  margin-bottom: 12px;
+.verificationCompareGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: start;
 }
 
-.verificationBlock:last-child {
-  margin-bottom: 0;
+.verificationCompareCol {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-height: 48px;
 }
 
 .verificationTitle {
   font-weight: 600;
   color: var(--color-text);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.verificationEmpty {
+  margin: 0;
   font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 /* 반응형 디자인 */
@@ -499,7 +555,8 @@
     padding: 16px;
   }
 
-  .compareGrid {
+  .compareGrid,
+  .verificationCompareGrid {
     grid-template-columns: 1fr;
   }
 

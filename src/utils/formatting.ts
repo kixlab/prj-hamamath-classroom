@@ -1,155 +1,311 @@
+import type { Locale, VerifierLanguage } from "../i18n/translations";
+import { toVerifierLanguage } from "../i18n/translations";
+
 export const escapeHtml = (str: string | null | undefined): string => {
-  if (str === null || str === undefined) return '';
+  if (str === null || str === undefined) return "";
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 };
 
 /** LaTeX 구간 보존: $ 또는 \( \) 등이 있으면 백슬래시 제거하지 않음 */
 const looksLikeLatex = (s: string): boolean => /\$|\\\(|\\\[|\\times|\\frac|\\sqrt/.test(s);
 
 export const formatAnswer = (answer: string | null | undefined): string => {
-  if (!answer) return '';
+  if (!answer) return "";
   let formatted = answer.trim();
-  if (/^\\+$/.test(formatted)) return '';
+  if (/^\\+$/.test(formatted)) return "";
   if (!looksLikeLatex(formatted)) {
-    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, "$1$2").trim();
   }
-  if (!formatted) return '';
-  formatted = formatted.replace(/\n/g, '<br>');
-  return formatted.replace(/(=\s*\d+)\s+(?=\d)/g, '$1<br>');
+  if (!formatted) return "";
+  formatted = formatted.replace(/\n/g, "<br>");
+  return formatted.replace(/(=\s*\d+)\s+(?=\d)/g, "$1<br>");
 };
 
 export const formatQuestion = (question: string | null | undefined): string => {
-  if (!question) return '';
+  if (!question) return "";
   let formatted = question.trim();
-  if (/^\\+$/.test(formatted)) return '';
+  if (/^\\+$/.test(formatted)) return "";
   if (!looksLikeLatex(formatted)) {
-    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, '$1$2').trim();
+    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, "$1$2").trim();
   }
-  return formatted || '';
+  return formatted || "";
 };
 
-export const formatVerificationResult = (verificationResult: string | null | undefined): string => {
-  if (!verificationResult || !verificationResult.trim()) return '';
+const VERIFIER_DISPLAY_NAMES: Record<string, string> = {
+  stage_elicitation: "Stage Elicitation",
+  context_alignment: "Context Alignment",
+  answer_validity: "Answer Validity",
+  prompt_validity: "Prompt Validity",
+};
 
+const VERIFICATION_LABELS = {
+  ko: {
+    scoreLabel: "점수",
+    evalMarker: "[평가 요약]",
+    improveMarker: "[개선 제안]",
+    evalTitle: "평가 요약",
+    improveTitle: "개선 제안",
+    pointsSuffix: "점",
+  },
+  en: {
+    scoreLabel: "Score",
+    evalMarker: "[Evaluation Summary]",
+    improveMarker: "[Improvement Suggestions]",
+    evalTitle: "Evaluation Summary",
+    improveTitle: "Improvement Suggestions",
+    pointsSuffix: " pts",
+  },
+} as const;
+
+const ALL_EVAL_MARKERS = [
+  VERIFICATION_LABELS.ko.evalMarker,
+  VERIFICATION_LABELS.en.evalMarker,
+  "[Evaluation summary]",
+  "[evaluation summary]",
+];
+const ALL_IMPROVE_MARKERS = [
+  VERIFICATION_LABELS.ko.improveMarker,
+  VERIFICATION_LABELS.en.improveMarker,
+  "[Improvement suggestions]",
+  "[improvement suggestions]",
+];
+const VERIFIER_HEADER_LINE = /^\[[^\]]+\]\s*(?:점수|Score):\s*([0-9.]+|N\/A)/i;
+const VERIFIER_HEADER_PARSE = /^\[([^\]]+)\]\s*(?:점수|Score):\s*([0-9.]+|N\/A)/i;
+const NEXT_VERIFIER_LINE = /\n\[[^\]]+\]\s*(?:점수|Score):/i;
+
+type VerifierResultPayload = {
+  score?: number | null;
+  evaluation_summary?: string;
+  improvement_suggestions?: string;
+  feedback?: string;
+};
+
+function labelsFor(language: VerifierLanguage) {
+  return VERIFICATION_LABELS[language];
+}
+
+function findMarkerMatch(text: string, markers: readonly string[]): { index: number; length: number } | null {
+  const lower = text.toLowerCase();
+  let best: { index: number; length: number } | null = null;
+  for (const marker of markers) {
+    const idx = lower.indexOf(marker.toLowerCase());
+    if (idx !== -1 && (best === null || idx < best.index)) {
+      best = { index: idx, length: marker.length };
+    }
+  }
+  return best;
+}
+
+function extractSection(text: string, markers: readonly string[], endIndex: number): string {
+  const match = findMarkerMatch(text, markers);
+  if (!match) return "";
+  return text.substring(match.index + match.length, endIndex).replace(/^\s*\n+|\n+$/g, "").trim();
+}
+
+function buildFromResultsOrSummary(
+  results: unknown,
+  summary: unknown,
+  language: VerifierLanguage,
+): string {
+  if (typeof summary === "string" && summary.trim()) return summary.trim();
+  if (results && typeof results === "object" && !Array.isArray(results)) {
+    const record = results as Record<string, VerifierResultPayload>;
+    if (Object.keys(record).length > 0) return buildVerificationTextFromResults(record, language);
+  }
+  return "";
+}
+
+/** verify-and-regenerate 응답에서 원본·재생성 검증 텍스트 분리 */
+export function extractVerificationTexts(
+  verifyResponse: Record<string, unknown>,
+  language: VerifierLanguage,
+  existing?: { verification_result?: string; re_verification_result?: string },
+): { original: string; regenerated: string } {
+  const wasRegenerated = !!verifyResponse.was_regenerated;
+  const priorOriginal = existing?.verification_result?.trim() || "";
+  const priorRegenerated = existing?.re_verification_result?.trim() || "";
+
+  // 원본: original_* 우선, 재생성 시에는 verification_results가 원본인 경우가 많음
+  const originalFromApi =
+    buildFromResultsOrSummary(
+      verifyResponse.original_verification_results ?? verifyResponse.pre_verification_results,
+      verifyResponse.original_verification_result ?? verifyResponse.pre_verification_result,
+      language,
+    ) ||
+    (wasRegenerated
+      ? buildFromResultsOrSummary(verifyResponse.verification_results, null, language)
+      : buildFromResultsOrSummary(verifyResponse.verification_results, verifyResponse.verification_result, language));
+
+  // 재생성: regenerated_* / re_* 만 사용 (verification_results를 재생성에 쓰지 않음)
+  const regeneratedFromApi = buildFromResultsOrSummary(
+    verifyResponse.regenerated_verification_results ?? verifyResponse.re_verification_results,
+    verifyResponse.re_verification_result ??
+      verifyResponse.regenerated_verification_result ??
+      (wasRegenerated ? verifyResponse.verification_result : undefined),
+    language,
+  );
+
+  if (wasRegenerated) {
+    return {
+      original: originalFromApi || priorOriginal,
+      regenerated: regeneratedFromApi || priorRegenerated,
+    };
+  }
+
+  return {
+    original:
+      originalFromApi ||
+      buildFromResultsOrSummary(verifyResponse.verification_results, verifyResponse.verification_result, language) ||
+      priorOriginal,
+    regenerated: priorRegenerated,
+  };
+}
+
+/** API `verification_results` → 저장용 평문 (오케스트레이터 라벨 규칙과 동일) */
+export function buildVerificationTextFromResults(
+  verificationResults: Record<string, VerifierResultPayload>,
+  language: VerifierLanguage,
+): string {
+  const L = labelsFor(language);
+  return Object.entries(verificationResults)
+    .map(([key, result]) => {
+      const verifierName = VERIFIER_DISPLAY_NAMES[key] || key;
+      const scoreStr = result.score !== null && result.score !== undefined ? String(result.score) : "N/A";
+      const evalSummary = result.evaluation_summary || "";
+      const improveSuggestions = result.improvement_suggestions || "";
+      if (evalSummary || improveSuggestions) {
+        return `[${verifierName}] ${L.scoreLabel}: ${scoreStr}\n${L.evalMarker}\n${evalSummary}\n${L.improveMarker}\n${improveSuggestions}`;
+      }
+      return `[${verifierName}] ${L.scoreLabel}: ${scoreStr}, ${result.feedback || ""}`;
+    })
+    .join("\n");
+}
+
+export const formatVerificationResult = (
+  verificationResult: string | null | undefined,
+  locale: Locale = "ko",
+): string => {
+  if (!verificationResult || !verificationResult.trim()) return "";
+
+  const labels = labelsFor(toVerifierLanguage(locale));
   let cleanedResult = verificationResult.trim();
   if (cleanedResult.startsWith('"') && cleanedResult.endsWith('"')) {
     cleanedResult = cleanedResult.slice(1, -1);
   }
 
+  // 과거에 HTML로 저장된 검증 결과는 그대로 표시
+  if (/^<div[\s>]/i.test(cleanedResult)) {
+    return cleanedResult;
+  }
+
   const lines = cleanedResult.split(/\n/);
   const verifierBlocks: string[] = [];
-  let currentBlock = '';
+  let currentBlock = "";
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    if (line.match(/^\[[^\]]+\]\s*점수:/)) {
-      if (currentBlock.trim()) {
-        verifierBlocks.push(currentBlock.trim());
-      }
+    if (VERIFIER_HEADER_LINE.test(line)) {
+      if (currentBlock.trim()) verifierBlocks.push(currentBlock.trim());
       currentBlock = line;
     } else if (currentBlock) {
-      currentBlock += '\n' + line;
+      currentBlock += "\n" + line;
     } else {
       currentBlock = line;
     }
   }
 
-  if (currentBlock.trim()) {
-    verifierBlocks.push(currentBlock.trim());
-  }
-
-  if (verifierBlocks.length === 0) {
-    verifierBlocks.push(cleanedResult.trim());
-  }
+  if (currentBlock.trim()) verifierBlocks.push(currentBlock.trim());
+  if (verifierBlocks.length === 0) verifierBlocks.push(cleanedResult.trim());
 
   const verifierCards: string[] = [];
 
   verifierBlocks.forEach((block) => {
-    const lines = block.split('\n').filter((line) => line.trim());
-    if (lines.length === 0) return;
+    const blockLines = block.split("\n").filter((line) => line.trim());
+    if (blockLines.length === 0) return;
 
-    const headerMatch = lines[0].match(/\[([^\]]+)\]\s*점수:\s*([0-9.]+|N\/A)/);
+    const headerMatch = blockLines[0].match(VERIFIER_HEADER_PARSE);
     if (!headerMatch) {
       verifierCards.push(
         `<div style="margin-bottom: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #6c757d;">
-          <div style="color: #495057; font-size: 0.9em; line-height: 1.5;">
-            ${block}
-          </div>
-        </div>`
+          <div style="color: #495057; font-size: 0.9em; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(block)}</div>
+        </div>`,
       );
       return;
     }
 
-    const verifierName = headerMatch[1].trim();
+    const verifierName = escapeHtml(headerMatch[1].trim());
     const score = headerMatch[2].trim();
-    const scoreNum = score === 'N/A' ? null : parseFloat(score);
+    const scoreNum = score === "N/A" ? null : parseFloat(score);
     const isValid = scoreNum !== null && scoreNum >= 3;
-    const scoreColor = scoreNum === null ? '#6c757d' : isValid ? '#28a745' : '#dc3545';
-    const scoreBg = scoreNum === null ? '#f8f9fa' : isValid ? '#d4edda' : '#f8d7da';
+    const scoreColor = scoreNum === null ? "#6c757d" : isValid ? "#28a745" : "#dc3545";
+    const scoreBg = scoreNum === null ? "#f8f9fa" : isValid ? "#d4edda" : "#f8d7da";
 
-    const fullText = block;
-    const evalIndex = fullText.indexOf('[평가 요약]');
-    const improveIndex = fullText.indexOf('[개선 제안]');
+    const evalMatch = findMarkerMatch(block, ALL_EVAL_MARKERS);
+    const improveMatch = findMarkerMatch(block, ALL_IMPROVE_MARKERS);
+    const evalIndex = evalMatch?.index ?? -1;
+    const improveIndex = improveMatch?.index ?? -1;
+    const evaluationSummary = extractSection(
+      block,
+      ALL_EVAL_MARKERS,
+      improveIndex !== -1 ? improveIndex : block.length,
+    );
+    const improvementSuggestions = extractSection(
+      block,
+      ALL_IMPROVE_MARKERS,
+      (() => {
+        if (improveIndex === -1) return block.length;
+        const tail = block.substring(improveIndex);
+        const next = tail.match(NEXT_VERIFIER_LINE);
+        return next?.index !== undefined ? improveIndex + next.index : block.length;
+      })(),
+    );
 
-    let evaluationSummary = '';
-    let improvementSuggestions = '';
-
-    if (evalIndex !== -1) {
-      const startIndex = evalIndex + '[평가 요약]'.length;
-      const endIndex = improveIndex !== -1 ? improveIndex : fullText.length;
-      evaluationSummary = fullText.substring(startIndex, endIndex).replace(/^\s*\n+|\n+$/g, '').trim();
-    }
-
-    if (improveIndex !== -1) {
-      const startIndex = improveIndex + '[개선 제안]'.length;
-      const nextVerifierMatch = fullText.substring(startIndex).match(/\n\[[^\]]+\]\s*점수:/);
-      const endIndex = nextVerifierMatch ? startIndex + nextVerifierMatch.index : fullText.length;
-      improvementSuggestions = fullText.substring(startIndex, endIndex).replace(/^\s*\n+|\n+$/g, '').trim();
-    }
+    const scoreDisplay =
+      scoreNum !== null
+        ? locale === "en"
+          ? `${scoreNum}${labels.pointsSuffix}`.trim()
+          : `${scoreNum}${labels.pointsSuffix}`
+        : "N/A";
 
     verifierCards.push(`
       <div style="margin-bottom: 12px; padding: 14px; background: ${scoreBg}; border-radius: 8px; border-left: 4px solid ${scoreColor};">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
           <strong style="color: #495057; font-size: 0.95em;">${verifierName}</strong>
           <span style="background: ${scoreColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600;">
-            ${scoreNum !== null ? `${scoreNum}점` : 'N/A'}
+            ${escapeHtml(scoreDisplay)}
           </span>
         </div>
         ${
           evaluationSummary
             ? `
         <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px;">
-          <div style="font-weight: 600; color: #495057; margin-bottom: 6px; font-size: 0.9em;">평가 요약</div>
-          <div style="color: #495057; font-size: 0.9em; line-height: 1.6;">${evaluationSummary}</div>
+          <div style="font-weight: 600; color: #495057; margin-bottom: 6px; font-size: 0.9em;">${escapeHtml(labels.evalTitle)}</div>
+          <div style="color: #495057; font-size: 0.9em; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(evaluationSummary)}</div>
         </div>
         `
-            : ''
+            : ""
         }
         ${
           improvementSuggestions
             ? `
         <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px;">
-          <div style="font-weight: 600; color: #495057; margin-bottom: 6px; font-size: 0.9em;">개선 제안</div>
-          <div style="color: #495057; font-size: 0.9em; line-height: 1.6;">${improvementSuggestions}</div>
+          <div style="font-weight: 600; color: #495057; margin-bottom: 6px; font-size: 0.9em;">${escapeHtml(labels.improveTitle)}</div>
+          <div style="color: #495057; font-size: 0.9em; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(improvementSuggestions)}</div>
         </div>
         `
-            : ''
+            : ""
         }
       </div>
     `);
   });
 
-  if (verifierCards.length === 0) {
-    return '';
-  }
-
-  // 토글 기능 제거 - React 컴포넌트에서 토글 처리
-  return verifierCards.join('');
+  return verifierCards.length === 0 ? "" : verifierCards.join("");
 };
+
