@@ -24,6 +24,25 @@
   /* 고정 헤더·워크플로 단계 바 높이 */
   --header-height: 48px;
   --workflow-tabs-height: 44px;
+
+  /* 페이지 레이아웃 여백 */
+  --layout-max-width: 1280px;
+  --layout-max-width-narrow: 1120px;
+  --page-padding-x: 24px;
+  --page-padding-y: 20px;
+  --page-padding-bottom: 28px;
+  --section-gap: 20px;
+  --card-padding: 16px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --page-padding-x: 16px;
+    --page-padding-y: 16px;
+    --page-padding-bottom: 24px;
+    --section-gap: 16px;
+    --card-padding: 14px;
+  }
 }
 
 body {

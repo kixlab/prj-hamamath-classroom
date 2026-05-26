@@ -143,8 +143,8 @@
 }
 
 .pageFooter {
-  margin-top: 20px;
-  padding: 14px 18px;
+  margin-top: var(--section-gap);
+  padding: 14px var(--card-padding);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -257,7 +257,7 @@
 .guidelineSubQuestions {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--section-gap);
 }
 
 /* 다음 문항이 생성될 자리(빈 영역)에 표시하는 로딩 플레이스홀더 */
@@ -639,10 +639,6 @@
 
 /* 반응형 디자인 */
 @media (max-width: 768px) {
-  .guidelineContainer {
-    padding: 16px;
-  }
-
   .compareGrid,
   .verificationCompareGrid {
     grid-template-columns: 1fr;

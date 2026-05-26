@@ -7,9 +7,9 @@
 .cotSteps {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 24px 32px 8px;
-  max-width: 1280px;
+  gap: calc(var(--section-gap) + 8px);
+  padding: var(--page-padding-y) var(--page-padding-x) 8px;
+  max-width: var(--layout-max-width);
   margin: 0 auto;
   width: 100%;
 }
@@ -17,7 +17,7 @@
 @media (max-width: 900px) {
   .cotSteps {
     gap: 24px;
-    padding: 20px 16px 8px;
+    padding: var(--page-padding-y) var(--page-padding-x) 8px;
   }
 }
 
@@ -259,7 +259,7 @@
   flex-shrink: 0;
   display: flex;
   justify-content: center;
-  padding: 20px 32px 28px;
+  padding: var(--page-padding-y) var(--page-padding-x) var(--page-padding-bottom);
   margin-top: 8px;
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
@@ -267,7 +267,7 @@
 
 @media (max-width: 900px) {
   .cotFooter {
-    padding: 16px 16px 24px;
+    padding: var(--page-padding-y) var(--page-padding-x) var(--page-padding-bottom);
   }
 }
 

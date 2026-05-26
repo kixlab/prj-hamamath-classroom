@@ -1,13 +1,14 @@
 .rubricContainer {
-  padding: 0;
+  padding: var(--page-padding-y) var(--page-padding-x) var(--page-padding-bottom);
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-max-width);
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .mainProblemCard {
-  margin-bottom: 16px;
-  padding: 16px 18px;
+  margin-bottom: var(--section-gap);
+  padding: var(--card-padding) calc(var(--card-padding) + 2px);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -37,8 +38,8 @@
 .rubricList {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 0 4px;
+  gap: var(--section-gap);
+  padding: 0;
 }
 
 /* ── 공통 버튼 (SubQs·CoT와 동일) ── */
@@ -450,8 +451,8 @@
 }
 
 .pageFooter {
-  margin-top: 20px;
-  padding: 14px 18px;
+  margin-top: var(--section-gap);
+  padding: 14px var(--card-padding);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 10px;
