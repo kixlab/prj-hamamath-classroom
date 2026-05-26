@@ -19,13 +19,26 @@ function userInitial(userId: string): string {
 }
 
 const ModeWorkflowIcon = () => (
-  <svg className={styles.modeIcon} viewBox="0 0 24 24" aria-hidden>
+  <svg className={`${styles.modeIcon} ${styles.modeIconSparkles}`} viewBox="0 0 24 24" aria-hidden>
     <path
-      d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+      d="M12 4.2 13.15 8.2 17.2 9.35 13.15 10.5 12 14.5 10.85 10.5 6.8 9.35 10.85 8.2 12 4.2z"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M17.8 12.8 18.55 14.75 20.5 15.5 18.55 16.25 17.8 18.2 17.05 16.25 15.1 15.5 17.05 14.75 17.8 12.8z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6.2 15.8 6.75 17.2 8.15 17.75 6.75 18.3 6.2 19.7 5.65 18.3 4.25 17.75 5.65 17.2 6.2 15.8z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
       strokeLinejoin="round"
     />
   </svg>

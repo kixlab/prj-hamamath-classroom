@@ -112,7 +112,6 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         <Sidebar
           userId={userId}
           onOpenAdminDb={() => setShowAdminDbView(true)}
-          onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
           onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
         />
         <div className={styles.container}>

@@ -123,6 +123,11 @@
   flex-shrink: 0;
 }
 
+.modeIconSparkles {
+  width: 18px;
+  height: 18px;
+}
+
 .modeBtnLabel {
   line-height: 1.2;
 }
