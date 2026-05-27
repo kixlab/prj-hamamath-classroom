@@ -70,6 +70,8 @@ interface VerifyAndRegenerateData {
   };
   previous_sub_questions?: any[];
   skip_regeneration?: boolean;
+  /** Verifier 출력 언어. 기본 ko, 영어 en (백엔드: en/english/eng 허용) */
+  language?: string;
 }
 
 interface GenerateRubricPipelineData {

@@ -1,6 +1,7 @@
 .app {
   min-height: 100vh;
   background: var(--color-bg-secondary);
+  padding-top: var(--header-height);
 }
 
 .container {
@@ -11,6 +12,10 @@
   box-shadow: none;
   overflow: visible;
   border: none;
+}
+
+.containerWithStepper {
+  padding-top: var(--workflow-tabs-height);
 }
 
 .workflowContent {
@@ -36,8 +41,8 @@
   align-self: flex-start;
   position: sticky;
   /* 헤더 + 탭 아래에 고정 */
-  top: calc(var(--header-height, 48px) + 52px);
-  max-height: calc(100vh - var(--header-height, 48px) - 52px);
+  top: calc(var(--header-height) + var(--workflow-tabs-height));
+  max-height: calc(100vh - var(--header-height) - var(--workflow-tabs-height));
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
   background: var(--color-bg-secondary);
@@ -45,7 +50,7 @@
 }
 
 .mainProblemPanel {
-  padding: 24px;
+  padding: var(--page-padding-y) var(--page-padding-x);
   height: 100%;
 }
 
@@ -140,6 +145,8 @@
   min-width: 0;
   overflow-y: auto;
   background: var(--color-bg);
+  padding: var(--page-padding-y) var(--page-padding-x) var(--page-padding-bottom);
+  box-sizing: border-box;
 }
 
 @keyframes fadeIn {
@@ -155,7 +162,7 @@
 
 .loading {
   text-align: center;
-  padding: 40px;
+  padding: var(--page-padding-y) var(--page-padding-x);
   display: block;
 }
 
@@ -196,6 +203,6 @@
   }
 
   .error {
-    margin: 16px 20px;
+    margin: var(--page-padding-y) var(--page-padding-x);
   }
 }

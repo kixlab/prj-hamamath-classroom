@@ -1,17 +1,33 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import { useLocale } from '../../i18n/LocaleContext';
+import { formatCotStepGroup, formatCotSubSkill } from '../../i18n/translations';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
 import type { CoTData, CoTStep } from '../../types';
 import styles from './CoTSteps.module.css';
 
+function chunkSteps<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    rows.push(items.slice(i, i + size));
+  }
+  return rows;
+}
+
 export const CoTSteps = () => {
   const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
+  const { t, locale } = useLocale();
   const containerRef = useMathJax([currentCotData?.steps]);
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>('');
+
+  const stepRows = useMemo(
+    () => chunkSteps((currentCotData?.steps ?? []) as CoTStep[], 2),
+    [currentCotData?.steps],
+  );
 
   if (!currentCotData || !currentCotData.steps) {
     return null;
@@ -36,8 +52,8 @@ export const CoTSteps = () => {
     setCurrentStep(3);
   };
 
-  const startEdit = (step: any) => {
-    setEditingStepId(step.sub_skill_id);
+  const startEdit = (step: CoTStep) => {
+    setEditingStepId(step.sub_skill_id ?? null);
     setEditingContent(step.step_content ?? '');
   };
 
@@ -67,59 +83,97 @@ export const CoTSteps = () => {
     setEditingContent('');
   };
 
-  return (
-    <>
-      <div className={styles.cotSteps} ref={containerRef}>
-        {currentCotData.steps.map((step: any, index: number) => {
-          const isEditing = editingStepId === step.sub_skill_id;
-          return (
-            <div key={step.sub_skill_id} className={styles.stepCard} id={`cot-step-${step.sub_skill_id}`}>
-              <div className={styles.stepHeader}>
-                <div className={styles.stepNumber}>{index + 1}</div>
-                <div className={styles.stepTitle}>
-                  <h3>{step.step_name}</h3>
-                  <div className={styles.subSkill}>
-                    {step.sub_skill_name} ({step.sub_skill_id})
-                  </div>
-                </div>
-              </div>
-              {isEditing ? (
-                <div className={styles.stepContentEdit}>
-                  <textarea
-                    className={styles.editTextarea}
-                    value={editingContent}
-                    onChange={(e) => setEditingContent(e.target.value)}
-                    rows={6}
-                  />
-                  <div className={styles.editActions}>
-                    <button type="button" className={styles.cancelBtn} onClick={cancelEdit}>
-                      취소
-                    </button>
-                    <button type="button" className={styles.saveBtn} onClick={saveEdit}>
-                      저장
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className={styles.stepContentRow}>
-                  <div className={styles.stepContent}>{step.step_content}</div>
-                  <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>
-                    편집
-                  </button>
-                </div>
-              )}
+  const renderStepCard = (step: CoTStep, stepIndex: number) => {
+    const stepKey = step.sub_skill_id ?? `step-${stepIndex}`;
+    const isEditing = editingStepId === step.sub_skill_id;
+    const skillLabel = formatCotSubSkill(step, locale);
+
+    return (
+      <article
+        key={stepKey}
+        className={styles.stepCard}
+        id={`cot-step-${stepKey}`}
+        aria-labelledby={`cot-step-title-${stepKey}`}
+      >
+        <header className={styles.stepHeader}>
+          <div className={styles.stepMeta}>
+            <span className={styles.stepIdBadge}>{step.sub_skill_id ?? stepIndex + 1}</span>
+            <h3 className={styles.stepSkillTitle} id={`cot-step-title-${stepKey}`}>
+              {skillLabel}
+            </h3>
+          </div>
+          {!isEditing && (
+            <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>
+              {t('common.edit')}
+            </button>
+          )}
+        </header>
+        {isEditing ? (
+          <div className={styles.stepContentEdit}>
+            <textarea
+              className={styles.editTextarea}
+              value={editingContent}
+              onChange={(e) => setEditingContent(e.target.value)}
+              rows={5}
+              aria-label={skillLabel}
+            />
+            <div className={styles.editActions}>
+              <button type="button" className={styles.cancelBtn} onClick={cancelEdit}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" className={styles.saveBtn} onClick={saveEdit}>
+                {t('common.save')}
+              </button>
             </div>
+          </div>
+        ) : (
+          <div className={styles.stepContent}>{step.step_content}</div>
+        )}
+      </article>
+    );
+  };
+
+  return (
+    <div className={styles.cotPage}>
+      <div className={styles.cotSteps} ref={containerRef}>
+        {stepRows.map((rowSteps, rowIndex) => {
+          const sectionLabel = formatCotStepGroup(rowSteps[0], locale);
+          return (
+            <section
+              key={`cot-row-${rowIndex}`}
+              className={styles.stepSection}
+              aria-label={sectionLabel}
+            >
+              <div className={styles.stepSectionHead}>
+                <span className={styles.stepSectionIndex} aria-hidden>
+                  {rowIndex + 1}
+                </span>
+                <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
+              </div>
+              <div className={styles.stepRow}>
+                {rowSteps.map((step, colIndex) => {
+                  const stepIndex = rowIndex * 2 + colIndex;
+                  return (
+                    <div key={step.sub_skill_id ?? stepIndex} className={styles.stepRowItem}>
+                      {colIndex > 0 && (
+                        <span className={styles.stepRowConnector} aria-hidden>
+                          →
+                        </span>
+                      )}
+                      {renderStepCard(step, stepIndex)}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>
-      <div className={styles.buttonContainer}>
-        <button 
-          className={styles.generateButton}
-          onClick={handleGenerateGuideline}
-        >
-          하위문항 생성하기
+      <footer className={styles.cotFooter}>
+        <button type="button" className={styles.generateButton} onClick={handleGenerateGuideline}>
+          {t('cot.generateSubq')}
         </button>
-      </div>
-    </>
+      </footer>
+    </div>
   );
 };

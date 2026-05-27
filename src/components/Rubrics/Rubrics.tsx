@@ -4,12 +4,15 @@ import { api } from "../../services/api";
 import { saveResult } from "../../hooks/useStorage";
 import { useMathJax } from "../../hooks/useMathJax";
 import { logUserEvent } from "../../services/eventLogger";
+import { useLocale } from "../../i18n/LocaleContext";
+import { formatCotStepGroup, formatCotSubSkill } from "../../i18n/translations";
+import { formatAnswer, formatQuestion } from "../../utils/formatting";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
   level: "상" | "중" | "하";
   score: number;
-  title: string;
+  /** API `description` — 등급 요약(만점/부분/0점 답변 설명) */
   description: string;
   bullets: string[];
   examples: string[];
@@ -20,9 +23,42 @@ interface RubricItem {
   step_name: string;
   sub_skill_name: string;
   question: string;
+  answer?: string;
   levels: RubricLevel[];
   level_analysis?: any;
   raw_response?: any;
+}
+
+type SubqVersion = "original" | "regenerated";
+
+function getSubqDisplayQA(
+  subQ: {
+    guide_sub_question?: string;
+    guide_sub_answer?: string;
+    sub_answer?: string;
+    re_sub_question?: string;
+    re_sub_answer?: string;
+  },
+  preferred?: SubqVersion,
+) {
+  const originalQ = (subQ.guide_sub_question || "").trim();
+  const originalA = (subQ.guide_sub_answer || subQ.sub_answer || "").trim();
+  const reQ = (subQ.re_sub_question || "").trim();
+  const reA = (subQ.re_sub_answer || "").trim();
+
+  if (preferred === "original") {
+    return { question: originalQ, answer: originalA };
+  }
+  if (preferred === "regenerated") {
+    return {
+      question: reQ || originalQ,
+      answer: reQ ? reA || originalA : originalA,
+    };
+  }
+  return {
+    question: reQ || originalQ,
+    answer: reQ ? reA || originalA : originalA,
+  };
 }
 
 /**
@@ -83,18 +119,19 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
         return {
           level: key,
           score: data.score ?? scoreMap[key],
-          title: data.description || "",
-          description: data.description || "",
+          description: (data.description || "").trim(),
           bullets: Array.isArray(data.criteria) ? data.criteria : [],
           examples: Array.isArray(data.examples) ? data.examples : [],
         };
       });
 
+    const { question, answer } = getSubqDisplayQA(sq);
     return {
       sub_question_id: sr.sub_question_id || sq.sub_question_id || `sq-${idx + 1}`,
       step_name: sq.step_name || "",
       sub_skill_name: sq.sub_skill_name || "",
-      question: sq.guide_sub_question || "",
+      question,
+      answer,
       levels,
       level_analysis: sr.level_analysis,
       raw_response: sr,
@@ -103,9 +140,22 @@ function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricIt
 }
 
 export const Rubrics = () => {
-  const { userId, currentGuidelineData, currentRubrics, setCurrentRubrics, currentProblemId, finalizedGuidelineForRubric } = useApp();
+  const { t, locale, formatLevel } = useLocale();
+  const {
+    userId,
+    currentCotData,
+    currentGuidelineData,
+    currentRubrics,
+    setCurrentRubrics,
+    currentProblemId,
+    finalizedGuidelineForRubric,
+    preferredVersion = {},
+  } = useApp();
   /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 guideline */
   const guidelineForStep4 = finalizedGuidelineForRubric ?? currentGuidelineData;
+  const guidelineGd = guidelineForStep4 as { main_problem?: string; main_answer?: string } | null;
+  const mainProblem = (guidelineGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
+  const mainAnswer = (guidelineGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
   const rubrics = (currentRubrics ?? []) as RubricItem[];
   const [generating, setGenerating] = useState(false);
 
@@ -119,21 +169,38 @@ export const Rubrics = () => {
   // Per-level editing: { [sub_question_id]: { [level]: boolean } }
   const [editingLevels, setEditingLevels] = useState<Record<string, Record<string, boolean>>>({});
   // Controlled edit drafts: { [sub_question_id]: { [level]: { title, description, bullets, examples } } }
-  const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { title: string; description: string; bullets: string; examples: string }>>>({});
+  const [editDrafts, setEditDrafts] = useState<Record<string, Record<string, { description: string; bullets: string; examples: string }>>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
-  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen]);
+  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen, mainProblem, mainAnswer, guidelineForStep4, preferredVersion]);
+
+  const renderMainProblemSection = () => {
+    if (!mainProblem && !mainAnswer) return null;
+    return (
+      <section className={styles.mainProblemCard} aria-label={t("rubric.mainProblem")}>
+        {mainProblem ? (
+          <div className={styles.mainProblemText} dangerouslySetInnerHTML={{ __html: formatQuestion(mainProblem) }} />
+        ) : null}
+        {mainAnswer ? (
+          <div className={styles.mainProblemAnswer}>
+            <strong>{t("common.answerColon")}</strong>{" "}
+            <span dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
+          </div>
+        ) : null}
+      </section>
+    );
+  };
 
   // 3단계에서 문항이 수정된 뒤, 전체 루브릭을 다시 생성하고 싶을 때 사용하는 헬퍼
   const handleRegenerateAllRubrics = () => {
-    const confirmed = window.confirm("현재 하위문항 내용을 기준으로 루브릭을 다시 생성하시겠습니까?\n기존에 편집한 루브릭 내용은 덮어쓰여질 수 있습니다.");
+    const confirmed = window.confirm(t('rubric.confirmRegenerateAll'));
     if (!confirmed) return;
     runGenerateRubrics();
   };
 
   const handleFinalizeRubrics = () => {
-    const confirmed = window.confirm("루브릭을 확정하시겠습니까? 확정 후에는 현재 상태를 기준으로 활용하게 됩니다.");
+    const confirmed = window.confirm(t('rubric.confirmFinalize'));
     if (!confirmed) return;
     try {
       // 확정 시 서버·사이드바에 저장 (다른 기기/새로고침 시에도 목록에 표시)
@@ -146,14 +213,14 @@ export const Rubrics = () => {
     } catch {
       // 로깅 실패는 무시
     }
-    window.alert("루브릭이 확정되었습니다. 필요한 경우 JSON을 다운로드하여 보관해 주세요.");
+    window.alert(t('rubric.finalized'));
   };
 
   const runGenerateRubrics = async () => {
     const gd = guidelineForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
-    setGeneratingMessage("루브릭 생성 중... (시간이 다소 소요될 수 있습니다)");
+    setGeneratingMessage(t('rubric.generatingLong'));
     setError(null);
     try {
       const response = await api.generateRubricPipeline({
@@ -186,7 +253,7 @@ export const Rubrics = () => {
       }
     } catch (err: any) {
       console.error("루브릭 생성 오류:", err);
-      setError(err.message || "루브릭 생성 중 오류가 발생했습니다.");
+      setError(err.message || t('rubric.generateError'));
     } finally {
       setGenerating(false);
       setGeneratingMessage("");
@@ -208,7 +275,7 @@ export const Rubrics = () => {
           ...prev,
           [id]: {
             ...prev[id],
-            [level]: { title: lv.title, description: lv.description, bullets: lv.bullets.join("\n"), examples: lv.examples.join("\n") },
+            [level]: { description: lv.description, bullets: lv.bullets.join("\n"), examples: lv.examples.join("\n") },
           },
         }));
       }
@@ -219,7 +286,7 @@ export const Rubrics = () => {
     }));
   };
 
-  const updateDraft = (id: string, level: string, field: "title" | "description" | "bullets" | "examples", value: string) => {
+  const updateDraft = (id: string, level: string, field: "description" | "bullets" | "examples", value: string) => {
     setEditDrafts((prev) => ({
       ...prev,
       [id]: {
@@ -244,7 +311,6 @@ export const Rubrics = () => {
             if (lv.level !== level) return lv;
             return {
               ...lv,
-              title: draft.title.trim() || lv.title,
               description: draft.description.trim() || lv.description,
               bullets: draft.bullets.split("\n").filter((b) => b.trim()),
               examples: draft.examples.split("\n").filter((e) => e.trim()),
@@ -263,14 +329,12 @@ export const Rubrics = () => {
         level,
         before: before
           ? {
-              title: before.title,
               description: before.description,
               bullets: before.bullets,
               examples: before.examples,
             }
           : null,
         after: {
-          title: draft.title.trim() || before?.title || "",
           description: draft.description.trim() || before?.description || "",
           bullets: draft.bullets.split("\n").filter((b) => b.trim()),
           examples: draft.examples.split("\n").filter((e) => e.trim()),
@@ -326,8 +390,7 @@ export const Rubrics = () => {
           return {
             level: key,
             score: data.score ?? scoreMap[key],
-            title: data.description || "",
-            description: data.description || "",
+            description: (data.description || "").trim(),
             bullets: Array.isArray(data.criteria) ? data.criteria : [],
             examples: Array.isArray(data.examples) ? data.examples : [],
           };
@@ -351,7 +414,7 @@ export const Rubrics = () => {
       }
     } catch (err: any) {
       console.error("루브릭 재생성 오류:", err);
-      alert(err.message || "루브릭 재생성 중 오류가 발생했습니다.");
+      alert(err.message || t('rubric.regenerateError'));
     } finally {
       setRegeneratingIds((prev) => {
         const next = new Set(prev);
@@ -376,58 +439,31 @@ export const Rubrics = () => {
     handleRegenerateSingle(id, feedbackText || null);
   };
 
-  const handleDownloadJson = () => {
-    const data = {
-      rubrics: rubrics.map((r) => ({
-        sub_question_id: r.sub_question_id,
-        step_name: r.step_name,
-        sub_skill_name: r.sub_skill_name,
-        question: r.question,
-        levels: r.levels,
-      })),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "rubrics.json";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    try {
-      logUserEvent("rubric_json_downloaded", {
-        count: rubrics.length,
-      });
-    } catch {
-      // 로깅 실패는 무시
-    }
-  };
-
-  if (generating) {
+  if (generating && !rubrics.length) {
     return (
       <div className={styles.rubricContainer}>
-        <div className={styles.loadingState}>
-          <div className={styles.spinner}></div>
-          <div className={styles.loadingMessage}>{generatingMessage}</div>
+        <div className={styles.loadingPlaceholderCard}>
+          <div className={styles.spinner} aria-hidden />
+          <div>{generatingMessage || t("common.loading")}</div>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !rubrics.length) {
     return (
       <div className={styles.rubricContainer}>
         <div className={styles.errorState}>
           <div className={styles.errorMessage}>{error}</div>
           <button
-            className={styles.retryBtn}
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary}`}
             onClick={() => {
               setError(null);
               runGenerateRubrics();
             }}
           >
-            다시 시도
+            {t("common.retry")}
           </button>
         </div>
       </div>
@@ -436,15 +472,21 @@ export const Rubrics = () => {
 
   if (!rubrics.length) {
     return (
-      <div className={styles.rubricContainer}>
+      <div className={styles.rubricContainer} ref={containerRef}>
         <div className={styles.emptyState}>
           {!guidelineForStep4 || !(guidelineForStep4 as any).guide_sub_questions?.length ? (
-            <p>하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.</p>
+            <p>{t("rubric.noGuideline")}</p>
           ) : (
             <>
-              <p>루브릭을 생성하려면 아래 버튼을 눌러주세요.</p>
-              <button className={styles.generateBtn} disabled={generating} onClick={runGenerateRubrics}>
-                {generating ? generatingMessage || "생성 중..." : "루브릭 생성"}
+              {renderMainProblemSection()}
+              <p>{t("rubric.clickGenerate")}</p>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnPrimary} ${styles.btnLg}`}
+                disabled={generating}
+                onClick={runGenerateRubrics}
+              >
+                {generating ? generatingMessage || t("common.generating") : t("rubric.generate")}
               </button>
             </>
           )}
@@ -453,32 +495,67 @@ export const Rubrics = () => {
     );
   }
 
+  const showRegenerateAllBanner = !!(guidelineForStep4 as any)?.guide_sub_questions?.length;
+
   return (
     <div className={styles.rubricContainer} ref={containerRef}>
-      {(guidelineForStep4 as any)?.guide_sub_questions?.length ? (
-        <div className={styles.regenerateAllRow}>
-          <div className={styles.regenerateAllText}>3단계에서 하위문항을 수정했다면, 아래 루브릭은 이전 문항 기준일 수 있습니다.</div>
-          <button type="button" className={styles.generateBtn} onClick={handleRegenerateAllRubrics} disabled={generating}>
-            루브릭 새로 생성하기
+      {renderMainProblemSection()}
+      {showRegenerateAllBanner && (
+        <div className={styles.noticeBanner}>
+          <p className={styles.noticeBannerText}>{t("rubric.regenerateAllHint")}</p>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
+            onClick={handleRegenerateAllRubrics}
+            disabled={generating}
+          >
+            {t("rubric.regenerateAll")}
           </button>
         </div>
-      ) : null}
+      )}
 
-      <div className={styles.rubricCards}>
+      <div className={styles.rubricList}>
         {rubrics.map((rubric) => {
           const isFeedbackOpen = feedbackStates[rubric.sub_question_id];
           const isRegenerating = regeneratingIds.has(rubric.sub_question_id);
+          const subQ = findSubQuestion(rubric.sub_question_id);
+          const { question: subqQuestion, answer: subqAnswer } = subQ
+            ? getSubqDisplayQA(subQ, preferredVersion[rubric.sub_question_id])
+            : { question: rubric.question, answer: rubric.answer ?? "" };
 
           return (
-            <div key={rubric.sub_question_id} className={`${styles.rubricCard} ${isRegenerating ? styles.rubricCardRegenerating : ""}`}>
-              <div className={styles.rubricHeader}>
-                <span className={styles.rubricId}>{rubric.sub_question_id}</span>
-                <span className={styles.rubricTitle}>
-                  {rubric.step_name} - {rubric.sub_skill_name}
-                </span>
-                <span className={styles.rubricQuestionInline}>{preprocessLatex(rubric.question)}</span>
+            <article key={rubric.sub_question_id} className={styles.rubricCard}>
+              <header className={styles.cardTop}>
+                <div className={styles.cardMeta}>
+                  <span className={styles.cardIdBadge}>{rubric.sub_question_id}</span>
+                  <div className={styles.cardTitles}>
+                    <span className={styles.cardSkillTitle}>{formatCotSubSkill(rubric, locale)}</span>
+                    <span className={styles.cardGroupTitle}>{formatCotStepGroup(rubric, locale)}</span>
+                  </div>
+                </div>
+              </header>
+
+              <div className={styles.questionPanel}>
+                {subqQuestion ? (
+                  <div
+                    className={styles.subqQuestion}
+                    dangerouslySetInnerHTML={{ __html: formatQuestion(subqQuestion) }}
+                  />
+                ) : null}
+                {subqAnswer ? (
+                  <div className={styles.subqAnswer}>
+                    <strong>{t("common.answerColon")}</strong>{" "}
+                    <span dangerouslySetInnerHTML={{ __html: formatAnswer(subqAnswer) }} />
+                  </div>
+                ) : null}
               </div>
 
+              {isRegenerating ? (
+                <div className={styles.cardBodyLoading} aria-busy="true">
+                  <div className={styles.spinner} aria-hidden />
+                  <div>{t("common.generating")}</div>
+                </div>
+              ) : (
               <div className={styles.levelCards}>
                 {rubric.levels.map((lv) => {
                   const isLevelEditing = editingLevels[rubric.sub_question_id]?.[lv.level];
@@ -489,11 +566,17 @@ export const Rubrics = () => {
                   return (
                     <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
                       <div className={styles.levelHeader}>
-                        <span className={`${styles.levelBadge} ${badgeStyle}`}>{lv.level}</span>
-                        {!isLevelEditing && <span className={styles.levelLabel}>{preprocessLatex(lv.title)}</span>}
+                        <span className={`${styles.levelBadge} ${badgeStyle}`}>{formatLevel(lv.level)}</span>
+                        {!isLevelEditing && lv.description ? (
+                          <span className={styles.levelLabel}>{preprocessLatex(lv.description)}</span>
+                        ) : null}
                         {!isLevelEditing && (
-                          <button className={styles.levelEditBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
-                            편집
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                            onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}
+                          >
+                            {t("common.edit")}
                           </button>
                         )}
                       </div>
@@ -501,16 +584,7 @@ export const Rubrics = () => {
                       {isLevelEditing ? (
                         <>
                           <div className={styles.levelEditGroup}>
-                            <label>제목</label>
-                            <textarea
-                              className={styles.editTextarea}
-                              value={draft?.title ?? lv.title}
-                              onChange={(e) => updateDraft(rubric.sub_question_id, lv.level, "title", e.target.value)}
-                              rows={1}
-                            />
-                          </div>
-                          <div className={styles.levelEditGroup}>
-                            <label>설명</label>
+                            <label>{t("rubric.labelDescription")}</label>
                             <textarea
                               className={styles.editTextarea}
                               value={draft?.description ?? lv.description}
@@ -519,7 +593,7 @@ export const Rubrics = () => {
                             />
                           </div>
                           <div className={styles.levelEditGroup}>
-                            <label>세부 기준 (줄바꿈으로 구분)</label>
+                            <label>{t('rubric.labelBullets')}</label>
                             <textarea
                               className={styles.editTextarea}
                               value={draft?.bullets ?? lv.bullets.join("\n")}
@@ -528,7 +602,7 @@ export const Rubrics = () => {
                             />
                           </div>
                           <div className={styles.levelEditGroup}>
-                            <label>학생 답변 예시 (줄바꿈으로 구분)</label>
+                            <label>{t('rubric.labelExamples')}</label>
                             <textarea
                               className={styles.editTextarea}
                               value={draft?.examples ?? lv.examples.join("\n")}
@@ -537,11 +611,19 @@ export const Rubrics = () => {
                             />
                           </div>
                           <div className={styles.levelEditActions}>
-                            <button className={styles.cancelBtn} onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}>
-                              취소
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                              onClick={() => toggleLevelEdit(rubric.sub_question_id, lv.level)}
+                            >
+                              {t("common.cancel")}
                             </button>
-                            <button className={styles.saveBtn} onClick={() => handleSaveLevelEdit(rubric.sub_question_id, lv.level)}>
-                              저장
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                              onClick={() => handleSaveLevelEdit(rubric.sub_question_id, lv.level)}
+                            >
+                              {t("common.save")}
                             </button>
                           </div>
                         </>
@@ -559,8 +641,12 @@ export const Rubrics = () => {
                             const isOpen = !!examplesOpen[exKey];
                             return (
                               <div className={styles.examplesToggleWrap}>
-                                <button className={styles.examplesToggleBtn} onClick={() => setExamplesOpen((prev) => ({ ...prev, [exKey]: !prev[exKey] }))}>
-                                  {isOpen ? "학생 답변 예시 닫기" : "학생 답변 예시 보기"}
+                                <button
+                                  type="button"
+                                  className={styles.toolLink}
+                                  onClick={() => setExamplesOpen((prev) => ({ ...prev, [exKey]: !prev[exKey] }))}
+                                >
+                                  {isOpen ? t("rubric.hideExamples") : t("rubric.showExamples")}
                                 </button>
                                 {isOpen && (
                                   <div className={styles.examplesList}>
@@ -571,7 +657,7 @@ export const Rubrics = () => {
                                         </div>
                                       ))
                                     ) : (
-                                      <p className={styles.examplesEmpty}>예시 없음</p>
+                                      <p className={styles.examplesEmpty}>{t('rubric.noExamples')}</p>
                                     )}
                                   </div>
                                 )}
@@ -584,49 +670,84 @@ export const Rubrics = () => {
                   );
                 })}
               </div>
+              )}
 
-              <div className={styles.actionButtons}>
-                <button className={styles.actionBtn} onClick={() => toggleFeedback(rubric.sub_question_id)}>
-                  <span>피드백</span>
-                </button>
-                <button
-                  className={styles.regenerateBtn}
-                  disabled={regeneratingIds.has(rubric.sub_question_id)}
-                  onClick={() => {
-                    if (isFeedbackOpen) {
-                      handleFeedbackRegenerate(rubric.sub_question_id);
-                    } else {
-                      handleRegenerateSingle(rubric.sub_question_id);
-                    }
-                  }}
-                >
-                  <span>{regeneratingIds.has(rubric.sub_question_id) ? "생성 중..." : "재생성"}</span>
-                </button>
-              </div>
-
-              <div className={styles.feedbackInput} style={{ display: isFeedbackOpen ? "block" : "none" }}>
-                <textarea className={`${styles.feedbackTextarea} feedback-rubric-${rubric.sub_question_id}`} rows={3} placeholder="루브릭 수정 요청사항을 입력하세요." />
-                <div className={styles.feedbackActions}>
-                  <button className={styles.cancelBtn} onClick={() => toggleFeedback(rubric.sub_question_id)}>
-                    취소
-                  </button>
-                  <button className={styles.submitBtn} onClick={() => handleFeedbackRegenerate(rubric.sub_question_id)}>
-                    입력
-                  </button>
+              {isFeedbackOpen && (
+                <div className={styles.feedbackPanelInline}>
+                  <textarea
+                    className={`${styles.editTextarea} feedback-rubric-${rubric.sub_question_id}`}
+                    rows={3}
+                    placeholder={t("rubric.feedbackPlaceholder")}
+                    disabled={isRegenerating}
+                  />
+                  <div className={styles.feedbackActions}>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                      onClick={() => toggleFeedback(rubric.sub_question_id)}
+                      disabled={isRegenerating}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                      onClick={() => handleFeedbackRegenerate(rubric.sub_question_id)}
+                      disabled={isRegenerating}
+                    >
+                      {isRegenerating ? (
+                        <>
+                          <span className={styles.spinnerInline} aria-hidden />
+                          {t("common.processing")}
+                        </>
+                      ) : (
+                        t("common.regenerate")
+                      )}
+                    </button>
+                  </div>
                 </div>
+              )}
+
+              <div className={styles.cardFooter}>
+                <button
+                  type="button"
+                  className={`${styles.toolLink} ${isFeedbackOpen ? styles.toolLinkActive : ""}`}
+                  onClick={() => toggleFeedback(rubric.sub_question_id)}
+                  disabled={isRegenerating}
+                >
+                  {t("common.feedback")}
+                </button>
+                {!isFeedbackOpen && (
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                    disabled={isRegenerating}
+                    onClick={() => handleRegenerateSingle(rubric.sub_question_id)}
+                  >
+                    {t("common.regenerate")}
+                  </button>
+                )}
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
-      <div className={styles.finalizeRow}>
-        <button type="button" className={styles.downloadBtn} onClick={handleDownloadJson}>
-          JSON 다운로드
-        </button>
-        <button type="button" className={styles.finalizeBtn} onClick={handleFinalizeRubrics}>
-          루브릭 확정하기
-        </button>
-      </div>
+
+      <footer className={styles.pageFooter}>
+        <div className={styles.pageFooterInner}>
+          <div className={styles.pageFooterSpacer} aria-hidden />
+          <div className={styles.pageFooterActions}>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnStacked}`}
+              onClick={handleFinalizeRubrics}
+            >
+              <span className={styles.btnStackedLabel}>{t("rubric.finalize")}</span>
+              <span className={styles.btnStackedHint}>{t("rubric.finalizeHint")}</span>
+            </button>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

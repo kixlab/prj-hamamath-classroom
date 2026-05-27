@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
+import { LocaleProvider, useLocale } from './i18n/LocaleContext';
 import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
 import { initEventLogger, stopEventLogger } from './services/eventLogger';
 import { loadResult } from './hooks/useStorage';
@@ -23,6 +24,7 @@ interface AppContentProps {
 }
 
 const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
+  const { t } = useLocale();
   const [showAdminDbView, setShowAdminDbView] = useState(false);
   const [showStudentDiagnosis, setShowStudentDiagnosis] = useState(false);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
@@ -110,7 +112,6 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         <Sidebar
           userId={userId}
           onOpenAdminDb={() => setShowAdminDbView(true)}
-          onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
           onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
         />
         <div className={styles.container}>
@@ -144,7 +145,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
         onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
       />
-      <div className={styles.container}>
+      <div className={`${styles.container} ${styles.containerWithStepper}`}>
         <WorkflowTabs />
         <div className={styles.workflowContent}>
           {currentStep === 1 && (
@@ -157,13 +158,13 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
               {loading && (
                 <div className={styles.loading}>
                   <div className={styles.spinner}></div>
-                  <div>로딩 중...</div>
+                  <div>{t('common.loading')}</div>
                 </div>
               )}
               {error && <div className={styles.error}>{error}</div>}
               {!loading && !error && currentCotData && <CoTSteps />}
               {!loading && !error && !currentCotData && (
-                <div className={styles.error}>데이터를 불러올 수 없습니다.</div>
+                <div className={styles.error}>{t('common.cannotLoadData')}</div>
               )}
             </div>
           )}
@@ -172,12 +173,12 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
               <div className={styles.subQsSplitLayout}>
                 <aside className={styles.mainProblemColumn} ref={mainProblemRef}>
                   <div className={styles.mainProblemPanel}>
-                    <h3 className={styles.mainProblemTitle}>입력한 문제</h3>
+                    <h3 className={styles.mainProblemTitle}>{t('app.mainProblem')}</h3>
                     {mainImage && (
                       <div className={styles.mainProblemImageWrap}>
                         <img
                           src={mainImage}
-                          alt="문제 이미지"
+                          alt={t('app.problemImage')}
                           className={styles.mainProblemImage}
                         />
                       </div>
@@ -187,30 +188,30 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
                         <div className={styles.mainProblemContent}>{formatQuestion(mainProblem)}</div>
                         {mainAnswer && (
                           <div className={styles.mainProblemAnswer}>
-                            <span className={styles.mainProblemAnswerLabel}>정답:</span>{' '}
+                            <span className={styles.mainProblemAnswerLabel}>{t('common.answerColon')}</span>{' '}
                             <span dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
                           </div>
                         )}
                         {mainSolution && (
                           <div className={styles.mainProblemSolution}>
-                            <span className={styles.mainProblemSolutionLabel}>모범답안</span>
+                            <span className={styles.mainProblemSolutionLabel}>{t('app.modelAnswer')}</span>
                             <div className={styles.mainProblemSolutionContent}>{mainSolution}</div>
                           </div>
                         )}
                       </>
                     ) : (
-                      !mainImage && <p className={styles.mainProblemEmpty}>문제 데이터가 없습니다.</p>
+                      !mainImage && <p className={styles.mainProblemEmpty}>{t('app.noProblemData')}</p>
                     )}
                     {(grade || subjectArea) && (
                       <div className={styles.mainProblemMeta}>
                         {grade && (
                           <div>
-                            <span className={styles.mainProblemMetaLabel}>학년:</span> {grade}
+                            <span className={styles.mainProblemMetaLabel}>{t('app.gradeLabel')}</span> {grade}
                           </div>
                         )}
                         {subjectArea && (
                           <div>
-                            <span className={styles.mainProblemMetaLabel}>수학 영역:</span> {subjectArea}
+                            <span className={styles.mainProblemMetaLabel}>{t('app.subjectArea')}</span> {subjectArea}
                           </div>
                         )}
                       </div>
@@ -242,12 +243,14 @@ function App() {
 
   if (!userId) {
     return (
-      <UserIdPage
-        onSuccess={(id) => {
-          if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(USER_ID_STORAGE_KEY, id);
-          setUserId(id);
-        }}
-      />
+      <LocaleProvider>
+        <UserIdPage
+          onSuccess={(id) => {
+            if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(USER_ID_STORAGE_KEY, id);
+            setUserId(id);
+          }}
+        />
+      </LocaleProvider>
     );
   }
 
@@ -257,11 +260,13 @@ function App() {
   };
 
   return (
-    <AppWithClickLogger userId={userId}>
-      <AppProvider userId={userId}>
-        <AppContent userId={userId} onShowUserIdPage={showUserIdPage} />
-      </AppProvider>
-    </AppWithClickLogger>
+    <LocaleProvider>
+      <AppWithClickLogger userId={userId}>
+        <AppProvider userId={userId}>
+          <AppContent userId={userId} onShowUserIdPage={showUserIdPage} />
+        </AppProvider>
+      </AppWithClickLogger>
+    </LocaleProvider>
   );
 }
 
