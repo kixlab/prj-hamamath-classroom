@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import styles from "./StudentDiagnosis.module.css";
 import { useApp } from "../../contexts/AppContext";
 import { useLocale } from "../../i18n/LocaleContext";
-import { translations } from "../../i18n/translations";
+import { getAppLanguage, translations } from "../../i18n/translations";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { api } from "../../services/api";
@@ -816,6 +816,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             correct_answer: item.answer,
             rubric: { levels: rubricLevels },
             student_answer: answerText,
+            language: getAppLanguage(locale),
           });
 
           newResultsForStudent[item.id] = {
@@ -902,6 +903,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               levels_by_display_code: s.levelsByDisplayCode,
               feedback_by_display_code: s.feedbackByDisplayCode ?? {},
             })),
+            language: getAppLanguage(locale),
           };
           const reportData = await api.generateStudentDiagnosisReport(reportPayload);
           await api.saveDiagnosisReport({ user_id: userId, student_id: currentStudentId, report: reportData });
@@ -1156,6 +1158,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           levels_by_display_code: fullPerStudent[pid].levelsByDisplayCode,
           feedback_by_display_code: fullPerStudent[pid].feedbackByDisplayCode ?? {},
         })),
+        language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
       setReportData(data);
@@ -1197,6 +1200,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           levels_by_display_code: perStudent[pid].levelsByDisplayCode,
           feedback_by_display_code: perStudent[pid].feedbackByDisplayCode ?? {},
         })),
+        language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
       setReportData(data);

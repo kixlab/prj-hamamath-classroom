@@ -16,6 +16,7 @@ export interface CoTData {
   final_answer?: string;
   grade?: string;
   main_solution?: string | null;
+  image_data?: string | null;
   steps: CoTStep[];
 }
 

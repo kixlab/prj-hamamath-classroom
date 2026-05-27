@@ -192,11 +192,35 @@
 }
 
 .questionPanel {
-  background: var(--color-bg-secondary, #f8fafc);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 14px;
+}
+
+.subqFieldLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.subqQuestionBlock,
+.subqAnswerBlock {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
+.subqQuestionBlock {
+  background: #fff;
+}
+
+.subqAnswerBlock {
+  background: var(--color-bg-secondary, #f8fafc);
+  border-style: dashed;
 }
 
 .subqQuestion {
@@ -207,17 +231,9 @@
 }
 
 .subqAnswer {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--color-border);
   font-size: 0.9rem;
   line-height: 1.6;
-  color: var(--color-text);
-}
-
-.subqAnswer strong {
   color: var(--color-text-secondary);
-  font-weight: 600;
 }
 
 .cardBodyLoading {

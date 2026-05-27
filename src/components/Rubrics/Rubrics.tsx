@@ -5,8 +5,8 @@ import { saveResult } from "../../hooks/useStorage";
 import { useMathJax } from "../../hooks/useMathJax";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatCotStepGroup, formatCotSubSkill } from "../../i18n/translations";
-import { formatAnswer, formatQuestion } from "../../utils/formatting";
+import { formatCotStepGroup, formatCotSubSkill, getAppLanguage } from "../../i18n/translations";
+import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -47,18 +47,12 @@ function getSubqDisplayQA(
   const reA = (subQ.re_sub_answer || "").trim();
 
   if (preferred === "original") {
-    return { question: originalQ, answer: originalA };
+    return splitQuestionAndAnswer(originalQ, originalA);
   }
   if (preferred === "regenerated") {
-    return {
-      question: reQ || originalQ,
-      answer: reQ ? reA || originalA : originalA,
-    };
+    return splitQuestionAndAnswer(reQ || originalQ, reQ ? reA || originalA : originalA);
   }
-  return {
-    question: reQ || originalQ,
-    answer: reQ ? reA || originalA : originalA,
-  };
+  return splitQuestionAndAnswer(reQ || originalQ, reQ ? reA || originalA : originalA);
 }
 
 /**
@@ -230,6 +224,7 @@ export const Rubrics = () => {
         subject_area: gd.subject_area,
         sub_questions: gd.guide_sub_questions,
         variant: "with_error_types",
+        language: getAppLanguage(locale),
       });
       const mapped = mapApiResponseToRubrics(response, gd);
       setCurrentRubrics(mapped);
@@ -377,6 +372,7 @@ export const Rubrics = () => {
         current_rubric: buildCurrentRubric(rubricItem),
         feedback: feedback || null,
         variant: "with_error_types",
+        language: getAppLanguage(locale),
       });
 
       const rubricData = response.rubric || {};
@@ -537,15 +533,21 @@ export const Rubrics = () => {
 
               <div className={styles.questionPanel}>
                 {subqQuestion ? (
-                  <div
-                    className={styles.subqQuestion}
-                    dangerouslySetInnerHTML={{ __html: formatQuestion(subqQuestion) }}
-                  />
+                  <div className={styles.subqQuestionBlock}>
+                    <div className={styles.subqFieldLabel}>{t("common.questionColon")}</div>
+                    <div
+                      className={styles.subqQuestion}
+                      dangerouslySetInnerHTML={{ __html: formatQuestion(subqQuestion) }}
+                    />
+                  </div>
                 ) : null}
                 {subqAnswer ? (
-                  <div className={styles.subqAnswer}>
-                    <strong>{t("common.answerColon")}</strong>{" "}
-                    <span dangerouslySetInnerHTML={{ __html: formatAnswer(subqAnswer) }} />
+                  <div className={styles.subqAnswerBlock}>
+                    <div className={styles.subqFieldLabel}>{t("common.answerColon")}</div>
+                    <div
+                      className={styles.subqAnswer}
+                      dangerouslySetInnerHTML={{ __html: formatAnswer(subqAnswer) }}
+                    />
                   </div>
                 ) : null}
               </div>

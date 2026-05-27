@@ -7,6 +7,11 @@ export function toVerifierLanguage(locale: Locale): VerifierLanguage {
   return locale === "en" ? "en" : "ko";
 }
 
+/** API 요청 body `language` (기본 ko, 영어 UI 시 en). classroom_web getAppLanguage()와 동일 */
+export function getAppLanguage(locale: Locale): VerifierLanguage {
+  return toVerifierLanguage(locale);
+}
+
 export type TranslationKey = keyof typeof ko;
 
 const ko = {
@@ -38,6 +43,7 @@ const ko = {
   "common.retry": "다시 시도",
   "common.answer": "정답",
   "common.answerColon": "정답:",
+  "common.questionColon": "문항:",
   "common.errorGeneric": "오류가 발생했습니다.",
   "common.cannotLoadData": "데이터를 불러올 수 없습니다.",
   "common.jsonDownload": "JSON 다운로드",
@@ -336,6 +342,7 @@ const en: Record<TranslationKey, string> = {
   "common.retry": "Retry",
   "common.answer": "Answer",
   "common.answerColon": "Answer:",
+  "common.questionColon": "Question:",
   "common.errorGeneric": "An error occurred.",
   "common.cannotLoadData": "Unable to load data.",
   "common.jsonDownload": "Download JSON",

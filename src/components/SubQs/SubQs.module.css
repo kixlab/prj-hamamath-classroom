@@ -512,34 +512,59 @@
 
 .displayMode {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fieldLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.questionBlock,
+.answerBlock {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
+.questionBlock {
+  background: #fff;
+}
+
+.answerBlock {
+  background: var(--color-bg);
+  border-style: dashed;
 }
 
 .questionContent {
   color: #212529;
   line-height: 1.7;
   font-size: 0.95em;
-  margin-bottom: 10px;
   white-space: pre-wrap;
 }
 
 .answerContent {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--color-border);
   color: var(--color-text-secondary);
   font-size: 0.875rem;
-}
-
-.answerContent strong {
-  color: var(--color-text);
-  font-weight: 600;
-  margin-right: 4px;
+  line-height: 1.65;
 }
 
 .editMode {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .editTextarea {

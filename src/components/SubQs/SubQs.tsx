@@ -5,9 +5,15 @@ import { saveResult } from "../../hooks/useStorage";
 import { logUserEvent } from "../../services/eventLogger";
 import { exportPdfFromGuideline } from "../../utils/exportPdf";
 import { useMathJax } from "../../hooks/useMathJax";
-import { formatQuestion, formatAnswer, formatVerificationResult, extractVerificationTexts } from "../../utils/formatting";
+import {
+  formatQuestion,
+  formatAnswer,
+  formatVerificationResult,
+  extractVerificationTexts,
+  splitQuestionAndAnswer,
+} from "../../utils/formatting";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatCotStepGroup, formatCotSubSkill, toVerifierLanguage } from "../../i18n/translations";
+import { formatCotStepGroup, formatCotSubSkill, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
 import styles from "./SubQs.module.css";
 
 interface SubQuestion {
@@ -30,6 +36,22 @@ interface Progress {
   total: number;
   currentStep: string;
 }
+
+const normalizeSubQuestion = (subQ: SubQuestion): SubQuestion => {
+  const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
+  const regenerated = subQ.re_sub_question
+    ? splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer)
+    : null;
+  return {
+    ...subQ,
+    guide_sub_question: original.question,
+    guide_sub_answer: original.answer,
+    ...(regenerated && {
+      re_sub_question: regenerated.question,
+      re_sub_answer: regenerated.answer,
+    }),
+  };
+};
 
 type SubqPanelVersion = "original" | "regenerated";
 
@@ -126,10 +148,12 @@ export const SubQs = () => {
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
   const getFinalQA = (subQ: SubQuestion) => {
-    const originalQ = (subQ.guide_sub_question || "").trim();
-    const originalA = (subQ.guide_sub_answer || "").trim();
-    const reQ = (subQ.re_sub_question || "").trim();
-    const reA = (subQ.re_sub_answer || "").trim();
+    const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
+    const regenerated = splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer);
+    const originalQ = original.question;
+    const originalA = original.answer;
+    const reQ = regenerated.question;
+    const reA = regenerated.answer;
     const preferred = preferredVersion[subQ.sub_question_id];
 
     let finalQuestion: string;
@@ -252,7 +276,7 @@ export const SubQs = () => {
             guide_sub_answer: hasReGeneratedA ? q.re_sub_answer! : q.guide_sub_answer,
           };
         }),
-        language: toVerifierLanguage(locale),
+        language: getAppLanguage(locale),
       };
 
       const verifyResponse = await api.verifyAndRegenerate({
@@ -281,20 +305,20 @@ export const SubQs = () => {
       }
 
       if ((verifyResponse as any).was_regenerated) {
-        enrichedSubQuestion = {
+        enrichedSubQuestion = normalizeSubQuestion({
           ...enrichedSubQuestion,
           re_sub_question: (verifyResponse as any).sub_question?.re_sub_question || (verifyResponse as any).sub_question?.guide_sub_question,
           re_sub_answer: (verifyResponse as any).sub_question?.re_sub_answer || (verifyResponse as any).sub_question?.guide_sub_answer,
           verification_result: originalVerification,
           re_verification_result: regeneratedVerification,
-        };
+        });
       } else {
-        enrichedSubQuestion = {
+        enrichedSubQuestion = normalizeSubQuestion({
           ...enrichedSubQuestion,
           re_sub_question: (verifyResponse as any).sub_question?.re_sub_question || (verifyResponse as any).sub_question?.guide_sub_question || enrichedSubQuestion.re_sub_question,
           re_sub_answer: (verifyResponse as any).sub_question?.re_sub_answer || (verifyResponse as any).sub_question?.guide_sub_answer || enrichedSubQuestion.re_sub_answer,
           verification_result: originalVerification,
-        };
+        });
       }
 
       // 로컬/기존 subQuestion에도 재생성 결과를 반영해서 이후 단계의 previous_sub_questions 계산에 활용
@@ -378,6 +402,7 @@ export const SubQs = () => {
           main_answer: (currentCotData as any).answer,
           main_solution: (currentCotData as any).main_solution || null,
           grade: (currentCotData as any).grade,
+          language: getAppLanguage(locale),
         });
         matchedSubjectArea = achievementData.subject_area || (currentCotData as any).subject_area;
         setBSubjectArea(matchedSubjectArea);
@@ -425,9 +450,10 @@ export const SubQs = () => {
         subject_area: subjectArea,
         considerations: considerations,
         previous_sub_questions: previousForGeneration,
+        language: getAppLanguage(locale),
       });
 
-      const subQuestion: SubQuestion = guidelineResponse.sub_question;
+      const subQuestion: SubQuestion = normalizeSubQuestion(guidelineResponse.sub_question);
       const previousSubQuestions = guideSubQuestions.slice();
 
       // 누적 + 화면 반영
@@ -499,6 +525,7 @@ export const SubQs = () => {
           main_answer: (currentCotData as any).answer,
           main_solution: (currentCotData as any).main_solution || null,
           grade: (currentCotData as any).grade,
+          language: getAppLanguage(locale),
         });
         subjectArea = achievementData.subject_area || (currentCotData as any).subject_area || "";
         setBSubjectArea(subjectArea);
@@ -543,9 +570,10 @@ export const SubQs = () => {
           subject_area: subjectArea,
           considerations,
           previous_sub_questions: previousForGeneration,
+          language: getAppLanguage(locale),
         });
 
-        const subQuestion: SubQuestion = guidelineResponse.sub_question;
+        const subQuestion: SubQuestion = normalizeSubQuestion(guidelineResponse.sub_question);
         const previousSubQuestions = guideSubQuestions.slice();
         guideSubQuestions.push(subQuestion);
 
@@ -602,10 +630,12 @@ export const SubQs = () => {
   // 원본 편집 저장: guide_sub_question / guide_sub_answer 업데이트
   const handleSaveOriginalEdit = (subqId: string) => {
     const questionEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="original-question"]`) as HTMLTextAreaElement;
-    const answerEl = document.querySelector(`input[data-subq-id="${subqId}"][data-type="original-answer"]`) as HTMLInputElement;
+    const answerEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="original-answer"]`) as HTMLTextAreaElement;
 
-    const newQuestion = (questionEl?.value ?? "").trim();
-    const newAnswer = (answerEl?.value ?? "").trim();
+    const { question: newQuestion, answer: newAnswer } = splitQuestionAndAnswer(
+      (questionEl?.value ?? "").trim(),
+      (answerEl?.value ?? "").trim(),
+    );
 
     (setCurrentGuidelineData as any)((prev: any) => {
       if (!prev || !prev.guide_sub_questions) return prev;
@@ -633,10 +663,12 @@ export const SubQs = () => {
 
   const handleSaveRegeneratedEdit = (subqId: string) => {
     const questionEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="regenerated-question"]`) as HTMLTextAreaElement;
-    const answerEl = document.querySelector(`input[data-subq-id="${subqId}"][data-type="regenerated-answer"]`) as HTMLInputElement;
+    const answerEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="regenerated-answer"]`) as HTMLTextAreaElement;
 
-    const newQuestion = (questionEl?.value ?? "").trim();
-    const newAnswer = (answerEl?.value ?? "").trim();
+    const { question: newQuestion, answer: newAnswer } = splitQuestionAndAnswer(
+      (questionEl?.value ?? "").trim(),
+      (answerEl?.value ?? "").trim(),
+    );
 
     (setCurrentGuidelineData as any)((prev: any) => {
       if (!prev || !prev.guide_sub_questions) return prev;
@@ -769,10 +801,11 @@ export const SubQs = () => {
         original_sub_question: feedbackTarget,
         verification_feedbacks: [`[사용자 피드백] ${userFeedback}`],
         failing_verifiers: ["stage_elicitation", "context_alignment", "answer_validity", "prompt_validity"],
+        language: getAppLanguage(locale),
       } as any);
 
       const updated = (regenerateResponse as any).sub_question as SubQuestion;
-      const merged: SubQuestion =
+      const merged: SubQuestion = normalizeSubQuestion(
         version === "regenerated"
           ? {
               ...targetSubQ,
@@ -783,7 +816,8 @@ export const SubQs = () => {
               ...targetSubQ,
               guide_sub_question: updated.guide_sub_question ?? targetSubQ.guide_sub_question,
               guide_sub_answer: updated.guide_sub_answer ?? targetSubQ.guide_sub_answer,
-            };
+            },
+      );
 
       const updatedSubQuestions = subQuestions.map((q: SubQuestion) => (q.sub_question_id === subqId ? merged : q));
 
@@ -922,20 +956,28 @@ export const SubQs = () => {
             selectedVersion ?? (showCompareLayout ? "regenerated" : undefined);
           const isVersionSelected = (version: SubqPanelVersion) =>
             effectiveSelectedVersion === version;
-          const originalQuestion = subQ.guide_sub_question || "";
-          const originalAnswer = subQ.guide_sub_answer || subQ.sub_answer || "";
-          const regeneratedQuestion = subQ.re_sub_question || "";
-          const regeneratedAnswer = subQ.re_sub_answer || "";
+          const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
+          const regenerated = splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer);
+          const originalQuestion = original.question;
+          const originalAnswer = original.answer;
+          const regeneratedQuestion = regenerated.question;
+          const regeneratedAnswer = regenerated.answer;
 
           const renderDisplay = (question: string, answer: string) => (
             <div className={styles.displayMode}>
-              <div className={styles.questionContent}>{formatQuestion(question)}</div>
-              {answer && (
-                <div className={styles.answerContent}>
-                  <strong>{t("common.answerColon")}</strong>{" "}
-                  <span dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }} />
+              <div className={styles.questionBlock}>
+                <div className={styles.fieldLabel}>{t("common.questionColon")}</div>
+                <div className={styles.questionContent}>{formatQuestion(question)}</div>
+              </div>
+              {answer ? (
+                <div className={styles.answerBlock}>
+                  <div className={styles.fieldLabel}>{t("common.answerColon")}</div>
+                  <div
+                    className={styles.answerContent}
+                    dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }}
+                  />
                 </div>
-              )}
+              ) : null}
             </div>
           );
 
@@ -952,21 +994,27 @@ export const SubQs = () => {
                 : () => handleSaveOriginalEdit(subQ.sub_question_id);
             return (
               <div className={styles.editMode}>
-                <textarea
-                  className={styles.editTextarea}
-                  defaultValue={q}
-                  rows={3}
-                  data-subq-id={subQ.sub_question_id}
-                  data-type={`${version}-question`}
-                />
-                <input
-                  type="text"
-                  className={styles.editInput}
-                  defaultValue={a}
-                  placeholder={t("problemInput.answerPlaceholder")}
-                  data-subq-id={subQ.sub_question_id}
-                  data-type={`${version}-answer`}
-                />
+                <label className={styles.editField}>
+                  <span className={styles.fieldLabel}>{t("common.questionColon")}</span>
+                  <textarea
+                    className={styles.editTextarea}
+                    defaultValue={q}
+                    rows={3}
+                    data-subq-id={subQ.sub_question_id}
+                    data-type={`${version}-question`}
+                  />
+                </label>
+                <label className={styles.editField}>
+                  <span className={styles.fieldLabel}>{t("common.answerColon")}</span>
+                  <textarea
+                    className={styles.editTextarea}
+                    defaultValue={a}
+                    rows={2}
+                    placeholder={t("problemInput.answerPlaceholder")}
+                    data-subq-id={subQ.sub_question_id}
+                    data-type={`${version}-answer`}
+                  />
+                </label>
                 <div className={styles.editActions}>
                   <button type="button" className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`} onClick={onCancel}>
                     {t("common.cancel")}

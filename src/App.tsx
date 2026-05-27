@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { LocaleProvider, useLocale } from './i18n/LocaleContext';
 import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
@@ -12,7 +12,7 @@ import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
 import { SubQs } from './components/SubQs/SubQs';
 import { useMathJax } from './hooks/useMathJax';
-import { formatQuestion, formatAnswer } from './utils/formatting';
+import { MainProblemSidebar } from './components/MainProblemSidebar/MainProblemSidebar';
 import { Rubrics } from './components/Rubrics/Rubrics';
 import { AdminDbView } from './components/AdminDbView/AdminDbView';
 import { StudentDiagnosis } from './components/StudentDiagnosis/StudentDiagnosis';
@@ -45,7 +45,28 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
     setPreferredVersion,
     setCurrentRubrics,
   } = useApp();
-  const mainProblemRef = useMathJax([(currentCotData as any)?.problem]);
+  const mainProblem = (currentCotData as any)?.problem;
+  const mainAnswer = (currentCotData as any)?.answer;
+  const mainImage = (currentCotData as any)?.image_data;
+  const mainSolution = (currentCotData as any)?.main_solution;
+  const grade = (currentCotData as any)?.grade;
+  const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
+  const mainProblemRef = useMathJax([mainProblem, mainAnswer, currentStep]);
+
+  const renderWorkflowSplit = (main: ReactNode) => (
+    <div className={styles.workflowSplitLayout}>
+      <MainProblemSidebar
+        panelRef={mainProblemRef}
+        problem={mainProblem}
+        answer={mainAnswer}
+        imageData={mainImage}
+        solution={mainSolution}
+        grade={grade}
+        subjectArea={subjectArea}
+      />
+      <main className={styles.workflowMainColumn}>{main}</main>
+    </div>
+  );
 
   // 다른 기기/브라우저에서 동일 ID로 로그인 시 서버에 저장된 최근 결과 자동 복원
   useEffect(() => {
@@ -90,13 +111,6 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const handleCoTSubmit = () => {
     setCurrentStep(2);
   };
-
-  const mainProblem = (currentCotData as any)?.problem;
-  const mainAnswer = (currentCotData as any)?.answer;
-  const mainImage = (currentCotData as any)?.image_data;
-  const mainSolution = (currentCotData as any)?.main_solution;
-  const grade = (currentCotData as any)?.grade;
-  const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
 
   if (showStudentDiagnosis) {
     return (
@@ -162,67 +176,14 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
                 </div>
               )}
               {error && <div className={styles.error}>{error}</div>}
-              {!loading && !error && currentCotData && <CoTSteps />}
+              {!loading && !error && currentCotData && renderWorkflowSplit(<CoTSteps />)}
               {!loading && !error && !currentCotData && (
                 <div className={styles.error}>{t('common.cannotLoadData')}</div>
               )}
             </div>
           )}
           {currentStep === 3 && (
-            <div className={styles.workflowPanel}>
-              <div className={styles.subQsSplitLayout}>
-                <aside className={styles.mainProblemColumn} ref={mainProblemRef}>
-                  <div className={styles.mainProblemPanel}>
-                    <h3 className={styles.mainProblemTitle}>{t('app.mainProblem')}</h3>
-                    {mainImage && (
-                      <div className={styles.mainProblemImageWrap}>
-                        <img
-                          src={mainImage}
-                          alt={t('app.problemImage')}
-                          className={styles.mainProblemImage}
-                        />
-                      </div>
-                    )}
-                    {mainProblem ? (
-                      <>
-                        <div className={styles.mainProblemContent}>{formatQuestion(mainProblem)}</div>
-                        {mainAnswer && (
-                          <div className={styles.mainProblemAnswer}>
-                            <span className={styles.mainProblemAnswerLabel}>{t('common.answerColon')}</span>{' '}
-                            <span dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
-                          </div>
-                        )}
-                        {mainSolution && (
-                          <div className={styles.mainProblemSolution}>
-                            <span className={styles.mainProblemSolutionLabel}>{t('app.modelAnswer')}</span>
-                            <div className={styles.mainProblemSolutionContent}>{mainSolution}</div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      !mainImage && <p className={styles.mainProblemEmpty}>{t('app.noProblemData')}</p>
-                    )}
-                    {(grade || subjectArea) && (
-                      <div className={styles.mainProblemMeta}>
-                        {grade && (
-                          <div>
-                            <span className={styles.mainProblemMetaLabel}>{t('app.gradeLabel')}</span> {grade}
-                          </div>
-                        )}
-                        {subjectArea && (
-                          <div>
-                            <span className={styles.mainProblemMetaLabel}>{t('app.subjectArea')}</span> {subjectArea}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </aside>
-                <main className={styles.subQsColumn}>
-                  <SubQs />
-                </main>
-              </div>
-            </div>
+            <div className={styles.workflowPanel}>{renderWorkflowSplit(<SubQs />)}</div>
           )}
           {currentStep === 4 && (
             <div className={styles.workflowPanel}>

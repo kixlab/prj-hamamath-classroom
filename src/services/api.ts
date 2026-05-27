@@ -1,4 +1,5 @@
 import { getHistoryHeaders, getHistoryHeadersWithFallback, encodeUserIdForHeader, encodeForHeader } from "../hooks/useStorage";
+import { splitQuestionAndAnswer } from "../utils/formatting";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -15,6 +16,8 @@ interface CoTCreateData {
   main_solution?: string | null;
   grade: string;
   image_data?: string | null;
+  /** 파이프라인 출력 언어. 기본 ko, 영어 en */
+  language?: string;
 }
 
 interface MatchSubjectAreaData {
@@ -22,6 +25,7 @@ interface MatchSubjectAreaData {
   main_answer: string;
   main_solution?: string | null;
   grade: string;
+  language?: string;
 }
 
 interface GenerateSubQuestionData {
@@ -41,6 +45,7 @@ interface GenerateSubQuestionData {
   subject_area: string;
   considerations?: string[];
   previous_sub_questions?: any[];
+  language?: string;
 }
 
 interface VerifyAndRegenerateData {
@@ -81,6 +86,7 @@ interface GenerateRubricPipelineData {
   subject_area: string;
   sub_questions: any[];
   variant: "with_error_types";
+  language?: string;
 }
 
 interface RegenerateRubricSingleData {
@@ -92,6 +98,7 @@ interface RegenerateRubricSingleData {
   current_rubric: Record<string, { score: number; description: string; criteria: string[] }>;
   feedback?: string | null;
   variant?: string;
+  language?: string;
 }
 
 interface ExportWordData {
@@ -601,6 +608,7 @@ export const api = {
     correct_answer?: string | null;
     rubric: any;
     student_answer: string;
+    language?: string;
   }): Promise<{ level: "상" | "중" | "하"; reason: string }> {
     const response = await fetch(getApiUrl("/api/v1/diagnosis/grade-answer"), {
       method: "POST",
@@ -624,6 +632,7 @@ export const api = {
       levels_by_display_code: Record<string, "상" | "중" | "하">;
       feedback_by_display_code?: Record<string, string>;
     }>;
+    language?: string;
   }): Promise<{
     problem_rows: Array<{
       problem_id: string;
@@ -746,8 +755,13 @@ export const api = {
         sub_skill_id: subQ.sub_skill_id,
         step_name: subQ.step_name,
         sub_skill_name: subQ.sub_skill_name,
-        guide_sub_question: useRegenerated ? reQ : originalQ,
-        guide_sub_answer: useRegenerated ? reA || originalA : originalA,
+        ...(() => {
+          const { question, answer } = splitQuestionAndAnswer(
+            useRegenerated ? reQ : originalQ,
+            useRegenerated ? reA || originalA : originalA,
+          );
+          return { guide_sub_question: question, guide_sub_answer: answer };
+        })(),
         re_sub_question: subQ.re_sub_question ?? null,
         re_sub_answer: subQ.re_sub_answer ?? null,
       };

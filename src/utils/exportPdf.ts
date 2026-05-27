@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import { escapeHtml } from "./formatting";
+import { escapeHtml, splitQuestionAndAnswer } from "./formatting";
 
 /** HTML 태그 제거 후 플레인 텍스트 반환 */
 function stripHtml(html: string): string {
@@ -51,10 +51,7 @@ export async function exportPdfFromGuideline(
     const reA = ((subQ as { re_sub_answer?: string }).re_sub_answer || "").trim();
     const chosen = preferredVersion[subQ.sub_question_id];
     const useRegenerated = chosen === "regenerated" && reQ;
-    return {
-      question: useRegenerated ? reQ : originalQ,
-      answer: useRegenerated ? reA || originalA : originalA,
-    };
+    return splitQuestionAndAnswer(useRegenerated ? reQ : originalQ, useRegenerated ? reA || originalA : originalA);
   });
 
   const wrap = document.createElement("div");
