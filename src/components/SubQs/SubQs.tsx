@@ -929,7 +929,13 @@ export const SubQs = () => {
   const handleExportPdf = async () => {
     if (!currentCotData || !finalizedGuidelineForRubric) return;
     try {
-      await exportPdfFromGuideline(currentCotData as any, finalizedGuidelineForRubric, {}, currentProblemId);
+      await exportPdfFromGuideline(
+        currentCotData as any,
+        finalizedGuidelineForRubric,
+        preferredVersion,
+        currentProblemId,
+        locale,
+      );
     } catch (err: any) {
       alert(err.message || t('subq.pdfExportError'));
     }

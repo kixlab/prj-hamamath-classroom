@@ -51,6 +51,13 @@ const ko = {
   "common.wordDownload": "Word 다운로드",
   "common.close": "닫기",
 
+  "exportPdf.title": "학습지",
+  "exportPdf.grade": "학년",
+  "exportPdf.problem": "문제",
+  "exportPdf.answer": "정답",
+  "exportPdf.filePrefix": "학습지",
+  "exportPdf.defaultGrade": "수학",
+
   "level.high": "상",
   "level.mid": "중",
   "level.low": "하",
@@ -355,6 +362,13 @@ const en: Record<TranslationKey, string> = {
   "common.pdfDownload": "Download PDF",
   "common.wordDownload": "Download Word",
   "common.close": "Close",
+
+  "exportPdf.title": "Worksheet",
+  "exportPdf.grade": "Grade",
+  "exportPdf.problem": "Problem",
+  "exportPdf.answer": "Answer",
+  "exportPdf.filePrefix": "Worksheet",
+  "exportPdf.defaultGrade": "Math",
 
   "level.high": "High",
   "level.mid": "Medium",
