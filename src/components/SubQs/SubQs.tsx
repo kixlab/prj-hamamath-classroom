@@ -92,6 +92,7 @@ export const SubQs = () => {
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
   const [regeneratingStates, setRegeneratingStates] = useState<Record<string, boolean>>({});
+  const [showOriginalStates, setShowOriginalStates] = useState<Record<string, boolean>>({});
   // B 생성 모드: 단계별로 교사 확정 후 다음 단계로 진행
   const [bMode, setBMode] = useState<boolean>(false);
   const [bVisibleCount, setBVisibleCount] = useState<number>(0);
@@ -713,6 +714,13 @@ export const SubQs = () => {
     logUserEvent("version_selected", { subqId, version });
   };
 
+  const toggleShowOriginal = (subqId: string) => {
+    setShowOriginalStates((prev) => ({
+      ...prev,
+      [subqId]: !prev[subqId],
+    }));
+  };
+
   const toggleFeedback = (subqId: string, version: SubqPanelVersion) => {
     const key = panelStateKey(subqId, version);
     setFeedbackStates((prev) => ({
@@ -954,8 +962,6 @@ export const SubQs = () => {
           const selectedVersion = preferredVersion[subQ.sub_question_id];
           const effectiveSelectedVersion: SubqPanelVersion | undefined =
             selectedVersion ?? (showCompareLayout ? "regenerated" : undefined);
-          const isVersionSelected = (version: SubqPanelVersion) =>
-            effectiveSelectedVersion === version;
           const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
           const regenerated = splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer);
           const originalQuestion = original.question;
@@ -1120,94 +1126,8 @@ export const SubQs = () => {
             );
           };
 
-          const stopPanelAction = (e: React.MouseEvent | React.KeyboardEvent) => {
-            e.stopPropagation();
-          };
-
-          const renderComparePanel = (version: SubqPanelVersion) => {
-            const isSelected = isVersionSelected(version);
-            const isEditing = version === "regenerated" ? isRegeneratedEditing : isOriginalEditing;
-            const question = version === "regenerated" ? regeneratedQuestion : originalQuestion;
-            const answer = version === "regenerated" ? regeneratedAnswer : originalAnswer;
-            const label = version === "regenerated" ? t("subq.regeneratedQuestion") : t("subq.originalQuestion");
-            const isPanelLoading = version === "regenerated" && isRegeneratedPanelRegenerating;
-            const onEdit =
-              version === "regenerated"
-                ? () => toggleRegeneratedEdit(subQ.sub_question_id)
-                : () => toggleOriginalEdit(subQ.sub_question_id);
-
-            return (
-              <div
-                key={version}
-                role={isPanelLoading ? undefined : "button"}
-                tabIndex={isPanelLoading ? undefined : 0}
-                className={`${styles.comparePanel} ${isSelected ? styles.comparePanelActive : ""} ${!isSelected && showCompareLayout ? styles.comparePanelSelectable : ""} ${isPanelLoading ? styles.comparePanelLoading : ""}`}
-                onClick={isPanelLoading ? undefined : () => selectSubqVersion(subQ.sub_question_id, version)}
-                onKeyDown={
-                  isPanelLoading
-                    ? undefined
-                    : (e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          selectSubqVersion(subQ.sub_question_id, version);
-                        }
-                      }
-                }
-                aria-pressed={isSelected}
-                aria-busy={isPanelLoading || undefined}
-                aria-label={`${label}${isSelected ? `, ${t("subq.selected")}` : ""}`}
-              >
-                <div className={styles.comparePanelHeader}>
-                  <div className={styles.comparePanelHeaderMain}>
-                    <span className={styles.compareLabel}>{label}</span>
-                    {isSelected && <span className={styles.selectedMark}>{t("subq.selected")}</span>}
-                  </div>
-                  <div className={styles.comparePanelHeaderActions} onClick={stopPanelAction}>
-                    {!isSelected && (
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
-                        onClick={(e) => {
-                          stopPanelAction(e);
-                          selectSubqVersion(subQ.sub_question_id, version);
-                        }}
-                      >
-                        {t("subq.selectThis")}
-                      </button>
-                    )}
-                    {!isEditing && !isPanelLoading && (
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                        onClick={(e) => {
-                          stopPanelAction(e);
-                          onEdit();
-                        }}
-                      >
-                        {t("common.edit")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div
-                  className={styles.comparePanelBody}
-                  onClick={isEditing ? stopPanelAction : undefined}
-                >
-                  {isPanelLoading ? (
-                    <div className={styles.comparePanelBodyLoading}>
-                      <div className={styles.spinner} aria-hidden />
-                      <div>{t("subq.regenerating")}</div>
-                    </div>
-                  ) : isEditing ? (
-                    renderEdit(version)
-                  ) : (
-                    renderDisplay(question, answer)
-                  )}
-                </div>
-                {!isPanelLoading && <div onClick={stopPanelAction}>{renderPanelExtras(version)}</div>}
-              </div>
-            );
-          };
+          const showOriginal = !!showOriginalStates[subQ.sub_question_id];
+          const usingOriginal = effectiveSelectedVersion === "original";
 
           return (
             <div key={subQ.sub_question_id} className={styles.subQuestionCard}>
@@ -1222,9 +1142,88 @@ export const SubQs = () => {
               </div>
 
               {showCompareLayout ? (
-                <div className={styles.compareGrid}>
-                  {renderComparePanel("original")}
-                  {renderComparePanel("regenerated")}
+                <div className={styles.contentPanel}>
+                  <div className={styles.itemPanelHeader}>
+                    <div className={styles.itemPanelHeaderMain}>
+                      <span className={styles.itemPanelTitle}>{t("subq.currentQuestion")}</span>
+                      {usingOriginal && (
+                        <span className={styles.versionNote}>{t("subq.usingOriginalNote")}</span>
+                      )}
+                    </div>
+                    <div className={styles.itemPanelActions}>
+                      {usingOriginal && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                          onClick={() => selectSubqVersion(subQ.sub_question_id, "regenerated")}
+                        >
+                          {t("subq.useRevisedVersion")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
+                        onClick={() => toggleShowOriginal(subQ.sub_question_id)}
+                      >
+                        {showOriginal ? t("subq.hideOriginal") : t("subq.viewOriginal")}
+                      </button>
+                      {!isRegeneratedEditing && !isRegeneratedPanelRegenerating && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                          onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
+                        >
+                          {t("common.edit")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className={styles.itemPanelBody}>
+                    {isRegeneratedPanelRegenerating ? (
+                      <div className={styles.comparePanelBodyLoading}>
+                        <div className={styles.spinner} aria-hidden />
+                        <div>{t("common.loading")}</div>
+                      </div>
+                    ) : isRegeneratedEditing ? (
+                      renderEdit("regenerated")
+                    ) : (
+                      renderDisplay(regeneratedQuestion, regeneratedAnswer)
+                    )}
+                  </div>
+                  {!isRegeneratedPanelRegenerating && renderPanelExtras("regenerated")}
+
+                  {showOriginal && (
+                    <div className={styles.originalReveal}>
+                      <div className={styles.originalRevealHeader}>
+                        <span className={styles.originalRevealTitle}>{t("subq.originalQuestion")}</span>
+                        <div className={styles.originalRevealActions}>
+                          {!usingOriginal && (
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                              onClick={() => selectSubqVersion(subQ.sub_question_id, "original")}
+                            >
+                              {t("subq.useOriginalVersion")}
+                            </button>
+                          )}
+                          {usingOriginal && <span className={styles.selectedMark}>{t("subq.selected")}</span>}
+                          {!isOriginalEditing && (
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                              onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                            >
+                              {t("common.edit")}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className={styles.itemPanelBody}>
+                        {isOriginalEditing ? renderEdit("original") : renderDisplay(originalQuestion, originalAnswer)}
+                      </div>
+                      {renderPanelExtras("original")}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className={styles.contentPanel}>
