@@ -38,6 +38,7 @@ interface ProblemStepSummary {
   /** 단계(display_code)별 LLM 진단 피드백(reason) */
   feedbackByDisplayCode?: Record<string, string>;
 }
+type LevelType = "상" | "중" | "하";
 
 // 학생 진단 상태를 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
 const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`; // 구버전 호환용
@@ -63,6 +64,21 @@ function buildSubQuestionIdToDisplayCode(guideSubQuestions: Array<{ sub_question
     map[id] = `${stepIndex}-${withinIndex}`;
   });
   return map;
+}
+
+function normalizeDiagnosisLevel(level?: string): LevelType | null {
+  if (!level) return null;
+  if (level === "상" || level === "중" || level === "하") return level;
+  const normalized = level.trim().toLowerCase();
+  if (normalized === "high") return "상";
+  if (normalized === "medium") return "중";
+  if (normalized === "low") return "하";
+  return null;
+}
+
+function isDisplayCode(value?: string): boolean {
+  if (!value) return false;
+  return /^\d+-\d+$/.test(value.trim());
 }
 
 export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: StudentDiagnosisProps) => {
@@ -223,9 +239,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     };
   });
 
-  const [activeId, setActiveId] = useState<string | null>(diagnosisItems[0]?.id ?? null);
-  const activeItemIndex = diagnosisItems.findIndex((it) => it.id === activeId);
-  const activeItem = activeItemIndex >= 0 ? diagnosisItems[activeItemIndex] : (diagnosisItems[0] ?? null);
+  const activeItem = diagnosisItems[0] ?? null;
 
   const [students, setStudents] = useState<StudentInfo[]>([{ id: "student-1", name: "학생 1" }]);
 
@@ -426,21 +440,18 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           } catch {
             // 문제별 가이드라인 없으면 해당 문제는 요약 스킵
           }
-          if (guideSubQuestions.length === 0) continue;
-          const subIdToDisplayCode = buildSubQuestionIdToDisplayCode(guideSubQuestions);
-
           for (const studentId of Object.keys(results)) {
             const perProblem = results[studentId]?.[problemId];
             if (!perProblem || typeof perProblem !== "object") continue;
+            const subIdToDisplayCode = guideSubQuestions.length > 0 ? buildSubQuestionIdToDisplayCode(guideSubQuestions) : {};
             const levelsByDisplayCode: Record<string, "상" | "중" | "하"> = {};
             const feedbackByDisplayCode: Record<string, string> = {};
             for (const subId of Object.keys(perProblem)) {
-              const dc = subIdToDisplayCode[subId];
+              const dc = subIdToDisplayCode[subId] ?? (isDisplayCode(subId) ? subId : undefined);
               if (!dc) continue;
               const res = perProblem[subId];
-              if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
-                levelsByDisplayCode[dc] = res.level as "상" | "중" | "하";
-              }
+              const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+              if (normalizedLevel) levelsByDisplayCode[dc] = normalizedLevel;
               if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
             }
             if (Object.keys(levelsByDisplayCode).length > 0) {
@@ -727,14 +738,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         [currentStudentId]: { ...perStudentPrev, [currentProblemKey]: nextForProblem },
       };
 
-      const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const levelOnlyByDisplayCode: Record<string, LevelType> = {};
       const feedbackByDisplayCode: Record<string, string> = {};
       diagnosisItems.forEach((it) => {
         const res = nextForProblem[it.id];
         if (!res) return;
-        if (res.level === "상" || res.level === "중" || res.level === "하") {
-          levelOnlyByDisplayCode[it.displayCode] = res.level as LevelType;
-        }
+        const normalizedLevel = normalizeDiagnosisLevel(res.level);
+        if (normalizedLevel) levelOnlyByDisplayCode[it.displayCode] = normalizedLevel;
         if (res.reason?.trim()) feedbackByDisplayCode[it.displayCode] = res.reason.trim();
       });
 
@@ -838,13 +848,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       });
 
       // 이 학생의 현재 문제에 대한 단계별 수준·피드백 요약 저장 (표·리포트용)
-      const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const levelOnlyByDisplayCode: Record<string, LevelType> = {};
       const feedbackByDisplayCode: Record<string, string> = {};
       targetItems.forEach((item) => {
         const res = newResultsForStudent[item.id];
-        if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
-          levelOnlyByDisplayCode[item.displayCode] = res.level;
-        }
+        const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+        if (normalizedLevel) levelOnlyByDisplayCode[item.displayCode] = normalizedLevel;
         if (res?.reason?.trim()) {
           feedbackByDisplayCode[item.displayCode] = res.reason.trim();
         }
@@ -892,7 +901,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       if (Object.keys(levelOnlyByDisplayCode).length > 0 && userId?.trim()) {
         const serverProblemKey = currentProblemKey === "__current__" ? (currentProblemId ?? currentProblemKey) : currentProblemKey;
         const existingSummaries = studentProblemSummaries[currentStudentId] ?? {};
-        const mergedSummaries: Record<string, { levelsByDisplayCode: Record<string, "상" | "중" | "하">; feedbackByDisplayCode?: Record<string, string> }> = { ...existingSummaries };
+        const mergedSummaries: Record<string, { levelsByDisplayCode: Record<string, LevelType>; feedbackByDisplayCode?: Record<string, string> }> = { ...existingSummaries };
         mergedSummaries[serverProblemKey] = { levelsByDisplayCode: levelOnlyByDisplayCode, feedbackByDisplayCode: Object.keys(feedbackByDisplayCode ?? {}).length > 0 ? feedbackByDisplayCode : undefined };
         try {
           const reportPayload = {
@@ -906,6 +915,18 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           };
           const reportData = await api.generateStudentDiagnosisReport(reportPayload);
           await api.saveDiagnosisReport({ user_id: userId, student_id: currentStudentId, report: reportData });
+          // 리포트 모달이 열려 있고 같은 학생이면 즉시 최신 계산 결과를 반영
+          if (reportOpen && reportStudentId === currentStudentId) {
+            setReportData(reportData);
+            const initialEdits: Record<string, string> = {};
+            (reportData.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
+              if (row.feedback_summary && typeof row.feedback_summary === "string") {
+                initialEdits[row.display_code] = row.feedback_summary;
+              }
+            });
+            setReportFeedbackEdits(initialEdits);
+            setReportError(null);
+          }
         } catch (reportErr: any) {
           console.warn("진단 후 리포트 자동 저장 실패:", reportErr);
         }
@@ -1011,23 +1032,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   };
 
   const mainProblemRef = useMathJax([mainProblem, mainAnswer, problemIdForDiagnosis]);
-  const containerRef = useMathJax([activeId, activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
+  const containerRef = useMathJax([activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
-  // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산
-  const summariesForCurrentStudent = studentProblemSummaries[currentStudentId] ?? {};
-  const summaryProblemIds = Object.keys(summariesForCurrentStudent);
-  const hasMultiProblemSummary = summaryProblemIds.length >= 2;
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
   const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
 
   // 하: 0점 / 중: 1점 / 상: 2점
-  type LevelType = "상" | "중" | "하";
   const LEVEL_SCORE: Record<LevelType, number> = { 상: 2, 중: 1, 하: 0 };
-  const scoreToLevel = (score: number): LevelType => {
-    if (score >= 1.5) return "상";
-    if (score >= 0.5) return "중";
-    return "하";
-  };
 
   const getStepGroupInfo = (displayCode: string) => {
     const [group] = displayCode.split("-");
@@ -1069,8 +1080,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출). 최초 제외하고는 이전 결과를 바로 표시 */
   const openReport = async (studentId: string) => {
-    // 해당 학생에 대해 진단 결과가 있는 모든 문제 ID 사용
-    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {});
+    // 해당 학생에 대해 진단 결과/요약이 있는 모든 문제 ID 사용
+    const diagnosisProblemIds = Array.from(
+      new Set([...Object.keys(diagnosisResults[studentId] ?? {}), ...Object.keys(studentProblemSummaries[studentId] ?? {})]),
+    );
     if (!diagnosisProblemIds.length) {
       alert(t("diagnosis.completeOneProblem"));
       return;
@@ -1078,7 +1091,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let fullPerStudent: Record<string, ProblemStepSummary> = { ...(studentProblemSummaries[studentId] ?? {}) };
     const saved = getSavedResults();
     for (const problemId of diagnosisProblemIds) {
-      if (fullPerStudent[problemId]) continue;
+      const perProblem = diagnosisResults[studentId]?.[problemId];
+      if (!perProblem || typeof perProblem !== "object") continue;
       let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
       try {
         const result = await api.getResult(problemId);
@@ -1090,19 +1104,15 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       } catch {
         // 스킵
       }
-      if (guideSubQuestions.length === 0) continue;
-      const subIdToDisplayCode = buildSubQuestionIdToDisplayCode(guideSubQuestions);
-      const perProblem = diagnosisResults[studentId]?.[problemId];
-      if (!perProblem || typeof perProblem !== "object") continue;
-      const levelsByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const subIdToDisplayCode = guideSubQuestions.length > 0 ? buildSubQuestionIdToDisplayCode(guideSubQuestions) : {};
+      const levelsByDisplayCode: Record<string, LevelType> = {};
       const feedbackByDisplayCode: Record<string, string> = {};
       for (const subId of Object.keys(perProblem)) {
-        const dc = subIdToDisplayCode[subId];
+        const dc = subIdToDisplayCode[subId] ?? (isDisplayCode(subId) ? subId : undefined);
         if (!dc) continue;
         const res = perProblem[subId];
-        if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
-          levelsByDisplayCode[dc] = res.level as "상" | "중" | "하";
-        }
+        const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+        if (normalizedLevel) levelsByDisplayCode[dc] = normalizedLevel;
         if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
       }
       if (Object.keys(levelsByDisplayCode).length > 0) {
@@ -1125,19 +1135,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }));
     }
 
-    // 이전에 이 학생 리포트를 연 적이 있으면 캐시된 결과만 표시 (API 호출 없음)
-    if (reportStudentId === studentId && reportData && reportData.problem_rows?.length >= problemIds.length) {
+    // 같은 학생 리포트가 이미 화면 상태에 있으면 재계산 없이 그대로 재사용
+    if (reportStudentId === studentId && reportData && !reportError) {
       setReportStudentId(studentId);
       setReportOpen(true);
-      setReportError(null);
+      setReportLoading(false);
       return;
     }
+
     setReportStudentId(studentId);
     setReportOpen(true);
     setReportLoading(true);
     setReportError(null);
     try {
-      // 다른 브라우저에서도 한 번 저장된 리포트를 보여주기 위해, 서버에 저장된 리포트를 우선 조회
+      // 저장된 리포트가 있으면 우선 사용 (버튼 클릭마다 자동 재계산하지 않음)
       const savedReport = await api.getDiagnosisReport(studentId, userId);
       if (savedReport && savedReport.problem_rows?.length > 0) {
         setReportData(savedReport);
@@ -1151,6 +1162,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         setReportLoading(false);
         return;
       }
+
       const payload = {
         student_id: studentId,
         problem_summaries: problemIds.map((pid) => ({
@@ -1240,6 +1252,56 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
+  const handleRemoveProblemFromReport = async (problemId: string) => {
+    const sid = reportStudentId ?? currentStudentId;
+    if (!sid) return;
+    if (!window.confirm(t("diagnosis.removeProblemConfirm", { problemId }))) return;
+
+    const currentPerStudent = studentProblemSummaries[sid] ?? {};
+    if (!currentPerStudent[problemId]) return;
+    const nextPerStudent = { ...currentPerStudent };
+    delete nextPerStudent[problemId];
+
+    setStudentProblemSummaries((prev) => ({ ...prev, [sid]: nextPerStudent }));
+
+    const remainingProblemIds = Object.keys(nextPerStudent);
+    if (!remainingProblemIds.length) {
+      setReportData(null);
+      setReportFeedbackEdits({});
+      setReportError(t("diagnosis.noDiagnosedProblems"));
+      return;
+    }
+
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const payload = {
+        student_id: sid,
+        problem_summaries: remainingProblemIds.map((pid) => ({
+          problem_id: pid,
+          levels_by_display_code: nextPerStudent[pid].levelsByDisplayCode,
+          feedback_by_display_code: nextPerStudent[pid].feedbackByDisplayCode ?? {},
+        })),
+        language: getAppLanguage(locale),
+      };
+      const data = await api.generateStudentDiagnosisReport(payload);
+      setReportData(data);
+      const initialEdits: Record<string, string> = {};
+      (data.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
+        if (row.feedback_summary && typeof row.feedback_summary === "string") {
+          initialEdits[row.display_code] = row.feedback_summary;
+        }
+      });
+      setReportFeedbackEdits(initialEdits);
+      await api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: data });
+    } catch (err: any) {
+      console.error("리포트 문제 제외 후 재생성 오류:", err);
+      setReportError(err?.message ?? t("diagnosis.reportRefreshError"));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   return (
     <div className={styles.page} ref={containerRef}>
       <header className={styles.header}>
@@ -1295,7 +1357,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                 {students.map((s) => {
                   const isActiveStudent = currentStudentId === s.id;
                   const isEditingName = editingStudentId === s.id;
-                  const diagnosedCount = Object.keys(studentProblemSummaries[s.id] ?? {}).length;
+                  const summaryProblemCount = Object.keys(studentProblemSummaries[s.id] ?? {}).length;
+                  const diagnosedProblemCount = Object.values(diagnosisResults[s.id] ?? {}).filter((perProblem) =>
+                    Object.values(perProblem ?? {}).some((res) => !!normalizeDiagnosisLevel((res as { level?: string })?.level)),
+                  ).length;
+                  const diagnosedCount = Math.max(summaryProblemCount, diagnosedProblemCount);
                   return (
                     <div
                       key={s.id}
@@ -1342,7 +1408,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               onClick={() => openReport(s.id)}
                               title={t("diagnosis.report")}
                               aria-label={t("diagnosis.reportAria", { name: s.name })}
-                              disabled={diagnosedCount === 0}
                             >
                               R
                             </button>
@@ -1442,12 +1507,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                 {diagnosisItems.map((item) => {
                                   const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
                                   const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                                  const isActive = activeItem?.id === item.id;
                                   const showAnswer = !!showAnswerById[item.id];
                                   const showRubric = !!showRubricById[item.id];
                                   const isEditingDiagnosis = !!editingDiagnosisById[item.id];
                                   return (
-                                    <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
+                                    <div key={item.id} className={styles.studentAnswerBlock}>
                                       <div className={styles.studentAnswerHeader}>
                                         <div className={styles.studentAnswerHeaderLeft}>
                                           <span className={styles.studentAnswerCode}>{item.displayCode}</span>
@@ -1613,129 +1677,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               </section>
             </div>
 
-            {diagnosisItems.length > 0 && (
-              <section className={styles.studentSummary}>
-                <h3 className={styles.studentSummaryTitle}>{t("diagnosis.summaryTitle")}</h3>
-                <div className={styles.studentSummaryRow}>
-                  {diagnosisItems.map((item) => {
-                    const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                    const hasAnswer = !!studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id]?.trim();
-                    const isActive = activeItem?.id === item.id;
-                    return (
-                      <button key={item.id} type="button" className={`${styles.studentSummaryChip} ${isActive ? styles.studentSummaryChipActive : ""}`} onClick={() => setActiveId(item.id)}>
-                        <span className={styles.studentSummaryCode}>{item.displayCode}</span>
-                        <span className={styles.studentSummaryStatus}>{result ? t("diagnosis.statusDiagnosed", { level: formatLevel(result.level) }) : hasAnswer ? t("diagnosis.statusAnswered") : t("diagnosis.statusEmpty")}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {hasMultiProblemSummary && (
-              <section className={styles.problemSummarySection}>
-                <h3 className={styles.problemSummaryTitle}>{t("diagnosis.problemSummaryTitle")}</h3>
-                <div className={styles.problemSummaryTables}>
-                  {/* 문제별 요약 표 */}
-                  <div className={styles.problemSummaryBlock}>
-                    <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.levelSummary")}</h4>
-                    <table className={styles.problemSummaryTable}>
-                      <thead>
-                        <tr>
-                          <th>{t("diagnosis.problemId")}</th>
-                          <th>{t("diagnosis.diagnosedStepCount")}</th>
-                          <th>{formatLevel("상")}</th>
-                          <th>{formatLevel("중")}</th>
-                          <th>{formatLevel("하")}</th>
-                          <th>{t("diagnosis.averageLevel")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summaryProblemIds.map((pid) => {
-                          const s = summariesForCurrentStudent[pid];
-                          const levels = Object.values(s.levelsByDisplayCode);
-                          const total = levels.length || 0;
-                          const high = levels.filter((l) => l === "상").length;
-                          const mid = levels.filter((l) => l === "중").length;
-                          const low = levels.filter((l) => l === "하").length;
-                          const avgScore = total > 0 ? levels.reduce((acc, lv) => acc + LEVEL_SCORE[lv as LevelType], 0) / total : 0;
-                          const avgLevel = total > 0 ? scoreToLevel(avgScore) : "-";
-                          return (
-                            <tr key={pid}>
-                              <td>{pid}</td>
-                              <td>{total}</td>
-                              <td>{high}</td>
-                              <td>{mid}</td>
-                              <td>{low}</td>
-                              <td>{avgLevel === "-" ? "-" : formatLevel(avgLevel)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* 단계별 최종 수준 표 */}
-                  <div className={styles.problemSummaryBlock}>
-                    <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.stageSummary")}</h4>
-                    {(() => {
-                      const perStepAgg: Record<
-                        string,
-                        {
-                          count: number;
-                          totalScore: number;
-                        }
-                      > = {};
-
-                      summaryProblemIds.forEach((pid) => {
-                        const s = summariesForCurrentStudent[pid];
-                        Object.entries(s.levelsByDisplayCode).forEach(([code, level]) => {
-                          const lv = level as LevelType;
-                          if (!perStepAgg[code]) {
-                            perStepAgg[code] = { count: 0, totalScore: 0 };
-                          }
-                          perStepAgg[code].count += 1;
-                          perStepAgg[code].totalScore += LEVEL_SCORE[lv];
-                        });
-                      });
-
-                      const rows = Object.entries(perStepAgg)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([code, v]) => {
-                          const avgScore = v.totalScore / v.count;
-                          const level = scoreToLevel(avgScore);
-                          return { code, count: v.count, level };
-                        });
-
-                      if (!rows.length) {
-                        return <p className={styles.problemSummaryEmpty}>{t("diagnosis.noStageSummary")}</p>;
-                      }
-
-                      return (
-                        <table className={styles.problemSummaryTable}>
-                          <thead>
-                            <tr>
-                              <th>{t("diagnosis.stageCode")}</th>
-                              <th>{t("diagnosis.diagnosedProblemCount")}</th>
-                              <th>{t("diagnosis.finalLevel")}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map((r) => (
-                              <tr key={r.code}>
-                                <td>{r.code}</td>
-                                <td>{r.count}</td>
-                                <td>{formatLevel(r.level)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </section>
-            )}
             </section>
           </div>
         </div>
@@ -1790,6 +1731,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           <th>{formatLevel("중")}</th>
                           <th>{formatLevel("하")}</th>
                           <th>{t("diagnosis.averageGrade")}</th>
+                          <th>{t("diagnosis.actions")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1806,6 +1748,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <td>{row.mid_count}</td>
                               <td>{row.low_count}</td>
                               <td>{formatGrade(gradeKo)}</td>
+                              <td>
+                                <button type="button" className={styles.reportRemoveProblemBtn} onClick={() => handleRemoveProblemFromReport(row.problem_id)} disabled={reportLoading}>
+                                  {t("diagnosis.excludeFromReport")}
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -1865,7 +1812,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           </thead>
                           <tbody>
                             {(() => {
-                              const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                              const perStudent = studentProblemSummaries[reportStudentId ?? currentStudentId] ?? {};
                               const sorted = [...reportData.step_rows].sort((a, b) => a.display_code.localeCompare(b.display_code, undefined, { numeric: true }));
                               const byGroup: Record<string, typeof sorted> = {};
                               sorted.forEach((row) => {
@@ -1932,7 +1879,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   <div className={styles.reportGraphGroupItems}>
                                     {rows.map((row) => {
                                       const info = getStepGroupInfo(row.display_code);
-                                      const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                                      const perStudent = studentProblemSummaries[reportStudentId ?? currentStudentId] ?? {};
                                       const problemIds = Object.keys(perStudent);
                                       let sum = 0,
                                         stepCount = 0;
