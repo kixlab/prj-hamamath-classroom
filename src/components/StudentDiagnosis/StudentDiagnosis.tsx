@@ -5,6 +5,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage, translations } from "../../i18n/translations";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
+import { MainProblemSidebar } from "../MainProblemSidebar/MainProblemSidebar";
 import { api } from "../../services/api";
 import { getSavedResults } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
@@ -172,7 +173,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const effectiveCotData: any = (problemIdForDiagnosis ? diagnosisCotData : null) ?? (currentCotData as any) ?? null;
 
   const mainProblem = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_problem : undefined) ?? effectiveCotData?.problem ?? "";
+  const mainImage = effectiveCotData?.image_data ?? null;
   const mainAnswer = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_answer : undefined) ?? effectiveCotData?.answer ?? "";
+  const mainSolution = effectiveCotData?.main_solution ?? null;
   const grade = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
   const subjectArea = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
 
@@ -550,10 +553,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       console.error("학생 진단 상태를 저장하는 중 오류:", err);
     }
   }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, students]);
-
-  const handleChangeStudent = (id: string) => {
-    setCurrentStudentId(id);
-  };
 
   const startEditStudentName = (studentId: string) => {
     const s = students.find((x) => x.id === studentId);
@@ -1011,6 +1010,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
+  const mainProblemRef = useMathJax([mainProblem, mainAnswer, problemIdForDiagnosis]);
   const containerRef = useMathJax([activeId, activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
   // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산
@@ -1249,136 +1249,125 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       </header>
 
       <main className={styles.main}>
-        <section className={styles.mainProblemSection}>
-          <div className={styles.mainProblemHeaderRow}>
-            <h3 className={styles.mainProblemTitle}>{t("diagnosis.mainProblem")}</h3>
-            {historyItems.length > 0 && (
-              <div className={styles.problemSelectWrap}>
-                <label className={styles.problemSelectLabel}>
-                  {t("diagnosis.selectProblemLabel")}
-                  <select className={styles.problemSelect} value={selectedProblemId ?? ""} onChange={(e) => setSelectedProblemId(e.target.value || null)}>
-                    <option value="">{t("diagnosis.selectProblem")}</option>
-                    {historyItems.map((item: any) => (
-                      <option key={item.problem_id} value={item.problem_id}>
-                        {item.problem_id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
-          </div>
+        <div className={styles.diagnosisSplitLayout}>
           {problemIdForDiagnosis ? (
-            mainProblem ? (
-              <>
-                <div className={styles.mainProblemContent} dangerouslySetInnerHTML={{ __html: formatQuestion(mainProblem) }} />
-                {mainAnswer && (
-                  <div className={styles.mainProblemAnswer}>
-                    <span className={styles.mainProblemAnswerLabel}>{t("common.answerColon")}</span> <span className={styles.mainProblemAnswerText} dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
-                  </div>
-                )}
-                {(grade || subjectArea) && (
-                  <div className={styles.mainProblemMeta}>
-                    {grade && (
-                      <span className={styles.metaItem}>
-                        <span className={styles.metaLabel}>{t("problemInput.grade")}</span>
-                        <span className={styles.metaValue}>{grade}</span>
-                      </span>
-                    )}
-                    {subjectArea && (
-                      <span className={styles.metaItem}>
-                        <span className={styles.metaLabel}>{t("app.subjectArea").replace(/:$/, "")}</span>
-                        <span className={styles.metaValue}>{subjectArea}</span>
-                      </span>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className={styles.mainProblemEmpty}>{t("diagnosis.noProblemData")}</p>
-            )
+            <MainProblemSidebar
+              panelRef={mainProblemRef}
+              problem={mainProblem}
+              answer={mainAnswer}
+              imageData={mainImage}
+              solution={mainSolution}
+              grade={grade}
+              subjectArea={subjectArea}
+            />
           ) : (
-            <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemFirst")}</p>
+            <aside className={styles.diagnosisProblemPlaceholder}>
+              <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemFirst")}</p>
+            </aside>
           )}
-        </section>
 
-        <div className={styles.layout}>
-          {/* 좌측: 학생 리스트 패널 */}
-          <aside className={styles.studentListColumn}>
-            <h3 className={styles.studentListTitle}>{t("diagnosis.studentList")}</h3>
-            <div className={styles.studentList}>
-              {students.map((s, idx) => {
-                const isActiveStudent = currentStudentId === s.id;
-                const isEditingName = editingStudentId === s.id;
-                return (
-                  <div key={s.id} className={styles.studentListItemWrap}>
-                    <button type="button" className={`${styles.studentListItem} ${isActiveStudent ? styles.studentListItemActive : ""}`} onClick={() => setCurrentStudentId(s.id)}>
-                      <div className={styles.studentListName} onClick={(e) => isEditingName && e.stopPropagation()}>
-                        {isEditingName ? (
-                          <input
-                            type="text"
-                            className={styles.studentListEditInput}
-                            value={editingStudentValue}
-                            onChange={(e) => setEditingStudentValue(e.target.value)}
-                            onBlur={saveEditStudentName}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveEditStudentName();
-                              if (e.key === "Escape") cancelEditStudent();
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            autoFocus
-                            aria-label={t("diagnosis.editName")}
-                          />
-                        ) : (
-                          <>
-                            <span>
-                              {idx + 1}. {s.name}
-                            </span>
-                            <span className={styles.studentListId}>ID: {s.id}</span>
-                          </>
-                        )}
-                      </div>
-                    </button>
-                    <div className={styles.studentListButtons}>
-                      {!isEditingName && (
-                        <button
-                          type="button"
-                          className={styles.studentListEditBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEditStudentName(s.id);
+          <div className={styles.diagnosisWorkspace}>
+            <aside className={styles.studentListRail}>
+              {historyItems.length > 0 && (
+                <div className={styles.railProblemSelect}>
+                  <label className={styles.railProblemSelectLabel}>
+                    <span className={styles.railProblemSelectCaption}>{t("diagnosis.selectProblemLabel")}</span>
+                    <select
+                      className={styles.railProblemSelectInput}
+                      value={selectedProblemId ?? ""}
+                      onChange={(e) => setSelectedProblemId(e.target.value || null)}
+                    >
+                      <option value="">{t("diagnosis.selectProblem")}</option>
+                      {historyItems.map((item: any) => (
+                        <option key={item.problem_id} value={item.problem_id}>
+                          {item.problem_id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+              <div className={styles.studentListRailHead}>
+                <h3 className={styles.studentListTitle}>{t("diagnosis.studentList")}</h3>
+                <span className={styles.studentListCount}>{students.length}</span>
+              </div>
+              <div className={styles.studentList}>
+                {students.map((s) => {
+                  const isActiveStudent = currentStudentId === s.id;
+                  const isEditingName = editingStudentId === s.id;
+                  const diagnosedCount = Object.keys(studentProblemSummaries[s.id] ?? {}).length;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`${styles.studentListRow} ${isActiveStudent ? styles.studentListRowActive : ""}`}
+                      title={s.id}
+                    >
+                      {isEditingName ? (
+                        <input
+                          type="text"
+                          className={styles.studentListEditInput}
+                          value={editingStudentValue}
+                          onChange={(e) => setEditingStudentValue(e.target.value)}
+                          onBlur={saveEditStudentName}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEditStudentName();
+                            if (e.key === "Escape") cancelEditStudent();
                           }}
-                          title={t("diagnosis.editName")}
-                          aria-label={`${s.name} ${t("diagnosis.editName")}`}
-                        >
-                          {t("diagnosis.editName")}
-                        </button>
+                          autoFocus
+                          aria-label={t("diagnosis.editName")}
+                        />
+                      ) : (
+                        <>
+                          <button type="button" className={styles.studentListRowSelect} onClick={() => setCurrentStudentId(s.id)}>
+                            <span className={styles.studentListRowName}>{s.name}</span>
+                            {diagnosedCount > 0 && (
+                              <span className={styles.studentListRowMeta}>
+                                {t("diagnosis.studentDiagnosedCount", { count: diagnosedCount })}
+                              </span>
+                            )}
+                          </button>
+                          <div className={styles.studentListRowActions}>
+                            <button
+                              type="button"
+                              className={styles.studentListIconBtn}
+                              onClick={() => startEditStudentName(s.id)}
+                              title={t("diagnosis.editName")}
+                              aria-label={`${s.name} ${t("diagnosis.editName")}`}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.studentListIconBtn}
+                              onClick={() => openReport(s.id)}
+                              title={t("diagnosis.report")}
+                              aria-label={t("diagnosis.reportAria", { name: s.name })}
+                              disabled={diagnosedCount === 0}
+                            >
+                              R
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.studentListIconBtn} ${styles.studentListIconBtnDanger}`}
+                              onClick={(e) => handleDeleteStudent(s.id, e)}
+                              title={t("diagnosis.deleteStudent")}
+                              aria-label={t("diagnosis.deleteStudentAria", { name: s.name })}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className={styles.studentListReportBtn}
-                        onClick={() => openReport(s.id)}
-                        title={t("diagnosis.report")}
-                        aria-label={t("diagnosis.reportAria", { name: s.name })}
-                        disabled={!Object.keys(studentProblemSummaries[s.id] ?? {}).length}
-                      >
-                        {t("diagnosis.report")}
-                      </button>
-                      <button type="button" className={styles.studentListDeleteBtn} onClick={(e) => handleDeleteStudent(s.id, e)} title={t("diagnosis.deleteStudent")} aria-label={t("diagnosis.deleteStudentAria", { name: s.name })}>
-                        {t("diagnosis.remove")}
-                      </button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            <button type="button" className={styles.addStudentBtn} onClick={handleAddStudent}>
-              {t("diagnosis.addStudent")}
-            </button>
-          </aside>
+                  );
+                })}
+              </div>
+              <button type="button" className={styles.addStudentBtn} onClick={handleAddStudent}>
+                {t("diagnosis.addStudent")}
+              </button>
+            </aside>
 
-          {/* 우측: 학생 답안/진단 */}
-          <section className={styles.mainColumn}>
+            <section className={styles.studentWorkArea}>
             <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
@@ -1388,23 +1377,67 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                     <>
                       <header className={styles.studentHeader}>
                         <div className={styles.studentHeaderTop}>
-                          <h3 className={styles.studentTitle}>{t("diagnosis.studentAnswers")}</h3>
-                          <div className={styles.studentControls}>
-                            <select className={styles.studentSelect} value={currentStudentId} onChange={(e) => handleChangeStudent(e.target.value)}>
-                              {students.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name} (ID: {s.id})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                          <h3 className={styles.studentTitle}>
+                            {t("diagnosis.studentAnswers")}
+                            {(() => {
+                              const name = students.find((s) => s.id === currentStudentId)?.name;
+                              return name ? <span className={styles.studentTitleName}> — {name}</span> : null;
+                            })()}
+                          </h3>
                         </div>
                       </header>
 
+                      {currentStudentId && currentProblemKey && (() => {
+                        const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
+                        const hasAnyImage = !!(urls[0] || urls[1]);
+                        return (
+                          <div className={styles.handwritingToolbar}>
+                            <span className={styles.handwritingToolbarLabel}>{t("diagnosis.handwrittenTitle")}</span>
+                            <div className={styles.handwritingToolbarActions}>
+                              <label className={styles.handwritingUploadBtn}>
+                                {hasAnyImage ? t("diagnosis.replace") : t("diagnosis.uploadHandwriting")}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className={styles.handwritingFileInput}
+                                  onChange={(e) => {
+                                    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+                                    if (files[0]) handleHandwrittenUpload(1, files[0]);
+                                    if (files[1]) handleHandwrittenUpload(2, files[1]);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              {([1, 2] as const).map((slot) => {
+                                const dataUrl = urls[slot - 1];
+                                if (!dataUrl) return null;
+                                return (
+                                  <div key={slot} className={styles.handwritingSlotCompact}>
+                                    <img
+                                      src={dataUrl}
+                                      alt={t("diagnosis.handwritingAlt", { n: slot })}
+                                      className={styles.handwritingThumb}
+                                    />
+                                    <button
+                                      type="button"
+                                      className={styles.handwritingRemoveBtn}
+                                      onClick={() => handleHandwrittenUpload(slot, null)}
+                                      aria-label={t("diagnosis.remove")}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {diagnosisItems.length > 0 ? (
                         <>
-                          <div className={styles.studentAnswerRow}>
-                            <div className={styles.studentAnswerColumn}>
+                          <div className={styles.studentAnswerColumn}>
                               <div className={styles.studentAllList}>
                                 {diagnosisItems.map((item) => {
                                   const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
@@ -1419,7 +1452,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                         <div className={styles.studentAnswerHeaderLeft}>
                                           <span className={styles.studentAnswerCode}>{item.displayCode}</span>
                                           <span className={styles.studentAnswerLabel}>
-                                            {item.stepName} - {item.subSkillName}
+                                            {(() => {
+                                              const [group] = item.displayCode.split("-");
+                                              const groupLabel = formatCategory(group) !== group ? formatCategory(group) : item.stepName;
+                                              const skillLabel = formatCategory(item.displayCode) !== item.displayCode ? formatCategory(item.displayCode) : item.subSkillName;
+                                              return `${groupLabel} - ${skillLabel}`;
+                                            })()}
                                           </span>
                                         </div>
                                       </div>
@@ -1561,78 +1599,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                 )}
                                 {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                               </div>
-                            </div>
-
-                            {currentStudentId && currentProblemKey && (
-                              <div className={styles.studentHandwrittenPanel}>
-                                <h4 className={styles.studentHandwrittenTitle}>{t("diagnosis.handwrittenTitle")}</h4>
-                                {/* 두 장을 한 번에 업로드 */}
-                                <div className={styles.studentHandwrittenMultiUpload}>
-                                  <label className={styles.studentHandwrittenUploadArea}>
-                                    <span className={styles.studentHandwrittenUploadText}>{t("diagnosis.uploadTwoImages")}</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      multiple
-                                      className={styles.studentHandwrittenFileInput}
-                                      onChange={(e) => {
-                                        const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
-                                        if (files[0]) handleHandwrittenUpload(1, files[0]);
-                                        if (files[1]) handleHandwrittenUpload(2, files[1]);
-                                        e.target.value = "";
-                                      }}
-                                    />
-                                  </label>
-                                </div>
-                                <div className={styles.studentHandwrittenScroll}>
-                                  {([1, 2] as const).map((slot) => {
-                                    const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
-                                    const dataUrl = urls[slot - 1];
-                                    return (
-                                      <div key={slot} className={styles.studentHandwrittenSlot}>
-                                        {dataUrl ? (
-                                          <>
-                                            <img src={dataUrl} alt={t("diagnosis.handwritingAlt", { n: slot })} className={styles.studentHandwrittenImg} />
-                                            <div className={styles.studentHandwrittenSlotActions}>
-                                              <label className={styles.studentHandwrittenReplaceBtn}>
-                                                {t("diagnosis.replace")}
-                                                <input
-                                                  type="file"
-                                                  accept="image/*"
-                                                  className={styles.studentHandwrittenFileInput}
-                                                  onChange={(e) => {
-                                                    const f = e.target.files?.[0];
-                                                    if (f) handleHandwrittenUpload(slot, f);
-                                                    e.target.value = "";
-                                                  }}
-                                                />
-                                              </label>
-                                              <button type="button" className={styles.studentHandwrittenRemoveBtn} onClick={() => handleHandwrittenUpload(slot, null)}>
-                                                {t("diagnosis.remove")}
-                                              </button>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <label className={styles.studentHandwrittenUploadArea}>
-                                            <span className={styles.studentHandwrittenUploadText}>{t("diagnosis.uploadImage", { n: slot })}</span>
-                                            <input
-                                              type="file"
-                                              accept="image/*"
-                                              className={styles.studentHandwrittenFileInput}
-                                              onChange={(e) => {
-                                                const f = e.target.files?.[0];
-                                                if (f) handleHandwrittenUpload(slot, f);
-                                                e.target.value = "";
-                                              }}
-                                            />
-                                          </label>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           {/* 개별 문항 진단 결과 요약 배지는 요약 섹션과 카드 상단에서 충분히 표현되므로,
@@ -1770,7 +1736,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                 </div>
               </section>
             )}
-          </section>
+            </section>
+          </div>
         </div>
       </main>
 
