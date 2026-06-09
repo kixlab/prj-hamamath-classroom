@@ -5,9 +5,15 @@ import { saveResult } from "../../hooks/useStorage";
 import { logUserEvent } from "../../services/eventLogger";
 import { exportPdfFromGuideline } from "../../utils/exportPdf";
 import { useMathJax } from "../../hooks/useMathJax";
-import { formatQuestion, formatAnswer, formatVerificationResult, extractVerificationTexts } from "../../utils/formatting";
+import {
+  formatQuestion,
+  formatAnswer,
+  formatVerificationResult,
+  extractVerificationTexts,
+  splitQuestionAndAnswer,
+} from "../../utils/formatting";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatCotStepGroup, formatCotSubSkill, toVerifierLanguage } from "../../i18n/translations";
+import { formatCotStepGroup, formatCotSubSkill, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
 import styles from "./SubQs.module.css";
 
 interface SubQuestion {
@@ -30,6 +36,22 @@ interface Progress {
   total: number;
   currentStep: string;
 }
+
+const normalizeSubQuestion = (subQ: SubQuestion): SubQuestion => {
+  const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
+  const regenerated = subQ.re_sub_question
+    ? splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer)
+    : null;
+  return {
+    ...subQ,
+    guide_sub_question: original.question,
+    guide_sub_answer: original.answer,
+    ...(regenerated && {
+      re_sub_question: regenerated.question,
+      re_sub_answer: regenerated.answer,
+    }),
+  };
+};
 
 type SubqPanelVersion = "original" | "regenerated";
 
@@ -70,6 +92,7 @@ export const SubQs = () => {
   const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
   const [regeneratingStates, setRegeneratingStates] = useState<Record<string, boolean>>({});
+  const [showOriginalStates, setShowOriginalStates] = useState<Record<string, boolean>>({});
   // B 생성 모드: 단계별로 교사 확정 후 다음 단계로 진행
   const [bMode, setBMode] = useState<boolean>(false);
   const [bVisibleCount, setBVisibleCount] = useState<number>(0);
@@ -126,10 +149,12 @@ export const SubQs = () => {
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
   const getFinalQA = (subQ: SubQuestion) => {
-    const originalQ = (subQ.guide_sub_question || "").trim();
-    const originalA = (subQ.guide_sub_answer || "").trim();
-    const reQ = (subQ.re_sub_question || "").trim();
-    const reA = (subQ.re_sub_answer || "").trim();
+    const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
+    const regenerated = splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer);
+    const originalQ = original.question;
+    const originalA = original.answer;
+    const reQ = regenerated.question;
+    const reA = regenerated.answer;
     const preferred = preferredVersion[subQ.sub_question_id];
 
     let finalQuestion: string;
@@ -252,7 +277,7 @@ export const SubQs = () => {
             guide_sub_answer: hasReGeneratedA ? q.re_sub_answer! : q.guide_sub_answer,
           };
         }),
-        language: toVerifierLanguage(locale),
+        language: getAppLanguage(locale),
       };
 
       const verifyResponse = await api.verifyAndRegenerate({
@@ -281,20 +306,20 @@ export const SubQs = () => {
       }
 
       if ((verifyResponse as any).was_regenerated) {
-        enrichedSubQuestion = {
+        enrichedSubQuestion = normalizeSubQuestion({
           ...enrichedSubQuestion,
           re_sub_question: (verifyResponse as any).sub_question?.re_sub_question || (verifyResponse as any).sub_question?.guide_sub_question,
           re_sub_answer: (verifyResponse as any).sub_question?.re_sub_answer || (verifyResponse as any).sub_question?.guide_sub_answer,
           verification_result: originalVerification,
           re_verification_result: regeneratedVerification,
-        };
+        });
       } else {
-        enrichedSubQuestion = {
+        enrichedSubQuestion = normalizeSubQuestion({
           ...enrichedSubQuestion,
           re_sub_question: (verifyResponse as any).sub_question?.re_sub_question || (verifyResponse as any).sub_question?.guide_sub_question || enrichedSubQuestion.re_sub_question,
           re_sub_answer: (verifyResponse as any).sub_question?.re_sub_answer || (verifyResponse as any).sub_question?.guide_sub_answer || enrichedSubQuestion.re_sub_answer,
           verification_result: originalVerification,
-        };
+        });
       }
 
       // 로컬/기존 subQuestion에도 재생성 결과를 반영해서 이후 단계의 previous_sub_questions 계산에 활용
@@ -378,6 +403,7 @@ export const SubQs = () => {
           main_answer: (currentCotData as any).answer,
           main_solution: (currentCotData as any).main_solution || null,
           grade: (currentCotData as any).grade,
+          language: getAppLanguage(locale),
         });
         matchedSubjectArea = achievementData.subject_area || (currentCotData as any).subject_area;
         setBSubjectArea(matchedSubjectArea);
@@ -425,9 +451,10 @@ export const SubQs = () => {
         subject_area: subjectArea,
         considerations: considerations,
         previous_sub_questions: previousForGeneration,
+        language: getAppLanguage(locale),
       });
 
-      const subQuestion: SubQuestion = guidelineResponse.sub_question;
+      const subQuestion: SubQuestion = normalizeSubQuestion(guidelineResponse.sub_question);
       const previousSubQuestions = guideSubQuestions.slice();
 
       // 누적 + 화면 반영
@@ -499,6 +526,7 @@ export const SubQs = () => {
           main_answer: (currentCotData as any).answer,
           main_solution: (currentCotData as any).main_solution || null,
           grade: (currentCotData as any).grade,
+          language: getAppLanguage(locale),
         });
         subjectArea = achievementData.subject_area || (currentCotData as any).subject_area || "";
         setBSubjectArea(subjectArea);
@@ -543,9 +571,10 @@ export const SubQs = () => {
           subject_area: subjectArea,
           considerations,
           previous_sub_questions: previousForGeneration,
+          language: getAppLanguage(locale),
         });
 
-        const subQuestion: SubQuestion = guidelineResponse.sub_question;
+        const subQuestion: SubQuestion = normalizeSubQuestion(guidelineResponse.sub_question);
         const previousSubQuestions = guideSubQuestions.slice();
         guideSubQuestions.push(subQuestion);
 
@@ -602,10 +631,12 @@ export const SubQs = () => {
   // 원본 편집 저장: guide_sub_question / guide_sub_answer 업데이트
   const handleSaveOriginalEdit = (subqId: string) => {
     const questionEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="original-question"]`) as HTMLTextAreaElement;
-    const answerEl = document.querySelector(`input[data-subq-id="${subqId}"][data-type="original-answer"]`) as HTMLInputElement;
+    const answerEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="original-answer"]`) as HTMLTextAreaElement;
 
-    const newQuestion = (questionEl?.value ?? "").trim();
-    const newAnswer = (answerEl?.value ?? "").trim();
+    const { question: newQuestion, answer: newAnswer } = splitQuestionAndAnswer(
+      (questionEl?.value ?? "").trim(),
+      (answerEl?.value ?? "").trim(),
+    );
 
     (setCurrentGuidelineData as any)((prev: any) => {
       if (!prev || !prev.guide_sub_questions) return prev;
@@ -633,10 +664,12 @@ export const SubQs = () => {
 
   const handleSaveRegeneratedEdit = (subqId: string) => {
     const questionEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="regenerated-question"]`) as HTMLTextAreaElement;
-    const answerEl = document.querySelector(`input[data-subq-id="${subqId}"][data-type="regenerated-answer"]`) as HTMLInputElement;
+    const answerEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="regenerated-answer"]`) as HTMLTextAreaElement;
 
-    const newQuestion = (questionEl?.value ?? "").trim();
-    const newAnswer = (answerEl?.value ?? "").trim();
+    const { question: newQuestion, answer: newAnswer } = splitQuestionAndAnswer(
+      (questionEl?.value ?? "").trim(),
+      (answerEl?.value ?? "").trim(),
+    );
 
     (setCurrentGuidelineData as any)((prev: any) => {
       if (!prev || !prev.guide_sub_questions) return prev;
@@ -679,6 +712,13 @@ export const SubQs = () => {
   const selectSubqVersion = (subqId: string, version: "original" | "regenerated") => {
     setPreferredVersion?.({ ...preferredVersion, [subqId]: version });
     logUserEvent("version_selected", { subqId, version });
+  };
+
+  const toggleShowOriginal = (subqId: string) => {
+    setShowOriginalStates((prev) => ({
+      ...prev,
+      [subqId]: !prev[subqId],
+    }));
   };
 
   const toggleFeedback = (subqId: string, version: SubqPanelVersion) => {
@@ -769,10 +809,11 @@ export const SubQs = () => {
         original_sub_question: feedbackTarget,
         verification_feedbacks: [`[사용자 피드백] ${userFeedback}`],
         failing_verifiers: ["stage_elicitation", "context_alignment", "answer_validity", "prompt_validity"],
+        language: getAppLanguage(locale),
       } as any);
 
       const updated = (regenerateResponse as any).sub_question as SubQuestion;
-      const merged: SubQuestion =
+      const merged: SubQuestion = normalizeSubQuestion(
         version === "regenerated"
           ? {
               ...targetSubQ,
@@ -783,7 +824,8 @@ export const SubQs = () => {
               ...targetSubQ,
               guide_sub_question: updated.guide_sub_question ?? targetSubQ.guide_sub_question,
               guide_sub_answer: updated.guide_sub_answer ?? targetSubQ.guide_sub_answer,
-            };
+            },
+      );
 
       const updatedSubQuestions = subQuestions.map((q: SubQuestion) => (q.sub_question_id === subqId ? merged : q));
 
@@ -887,7 +929,13 @@ export const SubQs = () => {
   const handleExportPdf = async () => {
     if (!currentCotData || !finalizedGuidelineForRubric) return;
     try {
-      await exportPdfFromGuideline(currentCotData as any, finalizedGuidelineForRubric, {}, currentProblemId);
+      await exportPdfFromGuideline(
+        currentCotData as any,
+        finalizedGuidelineForRubric,
+        preferredVersion,
+        currentProblemId,
+        locale,
+      );
     } catch (err: any) {
       alert(err.message || t('subq.pdfExportError'));
     }
@@ -920,22 +968,28 @@ export const SubQs = () => {
           const selectedVersion = preferredVersion[subQ.sub_question_id];
           const effectiveSelectedVersion: SubqPanelVersion | undefined =
             selectedVersion ?? (showCompareLayout ? "regenerated" : undefined);
-          const isVersionSelected = (version: SubqPanelVersion) =>
-            effectiveSelectedVersion === version;
-          const originalQuestion = subQ.guide_sub_question || "";
-          const originalAnswer = subQ.guide_sub_answer || subQ.sub_answer || "";
-          const regeneratedQuestion = subQ.re_sub_question || "";
-          const regeneratedAnswer = subQ.re_sub_answer || "";
+          const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
+          const regenerated = splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer);
+          const originalQuestion = original.question;
+          const originalAnswer = original.answer;
+          const regeneratedQuestion = regenerated.question;
+          const regeneratedAnswer = regenerated.answer;
 
           const renderDisplay = (question: string, answer: string) => (
             <div className={styles.displayMode}>
-              <div className={styles.questionContent}>{formatQuestion(question)}</div>
-              {answer && (
-                <div className={styles.answerContent}>
-                  <strong>{t("common.answerColon")}</strong>{" "}
-                  <span dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }} />
+              <div className={styles.questionBlock}>
+                <div className={styles.fieldLabel}>{t("common.questionColon")}</div>
+                <div className={styles.questionContent}>{formatQuestion(question)}</div>
+              </div>
+              {answer ? (
+                <div className={styles.answerBlock}>
+                  <div className={styles.fieldLabel}>{t("common.answerColon")}</div>
+                  <div
+                    className={styles.answerContent}
+                    dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }}
+                  />
                 </div>
-              )}
+              ) : null}
             </div>
           );
 
@@ -952,21 +1006,27 @@ export const SubQs = () => {
                 : () => handleSaveOriginalEdit(subQ.sub_question_id);
             return (
               <div className={styles.editMode}>
-                <textarea
-                  className={styles.editTextarea}
-                  defaultValue={q}
-                  rows={3}
-                  data-subq-id={subQ.sub_question_id}
-                  data-type={`${version}-question`}
-                />
-                <input
-                  type="text"
-                  className={styles.editInput}
-                  defaultValue={a}
-                  placeholder={t("problemInput.answerPlaceholder")}
-                  data-subq-id={subQ.sub_question_id}
-                  data-type={`${version}-answer`}
-                />
+                <label className={styles.editField}>
+                  <span className={styles.fieldLabel}>{t("common.questionColon")}</span>
+                  <textarea
+                    className={styles.editTextarea}
+                    defaultValue={q}
+                    rows={3}
+                    data-subq-id={subQ.sub_question_id}
+                    data-type={`${version}-question`}
+                  />
+                </label>
+                <label className={styles.editField}>
+                  <span className={styles.fieldLabel}>{t("common.answerColon")}</span>
+                  <textarea
+                    className={styles.editTextarea}
+                    defaultValue={a}
+                    rows={2}
+                    placeholder={t("problemInput.answerPlaceholder")}
+                    data-subq-id={subQ.sub_question_id}
+                    data-type={`${version}-answer`}
+                  />
+                </label>
                 <div className={styles.editActions}>
                   <button type="button" className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`} onClick={onCancel}>
                     {t("common.cancel")}
@@ -1072,94 +1132,8 @@ export const SubQs = () => {
             );
           };
 
-          const stopPanelAction = (e: React.MouseEvent | React.KeyboardEvent) => {
-            e.stopPropagation();
-          };
-
-          const renderComparePanel = (version: SubqPanelVersion) => {
-            const isSelected = isVersionSelected(version);
-            const isEditing = version === "regenerated" ? isRegeneratedEditing : isOriginalEditing;
-            const question = version === "regenerated" ? regeneratedQuestion : originalQuestion;
-            const answer = version === "regenerated" ? regeneratedAnswer : originalAnswer;
-            const label = version === "regenerated" ? t("subq.regeneratedQuestion") : t("subq.originalQuestion");
-            const isPanelLoading = version === "regenerated" && isRegeneratedPanelRegenerating;
-            const onEdit =
-              version === "regenerated"
-                ? () => toggleRegeneratedEdit(subQ.sub_question_id)
-                : () => toggleOriginalEdit(subQ.sub_question_id);
-
-            return (
-              <div
-                key={version}
-                role={isPanelLoading ? undefined : "button"}
-                tabIndex={isPanelLoading ? undefined : 0}
-                className={`${styles.comparePanel} ${isSelected ? styles.comparePanelActive : ""} ${!isSelected && showCompareLayout ? styles.comparePanelSelectable : ""} ${isPanelLoading ? styles.comparePanelLoading : ""}`}
-                onClick={isPanelLoading ? undefined : () => selectSubqVersion(subQ.sub_question_id, version)}
-                onKeyDown={
-                  isPanelLoading
-                    ? undefined
-                    : (e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          selectSubqVersion(subQ.sub_question_id, version);
-                        }
-                      }
-                }
-                aria-pressed={isSelected}
-                aria-busy={isPanelLoading || undefined}
-                aria-label={`${label}${isSelected ? `, ${t("subq.selected")}` : ""}`}
-              >
-                <div className={styles.comparePanelHeader}>
-                  <div className={styles.comparePanelHeaderMain}>
-                    <span className={styles.compareLabel}>{label}</span>
-                    {isSelected && <span className={styles.selectedMark}>{t("subq.selected")}</span>}
-                  </div>
-                  <div className={styles.comparePanelHeaderActions} onClick={stopPanelAction}>
-                    {!isSelected && (
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
-                        onClick={(e) => {
-                          stopPanelAction(e);
-                          selectSubqVersion(subQ.sub_question_id, version);
-                        }}
-                      >
-                        {t("subq.selectThis")}
-                      </button>
-                    )}
-                    {!isEditing && !isPanelLoading && (
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                        onClick={(e) => {
-                          stopPanelAction(e);
-                          onEdit();
-                        }}
-                      >
-                        {t("common.edit")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div
-                  className={styles.comparePanelBody}
-                  onClick={isEditing ? stopPanelAction : undefined}
-                >
-                  {isPanelLoading ? (
-                    <div className={styles.comparePanelBodyLoading}>
-                      <div className={styles.spinner} aria-hidden />
-                      <div>{t("subq.regenerating")}</div>
-                    </div>
-                  ) : isEditing ? (
-                    renderEdit(version)
-                  ) : (
-                    renderDisplay(question, answer)
-                  )}
-                </div>
-                {!isPanelLoading && <div onClick={stopPanelAction}>{renderPanelExtras(version)}</div>}
-              </div>
-            );
-          };
+          const showOriginal = !!showOriginalStates[subQ.sub_question_id];
+          const usingOriginal = effectiveSelectedVersion === "original";
 
           return (
             <div key={subQ.sub_question_id} className={styles.subQuestionCard}>
@@ -1174,9 +1148,88 @@ export const SubQs = () => {
               </div>
 
               {showCompareLayout ? (
-                <div className={styles.compareGrid}>
-                  {renderComparePanel("original")}
-                  {renderComparePanel("regenerated")}
+                <div className={styles.contentPanel}>
+                  <div className={styles.itemPanelHeader}>
+                    <div className={styles.itemPanelHeaderMain}>
+                      <span className={styles.itemPanelTitle}>{t("subq.currentQuestion")}</span>
+                      {usingOriginal && (
+                        <span className={styles.versionNote}>{t("subq.usingOriginalNote")}</span>
+                      )}
+                    </div>
+                    <div className={styles.itemPanelActions}>
+                      {usingOriginal && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                          onClick={() => selectSubqVersion(subQ.sub_question_id, "regenerated")}
+                        >
+                          {t("subq.useRevisedVersion")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
+                        onClick={() => toggleShowOriginal(subQ.sub_question_id)}
+                      >
+                        {showOriginal ? t("subq.hideOriginal") : t("subq.viewOriginal")}
+                      </button>
+                      {!isRegeneratedEditing && !isRegeneratedPanelRegenerating && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                          onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
+                        >
+                          {t("common.edit")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className={styles.itemPanelBody}>
+                    {isRegeneratedPanelRegenerating ? (
+                      <div className={styles.comparePanelBodyLoading}>
+                        <div className={styles.spinner} aria-hidden />
+                        <div>{t("common.loading")}</div>
+                      </div>
+                    ) : isRegeneratedEditing ? (
+                      renderEdit("regenerated")
+                    ) : (
+                      renderDisplay(regeneratedQuestion, regeneratedAnswer)
+                    )}
+                  </div>
+                  {!isRegeneratedPanelRegenerating && renderPanelExtras("regenerated")}
+
+                  {showOriginal && (
+                    <div className={styles.originalReveal}>
+                      <div className={styles.originalRevealHeader}>
+                        <span className={styles.originalRevealTitle}>{t("subq.originalQuestion")}</span>
+                        <div className={styles.originalRevealActions}>
+                          {!usingOriginal && (
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                              onClick={() => selectSubqVersion(subQ.sub_question_id, "original")}
+                            >
+                              {t("subq.useOriginalVersion")}
+                            </button>
+                          )}
+                          {usingOriginal && <span className={styles.selectedMark}>{t("subq.selected")}</span>}
+                          {!isOriginalEditing && (
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                              onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                            >
+                              {t("common.edit")}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className={styles.itemPanelBody}>
+                        {isOriginalEditing ? renderEdit("original") : renderDisplay(originalQuestion, originalAnswer)}
+                      </div>
+                      {renderPanelExtras("original")}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className={styles.contentPanel}>

@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import styles from "./StudentDiagnosis.module.css";
 import { useApp } from "../../contexts/AppContext";
 import { useLocale } from "../../i18n/LocaleContext";
-import { translations } from "../../i18n/translations";
+import { getAppLanguage, translations } from "../../i18n/translations";
 import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
+import { MainProblemSidebar } from "../MainProblemSidebar/MainProblemSidebar";
 import { api } from "../../services/api";
 import { getSavedResults } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
@@ -37,6 +38,7 @@ interface ProblemStepSummary {
   /** 단계(display_code)별 LLM 진단 피드백(reason) */
   feedbackByDisplayCode?: Record<string, string>;
 }
+type LevelType = "상" | "중" | "하";
 
 // 학생 진단 상태를 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
 const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`; // 구버전 호환용
@@ -62,6 +64,21 @@ function buildSubQuestionIdToDisplayCode(guideSubQuestions: Array<{ sub_question
     map[id] = `${stepIndex}-${withinIndex}`;
   });
   return map;
+}
+
+function normalizeDiagnosisLevel(level?: string): LevelType | null {
+  if (!level) return null;
+  if (level === "상" || level === "중" || level === "하") return level;
+  const normalized = level.trim().toLowerCase();
+  if (normalized === "high") return "상";
+  if (normalized === "medium") return "중";
+  if (normalized === "low") return "하";
+  return null;
+}
+
+function isDisplayCode(value?: string): boolean {
+  if (!value) return false;
+  return /^\d+-\d+$/.test(value.trim());
 }
 
 export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: StudentDiagnosisProps) => {
@@ -172,7 +189,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const effectiveCotData: any = (problemIdForDiagnosis ? diagnosisCotData : null) ?? (currentCotData as any) ?? null;
 
   const mainProblem = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_problem : undefined) ?? effectiveCotData?.problem ?? "";
+  const mainImage = effectiveCotData?.image_data ?? null;
   const mainAnswer = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_answer : undefined) ?? effectiveCotData?.answer ?? "";
+  const mainSolution = effectiveCotData?.main_solution ?? null;
   const grade = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
   const subjectArea = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
 
@@ -220,9 +239,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     };
   });
 
-  const [activeId, setActiveId] = useState<string | null>(diagnosisItems[0]?.id ?? null);
-  const activeItemIndex = diagnosisItems.findIndex((it) => it.id === activeId);
-  const activeItem = activeItemIndex >= 0 ? diagnosisItems[activeItemIndex] : (diagnosisItems[0] ?? null);
+  const activeItem = diagnosisItems[0] ?? null;
 
   const [students, setStudents] = useState<StudentInfo[]>([{ id: "student-1", name: "학생 1" }]);
 
@@ -423,21 +440,18 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           } catch {
             // 문제별 가이드라인 없으면 해당 문제는 요약 스킵
           }
-          if (guideSubQuestions.length === 0) continue;
-          const subIdToDisplayCode = buildSubQuestionIdToDisplayCode(guideSubQuestions);
-
           for (const studentId of Object.keys(results)) {
             const perProblem = results[studentId]?.[problemId];
             if (!perProblem || typeof perProblem !== "object") continue;
+            const subIdToDisplayCode = guideSubQuestions.length > 0 ? buildSubQuestionIdToDisplayCode(guideSubQuestions) : {};
             const levelsByDisplayCode: Record<string, "상" | "중" | "하"> = {};
             const feedbackByDisplayCode: Record<string, string> = {};
             for (const subId of Object.keys(perProblem)) {
-              const dc = subIdToDisplayCode[subId];
+              const dc = subIdToDisplayCode[subId] ?? (isDisplayCode(subId) ? subId : undefined);
               if (!dc) continue;
               const res = perProblem[subId];
-              if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
-                levelsByDisplayCode[dc] = res.level as "상" | "중" | "하";
-              }
+              const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+              if (normalizedLevel) levelsByDisplayCode[dc] = normalizedLevel;
               if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
             }
             if (Object.keys(levelsByDisplayCode).length > 0) {
@@ -550,10 +564,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       console.error("학생 진단 상태를 저장하는 중 오류:", err);
     }
   }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, students]);
-
-  const handleChangeStudent = (id: string) => {
-    setCurrentStudentId(id);
-  };
 
   const startEditStudentName = (studentId: string) => {
     const s = students.find((x) => x.id === studentId);
@@ -728,14 +738,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         [currentStudentId]: { ...perStudentPrev, [currentProblemKey]: nextForProblem },
       };
 
-      const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const levelOnlyByDisplayCode: Record<string, LevelType> = {};
       const feedbackByDisplayCode: Record<string, string> = {};
       diagnosisItems.forEach((it) => {
         const res = nextForProblem[it.id];
         if (!res) return;
-        if (res.level === "상" || res.level === "중" || res.level === "하") {
-          levelOnlyByDisplayCode[it.displayCode] = res.level as LevelType;
-        }
+        const normalizedLevel = normalizeDiagnosisLevel(res.level);
+        if (normalizedLevel) levelOnlyByDisplayCode[it.displayCode] = normalizedLevel;
         if (res.reason?.trim()) feedbackByDisplayCode[it.displayCode] = res.reason.trim();
       });
 
@@ -816,6 +825,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             correct_answer: item.answer,
             rubric: { levels: rubricLevels },
             student_answer: answerText,
+            language: getAppLanguage(locale),
           });
 
           newResultsForStudent[item.id] = {
@@ -838,13 +848,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       });
 
       // 이 학생의 현재 문제에 대한 단계별 수준·피드백 요약 저장 (표·리포트용)
-      const levelOnlyByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const levelOnlyByDisplayCode: Record<string, LevelType> = {};
       const feedbackByDisplayCode: Record<string, string> = {};
       targetItems.forEach((item) => {
         const res = newResultsForStudent[item.id];
-        if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
-          levelOnlyByDisplayCode[item.displayCode] = res.level;
-        }
+        const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+        if (normalizedLevel) levelOnlyByDisplayCode[item.displayCode] = normalizedLevel;
         if (res?.reason?.trim()) {
           feedbackByDisplayCode[item.displayCode] = res.reason.trim();
         }
@@ -892,7 +901,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       if (Object.keys(levelOnlyByDisplayCode).length > 0 && userId?.trim()) {
         const serverProblemKey = currentProblemKey === "__current__" ? (currentProblemId ?? currentProblemKey) : currentProblemKey;
         const existingSummaries = studentProblemSummaries[currentStudentId] ?? {};
-        const mergedSummaries: Record<string, { levelsByDisplayCode: Record<string, "상" | "중" | "하">; feedbackByDisplayCode?: Record<string, string> }> = { ...existingSummaries };
+        const mergedSummaries: Record<string, { levelsByDisplayCode: Record<string, LevelType>; feedbackByDisplayCode?: Record<string, string> }> = { ...existingSummaries };
         mergedSummaries[serverProblemKey] = { levelsByDisplayCode: levelOnlyByDisplayCode, feedbackByDisplayCode: Object.keys(feedbackByDisplayCode ?? {}).length > 0 ? feedbackByDisplayCode : undefined };
         try {
           const reportPayload = {
@@ -902,9 +911,22 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               levels_by_display_code: s.levelsByDisplayCode,
               feedback_by_display_code: s.feedbackByDisplayCode ?? {},
             })),
+            language: getAppLanguage(locale),
           };
           const reportData = await api.generateStudentDiagnosisReport(reportPayload);
           await api.saveDiagnosisReport({ user_id: userId, student_id: currentStudentId, report: reportData });
+          // 리포트 모달이 열려 있고 같은 학생이면 즉시 최신 계산 결과를 반영
+          if (reportOpen && reportStudentId === currentStudentId) {
+            setReportData(reportData);
+            const initialEdits: Record<string, string> = {};
+            (reportData.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
+              if (row.feedback_summary && typeof row.feedback_summary === "string") {
+                initialEdits[row.display_code] = row.feedback_summary;
+              }
+            });
+            setReportFeedbackEdits(initialEdits);
+            setReportError(null);
+          }
         } catch (reportErr: any) {
           console.warn("진단 후 리포트 자동 저장 실패:", reportErr);
         }
@@ -1009,23 +1031,14 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
-  const containerRef = useMathJax([activeId, activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
+  const mainProblemRef = useMathJax([mainProblem, mainAnswer, problemIdForDiagnosis]);
+  const containerRef = useMathJax([activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
-  // 한 학생이 여러 문제를 진단한 경우, 표 요약용 파생 데이터 계산
-  const summariesForCurrentStudent = studentProblemSummaries[currentStudentId] ?? {};
-  const summaryProblemIds = Object.keys(summariesForCurrentStudent);
-  const hasMultiProblemSummary = summaryProblemIds.length >= 2;
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
   const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
 
   // 하: 0점 / 중: 1점 / 상: 2점
-  type LevelType = "상" | "중" | "하";
   const LEVEL_SCORE: Record<LevelType, number> = { 상: 2, 중: 1, 하: 0 };
-  const scoreToLevel = (score: number): LevelType => {
-    if (score >= 1.5) return "상";
-    if (score >= 0.5) return "중";
-    return "하";
-  };
 
   const getStepGroupInfo = (displayCode: string) => {
     const [group] = displayCode.split("-");
@@ -1067,8 +1080,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출). 최초 제외하고는 이전 결과를 바로 표시 */
   const openReport = async (studentId: string) => {
-    // 해당 학생에 대해 진단 결과가 있는 모든 문제 ID 사용
-    const diagnosisProblemIds = Object.keys(diagnosisResults[studentId] ?? {});
+    // 해당 학생에 대해 진단 결과/요약이 있는 모든 문제 ID 사용
+    const diagnosisProblemIds = Array.from(
+      new Set([...Object.keys(diagnosisResults[studentId] ?? {}), ...Object.keys(studentProblemSummaries[studentId] ?? {})]),
+    );
     if (!diagnosisProblemIds.length) {
       alert(t("diagnosis.completeOneProblem"));
       return;
@@ -1076,7 +1091,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let fullPerStudent: Record<string, ProblemStepSummary> = { ...(studentProblemSummaries[studentId] ?? {}) };
     const saved = getSavedResults();
     for (const problemId of diagnosisProblemIds) {
-      if (fullPerStudent[problemId]) continue;
+      const perProblem = diagnosisResults[studentId]?.[problemId];
+      if (!perProblem || typeof perProblem !== "object") continue;
       let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
       try {
         const result = await api.getResult(problemId);
@@ -1088,19 +1104,15 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       } catch {
         // 스킵
       }
-      if (guideSubQuestions.length === 0) continue;
-      const subIdToDisplayCode = buildSubQuestionIdToDisplayCode(guideSubQuestions);
-      const perProblem = diagnosisResults[studentId]?.[problemId];
-      if (!perProblem || typeof perProblem !== "object") continue;
-      const levelsByDisplayCode: Record<string, "상" | "중" | "하"> = {};
+      const subIdToDisplayCode = guideSubQuestions.length > 0 ? buildSubQuestionIdToDisplayCode(guideSubQuestions) : {};
+      const levelsByDisplayCode: Record<string, LevelType> = {};
       const feedbackByDisplayCode: Record<string, string> = {};
       for (const subId of Object.keys(perProblem)) {
-        const dc = subIdToDisplayCode[subId];
+        const dc = subIdToDisplayCode[subId] ?? (isDisplayCode(subId) ? subId : undefined);
         if (!dc) continue;
         const res = perProblem[subId];
-        if (res?.level === "상" || res?.level === "중" || res?.level === "하") {
-          levelsByDisplayCode[dc] = res.level as "상" | "중" | "하";
-        }
+        const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+        if (normalizedLevel) levelsByDisplayCode[dc] = normalizedLevel;
         if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
       }
       if (Object.keys(levelsByDisplayCode).length > 0) {
@@ -1123,19 +1135,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }));
     }
 
-    // 이전에 이 학생 리포트를 연 적이 있으면 캐시된 결과만 표시 (API 호출 없음)
-    if (reportStudentId === studentId && reportData && reportData.problem_rows?.length >= problemIds.length) {
+    // 같은 학생 리포트가 이미 화면 상태에 있으면 재계산 없이 그대로 재사용
+    if (reportStudentId === studentId && reportData && !reportError) {
       setReportStudentId(studentId);
       setReportOpen(true);
-      setReportError(null);
+      setReportLoading(false);
       return;
     }
+
     setReportStudentId(studentId);
     setReportOpen(true);
     setReportLoading(true);
     setReportError(null);
     try {
-      // 다른 브라우저에서도 한 번 저장된 리포트를 보여주기 위해, 서버에 저장된 리포트를 우선 조회
+      // 저장된 리포트가 있으면 우선 사용 (버튼 클릭마다 자동 재계산하지 않음)
       const savedReport = await api.getDiagnosisReport(studentId, userId);
       if (savedReport && savedReport.problem_rows?.length > 0) {
         setReportData(savedReport);
@@ -1149,6 +1162,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         setReportLoading(false);
         return;
       }
+
       const payload = {
         student_id: studentId,
         problem_summaries: problemIds.map((pid) => ({
@@ -1156,6 +1170,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           levels_by_display_code: fullPerStudent[pid].levelsByDisplayCode,
           feedback_by_display_code: fullPerStudent[pid].feedbackByDisplayCode ?? {},
         })),
+        language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
       setReportData(data);
@@ -1197,6 +1212,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           levels_by_display_code: perStudent[pid].levelsByDisplayCode,
           feedback_by_display_code: perStudent[pid].feedbackByDisplayCode ?? {},
         })),
+        language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
       setReportData(data);
@@ -1236,6 +1252,56 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
+  const handleRemoveProblemFromReport = async (problemId: string) => {
+    const sid = reportStudentId ?? currentStudentId;
+    if (!sid) return;
+    if (!window.confirm(t("diagnosis.removeProblemConfirm", { problemId }))) return;
+
+    const currentPerStudent = studentProblemSummaries[sid] ?? {};
+    if (!currentPerStudent[problemId]) return;
+    const nextPerStudent = { ...currentPerStudent };
+    delete nextPerStudent[problemId];
+
+    setStudentProblemSummaries((prev) => ({ ...prev, [sid]: nextPerStudent }));
+
+    const remainingProblemIds = Object.keys(nextPerStudent);
+    if (!remainingProblemIds.length) {
+      setReportData(null);
+      setReportFeedbackEdits({});
+      setReportError(t("diagnosis.noDiagnosedProblems"));
+      return;
+    }
+
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const payload = {
+        student_id: sid,
+        problem_summaries: remainingProblemIds.map((pid) => ({
+          problem_id: pid,
+          levels_by_display_code: nextPerStudent[pid].levelsByDisplayCode,
+          feedback_by_display_code: nextPerStudent[pid].feedbackByDisplayCode ?? {},
+        })),
+        language: getAppLanguage(locale),
+      };
+      const data = await api.generateStudentDiagnosisReport(payload);
+      setReportData(data);
+      const initialEdits: Record<string, string> = {};
+      (data.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
+        if (row.feedback_summary && typeof row.feedback_summary === "string") {
+          initialEdits[row.display_code] = row.feedback_summary;
+        }
+      });
+      setReportFeedbackEdits(initialEdits);
+      await api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: data });
+    } catch (err: any) {
+      console.error("리포트 문제 제외 후 재생성 오류:", err);
+      setReportError(err?.message ?? t("diagnosis.reportRefreshError"));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   return (
     <div className={styles.page} ref={containerRef}>
       <header className={styles.header}>
@@ -1245,136 +1311,128 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       </header>
 
       <main className={styles.main}>
-        <section className={styles.mainProblemSection}>
-          <div className={styles.mainProblemHeaderRow}>
-            <h3 className={styles.mainProblemTitle}>{t("diagnosis.mainProblem")}</h3>
-            {historyItems.length > 0 && (
-              <div className={styles.problemSelectWrap}>
-                <label className={styles.problemSelectLabel}>
-                  {t("diagnosis.selectProblemLabel")}
-                  <select className={styles.problemSelect} value={selectedProblemId ?? ""} onChange={(e) => setSelectedProblemId(e.target.value || null)}>
-                    <option value="">{t("diagnosis.selectProblem")}</option>
-                    {historyItems.map((item: any) => (
-                      <option key={item.problem_id} value={item.problem_id}>
-                        {item.problem_id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
-          </div>
+        <div className={styles.diagnosisSplitLayout}>
           {problemIdForDiagnosis ? (
-            mainProblem ? (
-              <>
-                <div className={styles.mainProblemContent} dangerouslySetInnerHTML={{ __html: formatQuestion(mainProblem) }} />
-                {mainAnswer && (
-                  <div className={styles.mainProblemAnswer}>
-                    <span className={styles.mainProblemAnswerLabel}>{t("common.answerColon")}</span> <span className={styles.mainProblemAnswerText} dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
-                  </div>
-                )}
-                {(grade || subjectArea) && (
-                  <div className={styles.mainProblemMeta}>
-                    {grade && (
-                      <span className={styles.metaItem}>
-                        <span className={styles.metaLabel}>{t("problemInput.grade")}</span>
-                        <span className={styles.metaValue}>{grade}</span>
-                      </span>
-                    )}
-                    {subjectArea && (
-                      <span className={styles.metaItem}>
-                        <span className={styles.metaLabel}>{t("app.subjectArea").replace(/:$/, "")}</span>
-                        <span className={styles.metaValue}>{subjectArea}</span>
-                      </span>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className={styles.mainProblemEmpty}>{t("diagnosis.noProblemData")}</p>
-            )
+            <MainProblemSidebar
+              panelRef={mainProblemRef}
+              problem={mainProblem}
+              answer={mainAnswer}
+              imageData={mainImage}
+              solution={mainSolution}
+              grade={grade}
+              subjectArea={subjectArea}
+            />
           ) : (
-            <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemFirst")}</p>
+            <aside className={styles.diagnosisProblemPlaceholder}>
+              <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemFirst")}</p>
+            </aside>
           )}
-        </section>
 
-        <div className={styles.layout}>
-          {/* 좌측: 학생 리스트 패널 */}
-          <aside className={styles.studentListColumn}>
-            <h3 className={styles.studentListTitle}>{t("diagnosis.studentList")}</h3>
-            <div className={styles.studentList}>
-              {students.map((s, idx) => {
-                const isActiveStudent = currentStudentId === s.id;
-                const isEditingName = editingStudentId === s.id;
-                return (
-                  <div key={s.id} className={styles.studentListItemWrap}>
-                    <button type="button" className={`${styles.studentListItem} ${isActiveStudent ? styles.studentListItemActive : ""}`} onClick={() => setCurrentStudentId(s.id)}>
-                      <div className={styles.studentListName} onClick={(e) => isEditingName && e.stopPropagation()}>
-                        {isEditingName ? (
-                          <input
-                            type="text"
-                            className={styles.studentListEditInput}
-                            value={editingStudentValue}
-                            onChange={(e) => setEditingStudentValue(e.target.value)}
-                            onBlur={saveEditStudentName}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveEditStudentName();
-                              if (e.key === "Escape") cancelEditStudent();
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            autoFocus
-                            aria-label={t("diagnosis.editName")}
-                          />
-                        ) : (
-                          <>
-                            <span>
-                              {idx + 1}. {s.name}
-                            </span>
-                            <span className={styles.studentListId}>ID: {s.id}</span>
-                          </>
-                        )}
-                      </div>
-                    </button>
-                    <div className={styles.studentListButtons}>
-                      {!isEditingName && (
-                        <button
-                          type="button"
-                          className={styles.studentListEditBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEditStudentName(s.id);
+          <div className={styles.diagnosisWorkspace}>
+            <aside className={styles.studentListRail}>
+              {historyItems.length > 0 && (
+                <div className={styles.railProblemSelect}>
+                  <label className={styles.railProblemSelectLabel}>
+                    <span className={styles.railProblemSelectCaption}>{t("diagnosis.selectProblemLabel")}</span>
+                    <select
+                      className={styles.railProblemSelectInput}
+                      value={selectedProblemId ?? ""}
+                      onChange={(e) => setSelectedProblemId(e.target.value || null)}
+                    >
+                      <option value="">{t("diagnosis.selectProblem")}</option>
+                      {historyItems.map((item: any) => (
+                        <option key={item.problem_id} value={item.problem_id}>
+                          {item.problem_id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+              <div className={styles.studentListRailHead}>
+                <h3 className={styles.studentListTitle}>{t("diagnosis.studentList")}</h3>
+                <span className={styles.studentListCount}>{students.length}</span>
+              </div>
+              <div className={styles.studentList}>
+                {students.map((s) => {
+                  const isActiveStudent = currentStudentId === s.id;
+                  const isEditingName = editingStudentId === s.id;
+                  const summaryProblemCount = Object.keys(studentProblemSummaries[s.id] ?? {}).length;
+                  const diagnosedProblemCount = Object.values(diagnosisResults[s.id] ?? {}).filter((perProblem) =>
+                    Object.values(perProblem ?? {}).some((res) => !!normalizeDiagnosisLevel((res as { level?: string })?.level)),
+                  ).length;
+                  const diagnosedCount = Math.max(summaryProblemCount, diagnosedProblemCount);
+                  return (
+                    <div
+                      key={s.id}
+                      className={`${styles.studentListRow} ${isActiveStudent ? styles.studentListRowActive : ""}`}
+                      title={s.id}
+                    >
+                      {isEditingName ? (
+                        <input
+                          type="text"
+                          className={styles.studentListEditInput}
+                          value={editingStudentValue}
+                          onChange={(e) => setEditingStudentValue(e.target.value)}
+                          onBlur={saveEditStudentName}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEditStudentName();
+                            if (e.key === "Escape") cancelEditStudent();
                           }}
-                          title={t("diagnosis.editName")}
-                          aria-label={`${s.name} ${t("diagnosis.editName")}`}
-                        >
-                          {t("diagnosis.editName")}
-                        </button>
+                          autoFocus
+                          aria-label={t("diagnosis.editName")}
+                        />
+                      ) : (
+                        <>
+                          <button type="button" className={styles.studentListRowSelect} onClick={() => setCurrentStudentId(s.id)}>
+                            <span className={styles.studentListRowName}>{s.name}</span>
+                            {diagnosedCount > 0 && (
+                              <span className={styles.studentListRowMeta}>
+                                {t("diagnosis.studentDiagnosedCount", { count: diagnosedCount })}
+                              </span>
+                            )}
+                          </button>
+                          <div className={styles.studentListRowActions}>
+                            <button
+                              type="button"
+                              className={styles.studentListIconBtn}
+                              onClick={() => startEditStudentName(s.id)}
+                              title={t("diagnosis.editName")}
+                              aria-label={`${s.name} ${t("diagnosis.editName")}`}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.studentListIconBtn}
+                              onClick={() => openReport(s.id)}
+                              title={t("diagnosis.report")}
+                              aria-label={t("diagnosis.reportAria", { name: s.name })}
+                            >
+                              R
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.studentListIconBtn} ${styles.studentListIconBtnDanger}`}
+                              onClick={(e) => handleDeleteStudent(s.id, e)}
+                              title={t("diagnosis.deleteStudent")}
+                              aria-label={t("diagnosis.deleteStudentAria", { name: s.name })}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className={styles.studentListReportBtn}
-                        onClick={() => openReport(s.id)}
-                        title={t("diagnosis.report")}
-                        aria-label={t("diagnosis.reportAria", { name: s.name })}
-                        disabled={!Object.keys(studentProblemSummaries[s.id] ?? {}).length}
-                      >
-                        {t("diagnosis.report")}
-                      </button>
-                      <button type="button" className={styles.studentListDeleteBtn} onClick={(e) => handleDeleteStudent(s.id, e)} title={t("diagnosis.deleteStudent")} aria-label={t("diagnosis.deleteStudentAria", { name: s.name })}>
-                        {t("diagnosis.remove")}
-                      </button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            <button type="button" className={styles.addStudentBtn} onClick={handleAddStudent}>
-              {t("diagnosis.addStudent")}
-            </button>
-          </aside>
+                  );
+                })}
+              </div>
+              <button type="button" className={styles.addStudentBtn} onClick={handleAddStudent}>
+                {t("diagnosis.addStudent")}
+              </button>
+            </aside>
 
-          {/* 우측: 학생 답안/진단 */}
-          <section className={styles.mainColumn}>
+            <section className={styles.studentWorkArea}>
             <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
@@ -1384,38 +1442,86 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                     <>
                       <header className={styles.studentHeader}>
                         <div className={styles.studentHeaderTop}>
-                          <h3 className={styles.studentTitle}>{t("diagnosis.studentAnswers")}</h3>
-                          <div className={styles.studentControls}>
-                            <select className={styles.studentSelect} value={currentStudentId} onChange={(e) => handleChangeStudent(e.target.value)}>
-                              {students.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name} (ID: {s.id})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                          <h3 className={styles.studentTitle}>
+                            {t("diagnosis.studentAnswers")}
+                            {(() => {
+                              const name = students.find((s) => s.id === currentStudentId)?.name;
+                              return name ? <span className={styles.studentTitleName}> — {name}</span> : null;
+                            })()}
+                          </h3>
                         </div>
                       </header>
 
+                      {currentStudentId && currentProblemKey && (() => {
+                        const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
+                        const hasAnyImage = !!(urls[0] || urls[1]);
+                        return (
+                          <div className={styles.handwritingToolbar}>
+                            <span className={styles.handwritingToolbarLabel}>{t("diagnosis.handwrittenTitle")}</span>
+                            <div className={styles.handwritingToolbarActions}>
+                              <label className={styles.handwritingUploadBtn}>
+                                {hasAnyImage ? t("diagnosis.replace") : t("diagnosis.uploadHandwriting")}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className={styles.handwritingFileInput}
+                                  onChange={(e) => {
+                                    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+                                    if (files[0]) handleHandwrittenUpload(1, files[0]);
+                                    if (files[1]) handleHandwrittenUpload(2, files[1]);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              {([1, 2] as const).map((slot) => {
+                                const dataUrl = urls[slot - 1];
+                                if (!dataUrl) return null;
+                                return (
+                                  <div key={slot} className={styles.handwritingSlotCompact}>
+                                    <img
+                                      src={dataUrl}
+                                      alt={t("diagnosis.handwritingAlt", { n: slot })}
+                                      className={styles.handwritingThumb}
+                                    />
+                                    <button
+                                      type="button"
+                                      className={styles.handwritingRemoveBtn}
+                                      onClick={() => handleHandwrittenUpload(slot, null)}
+                                      aria-label={t("diagnosis.remove")}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {diagnosisItems.length > 0 ? (
                         <>
-                          <div className={styles.studentAnswerRow}>
-                            <div className={styles.studentAnswerColumn}>
+                          <div className={styles.studentAnswerColumn}>
                               <div className={styles.studentAllList}>
                                 {diagnosisItems.map((item) => {
                                   const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
                                   const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                                  const isActive = activeItem?.id === item.id;
                                   const showAnswer = !!showAnswerById[item.id];
                                   const showRubric = !!showRubricById[item.id];
                                   const isEditingDiagnosis = !!editingDiagnosisById[item.id];
                                   return (
-                                    <div key={item.id} className={`${styles.studentAnswerBlock} ${isActive ? styles.studentAnswerBlockActive : ""}`}>
+                                    <div key={item.id} className={styles.studentAnswerBlock}>
                                       <div className={styles.studentAnswerHeader}>
                                         <div className={styles.studentAnswerHeaderLeft}>
                                           <span className={styles.studentAnswerCode}>{item.displayCode}</span>
                                           <span className={styles.studentAnswerLabel}>
-                                            {item.stepName} - {item.subSkillName}
+                                            {(() => {
+                                              const [group] = item.displayCode.split("-");
+                                              const groupLabel = formatCategory(group) !== group ? formatCategory(group) : item.stepName;
+                                              const skillLabel = formatCategory(item.displayCode) !== item.displayCode ? formatCategory(item.displayCode) : item.subSkillName;
+                                              return `${groupLabel} - ${skillLabel}`;
+                                            })()}
                                           </span>
                                         </div>
                                       </div>
@@ -1557,78 +1663,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                 )}
                                 {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                               </div>
-                            </div>
-
-                            {currentStudentId && currentProblemKey && (
-                              <div className={styles.studentHandwrittenPanel}>
-                                <h4 className={styles.studentHandwrittenTitle}>{t("diagnosis.handwrittenTitle")}</h4>
-                                {/* 두 장을 한 번에 업로드 */}
-                                <div className={styles.studentHandwrittenMultiUpload}>
-                                  <label className={styles.studentHandwrittenUploadArea}>
-                                    <span className={styles.studentHandwrittenUploadText}>{t("diagnosis.uploadTwoImages")}</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      multiple
-                                      className={styles.studentHandwrittenFileInput}
-                                      onChange={(e) => {
-                                        const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
-                                        if (files[0]) handleHandwrittenUpload(1, files[0]);
-                                        if (files[1]) handleHandwrittenUpload(2, files[1]);
-                                        e.target.value = "";
-                                      }}
-                                    />
-                                  </label>
-                                </div>
-                                <div className={styles.studentHandwrittenScroll}>
-                                  {([1, 2] as const).map((slot) => {
-                                    const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
-                                    const dataUrl = urls[slot - 1];
-                                    return (
-                                      <div key={slot} className={styles.studentHandwrittenSlot}>
-                                        {dataUrl ? (
-                                          <>
-                                            <img src={dataUrl} alt={t("diagnosis.handwritingAlt", { n: slot })} className={styles.studentHandwrittenImg} />
-                                            <div className={styles.studentHandwrittenSlotActions}>
-                                              <label className={styles.studentHandwrittenReplaceBtn}>
-                                                {t("diagnosis.replace")}
-                                                <input
-                                                  type="file"
-                                                  accept="image/*"
-                                                  className={styles.studentHandwrittenFileInput}
-                                                  onChange={(e) => {
-                                                    const f = e.target.files?.[0];
-                                                    if (f) handleHandwrittenUpload(slot, f);
-                                                    e.target.value = "";
-                                                  }}
-                                                />
-                                              </label>
-                                              <button type="button" className={styles.studentHandwrittenRemoveBtn} onClick={() => handleHandwrittenUpload(slot, null)}>
-                                                {t("diagnosis.remove")}
-                                              </button>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <label className={styles.studentHandwrittenUploadArea}>
-                                            <span className={styles.studentHandwrittenUploadText}>{t("diagnosis.uploadImage", { n: slot })}</span>
-                                            <input
-                                              type="file"
-                                              accept="image/*"
-                                              className={styles.studentHandwrittenFileInput}
-                                              onChange={(e) => {
-                                                const f = e.target.files?.[0];
-                                                if (f) handleHandwrittenUpload(slot, f);
-                                                e.target.value = "";
-                                              }}
-                                            />
-                                          </label>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           {/* 개별 문항 진단 결과 요약 배지는 요약 섹션과 카드 상단에서 충분히 표현되므로,
@@ -1643,130 +1677,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               </section>
             </div>
 
-            {diagnosisItems.length > 0 && (
-              <section className={styles.studentSummary}>
-                <h3 className={styles.studentSummaryTitle}>{t("diagnosis.summaryTitle")}</h3>
-                <div className={styles.studentSummaryRow}>
-                  {diagnosisItems.map((item) => {
-                    const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
-                    const hasAnswer = !!studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id]?.trim();
-                    const isActive = activeItem?.id === item.id;
-                    return (
-                      <button key={item.id} type="button" className={`${styles.studentSummaryChip} ${isActive ? styles.studentSummaryChipActive : ""}`} onClick={() => setActiveId(item.id)}>
-                        <span className={styles.studentSummaryCode}>{item.displayCode}</span>
-                        <span className={styles.studentSummaryStatus}>{result ? t("diagnosis.statusDiagnosed", { level: formatLevel(result.level) }) : hasAnswer ? t("diagnosis.statusAnswered") : t("diagnosis.statusEmpty")}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {hasMultiProblemSummary && (
-              <section className={styles.problemSummarySection}>
-                <h3 className={styles.problemSummaryTitle}>{t("diagnosis.problemSummaryTitle")}</h3>
-                <div className={styles.problemSummaryTables}>
-                  {/* 문제별 요약 표 */}
-                  <div className={styles.problemSummaryBlock}>
-                    <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.levelSummary")}</h4>
-                    <table className={styles.problemSummaryTable}>
-                      <thead>
-                        <tr>
-                          <th>{t("diagnosis.problemId")}</th>
-                          <th>{t("diagnosis.diagnosedStepCount")}</th>
-                          <th>{formatLevel("상")}</th>
-                          <th>{formatLevel("중")}</th>
-                          <th>{formatLevel("하")}</th>
-                          <th>{t("diagnosis.averageLevel")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summaryProblemIds.map((pid) => {
-                          const s = summariesForCurrentStudent[pid];
-                          const levels = Object.values(s.levelsByDisplayCode);
-                          const total = levels.length || 0;
-                          const high = levels.filter((l) => l === "상").length;
-                          const mid = levels.filter((l) => l === "중").length;
-                          const low = levels.filter((l) => l === "하").length;
-                          const avgScore = total > 0 ? levels.reduce((acc, lv) => acc + LEVEL_SCORE[lv as LevelType], 0) / total : 0;
-                          const avgLevel = total > 0 ? scoreToLevel(avgScore) : "-";
-                          return (
-                            <tr key={pid}>
-                              <td>{pid}</td>
-                              <td>{total}</td>
-                              <td>{high}</td>
-                              <td>{mid}</td>
-                              <td>{low}</td>
-                              <td>{avgLevel === "-" ? "-" : formatLevel(avgLevel)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* 단계별 최종 수준 표 */}
-                  <div className={styles.problemSummaryBlock}>
-                    <h4 className={styles.problemSummarySubTitle}>{t("diagnosis.stageSummary")}</h4>
-                    {(() => {
-                      const perStepAgg: Record<
-                        string,
-                        {
-                          count: number;
-                          totalScore: number;
-                        }
-                      > = {};
-
-                      summaryProblemIds.forEach((pid) => {
-                        const s = summariesForCurrentStudent[pid];
-                        Object.entries(s.levelsByDisplayCode).forEach(([code, level]) => {
-                          const lv = level as LevelType;
-                          if (!perStepAgg[code]) {
-                            perStepAgg[code] = { count: 0, totalScore: 0 };
-                          }
-                          perStepAgg[code].count += 1;
-                          perStepAgg[code].totalScore += LEVEL_SCORE[lv];
-                        });
-                      });
-
-                      const rows = Object.entries(perStepAgg)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([code, v]) => {
-                          const avgScore = v.totalScore / v.count;
-                          const level = scoreToLevel(avgScore);
-                          return { code, count: v.count, level };
-                        });
-
-                      if (!rows.length) {
-                        return <p className={styles.problemSummaryEmpty}>{t("diagnosis.noStageSummary")}</p>;
-                      }
-
-                      return (
-                        <table className={styles.problemSummaryTable}>
-                          <thead>
-                            <tr>
-                              <th>{t("diagnosis.stageCode")}</th>
-                              <th>{t("diagnosis.diagnosedProblemCount")}</th>
-                              <th>{t("diagnosis.finalLevel")}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map((r) => (
-                              <tr key={r.code}>
-                                <td>{r.code}</td>
-                                <td>{r.count}</td>
-                                <td>{formatLevel(r.level)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </section>
-            )}
-          </section>
+            </section>
+          </div>
         </div>
       </main>
 
@@ -1819,6 +1731,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           <th>{formatLevel("중")}</th>
                           <th>{formatLevel("하")}</th>
                           <th>{t("diagnosis.averageGrade")}</th>
+                          <th>{t("diagnosis.actions")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1835,6 +1748,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <td>{row.mid_count}</td>
                               <td>{row.low_count}</td>
                               <td>{formatGrade(gradeKo)}</td>
+                              <td>
+                                <button type="button" className={styles.reportRemoveProblemBtn} onClick={() => handleRemoveProblemFromReport(row.problem_id)} disabled={reportLoading}>
+                                  {t("diagnosis.excludeFromReport")}
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -1894,7 +1812,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           </thead>
                           <tbody>
                             {(() => {
-                              const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                              const perStudent = studentProblemSummaries[reportStudentId ?? currentStudentId] ?? {};
                               const sorted = [...reportData.step_rows].sort((a, b) => a.display_code.localeCompare(b.display_code, undefined, { numeric: true }));
                               const byGroup: Record<string, typeof sorted> = {};
                               sorted.forEach((row) => {
@@ -1961,7 +1879,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   <div className={styles.reportGraphGroupItems}>
                                     {rows.map((row) => {
                                       const info = getStepGroupInfo(row.display_code);
-                                      const perStudent = studentProblemSummaries[currentStudentId] ?? {};
+                                      const perStudent = studentProblemSummaries[reportStudentId ?? currentStudentId] ?? {};
                                       const problemIds = Object.keys(perStudent);
                                       let sum = 0,
                                         stepCount = 0;

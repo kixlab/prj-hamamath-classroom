@@ -14,6 +14,53 @@ export const escapeHtml = (str: string | null | undefined): string => {
 /** LaTeX 구간 보존: $ 또는 \( \) 등이 있으면 백슬래시 제거하지 않음 */
 const looksLikeLatex = (s: string): boolean => /\$|\\\(|\\\[|\\times|\\frac|\\sqrt/.test(s);
 
+const ANSWER_TAG_RE = /\{answer_tag\}/i;
+
+/** LLM/오케스트레이터 프롬프트용 플레이스홀더 — UI에서는 정답을 별도 영역에 표시 */
+export const stripQuestionTemplateTags = (text: string | null | undefined): string => {
+  if (!text) return "";
+  let cleaned = String(text);
+  cleaned = cleaned
+    .replace(ANSWER_TAG_RE, "")
+    .replace(/\{question_tag\}/gi, "")
+    .replace(/\{\{answer_tag\}\}/gi, "")
+    .replace(/\{\{question_tag\}\}/gi, "");
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+  return cleaned.trim();
+};
+
+/** guide_sub_question 안에 붙은 {answer_tag}·불릿 정답을 분리 (guide_sub_answer 우선) */
+export const splitQuestionAndAnswer = (
+  rawQuestion: string | null | undefined,
+  explicitAnswer?: string | null | undefined,
+): { question: string; answer: string } => {
+  const raw = (rawQuestion ?? "").trim();
+  let explicit = (explicitAnswer ?? "").trim();
+
+  let questionPart = raw;
+  let embeddedAnswer = "";
+
+  const tagMatch = ANSWER_TAG_RE.exec(raw);
+  if (tagMatch) {
+    questionPart = raw.slice(0, tagMatch.index).trim();
+    embeddedAnswer = raw.slice(tagMatch.index + tagMatch[0].length).trim();
+  } else if (!explicit) {
+    const bulletMatch = raw.match(/\n\s*[-•·]\s+/);
+    if (bulletMatch?.index != null && bulletMatch.index > 0) {
+      questionPart = raw.slice(0, bulletMatch.index).trim();
+      embeddedAnswer = raw.slice(bulletMatch.index).trim();
+    }
+  }
+
+  questionPart = stripQuestionTemplateTags(questionPart);
+  embeddedAnswer = stripQuestionTemplateTags(embeddedAnswer).replace(/^[-•·]\s+/, "").trim();
+
+  return {
+    question: questionPart,
+    answer: explicit || embeddedAnswer,
+  };
+};
+
 export const formatAnswer = (answer: string | null | undefined): string => {
   if (!answer) return "";
   let formatted = answer.trim();
@@ -28,7 +75,7 @@ export const formatAnswer = (answer: string | null | undefined): string => {
 
 export const formatQuestion = (question: string | null | undefined): string => {
   if (!question) return "";
-  let formatted = question.trim();
+  let formatted = stripQuestionTemplateTags(question);
   if (/^\\+$/.test(formatted)) return "";
   if (!looksLikeLatex(formatted)) {
     formatted = formatted.replace(/(^|\s)\\(\s|$)/g, "$1$2").trim();

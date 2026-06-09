@@ -4,6 +4,7 @@ import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
+import { getAppLanguage } from "../../i18n/translations";
 import styles from "./ProblemInput.module.css";
 import example1Data from "../../../data/finalized_data/example1.json";
 import example1Image from "../../../data/finalized_data/example1.png";
@@ -13,8 +14,22 @@ import example2Image from "../../../data/finalized_data/example2.png";
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
 const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/finalized_data/*.json");
 
-/** 드롭다운에 표시할 문제: example1, example2, num1~num5 만 */
-const DROPDOWN_OPTIONS = ["num1.json", "num2.json", "num3.json", "num4.json", "num5.json"] as const;
+/** data/finalized_data 이미지 (JSON의 image_file 필드와 매칭) */
+const dataImageGlob = import.meta.glob<string>("../../../data/finalized_data/*.{png,jpg,jpeg,webp}", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+function resolveLocalImageUrl(imageFile?: string | null): string | null {
+  const name = imageFile?.trim();
+  if (!name) return null;
+  const entry = Object.entries(dataImageGlob).find(([path]) => path.endsWith(`/${name}`));
+  return entry ? entry[1] : null;
+}
+
+/** 드롭다운에 기본으로 표시할 로컬 문제들 */
+const DROPDOWN_OPTIONS = ["example3.json", "num1.json", "num2.json", "num3.json", "num4.json", "num5.json"] as const;
 
 const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
@@ -118,7 +133,7 @@ const IconImage = () => (
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const { userId, setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId } = useApp();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
   /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
@@ -187,6 +202,9 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       try {
         const mod = await dataJsonGlob[dataKey]();
         const data = mod.default as Record<string, unknown>;
+        const imageUrl = resolveLocalImageUrl(
+          typeof data.image_file === "string" ? data.image_file : null,
+        );
         setFormData((prev) => ({
           ...prev,
           ...patchFromMainAnswer({
@@ -195,9 +213,18 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             main_solution: String(data.main_solution ?? ""),
             grade: String(data.grade ?? ""),
           }),
-          imagePreview: null,
-          imageData: null,
+          imagePreview: imageUrl,
+          imageData: imageUrl,
         }));
+        if (imageUrl) {
+          urlToBase64(imageUrl)
+            .then((dataUrl) => {
+              setFormData((prev) =>
+                prev.imagePreview === imageUrl ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev,
+              );
+            })
+            .catch((err) => console.warn("로컬 이미지 base64 변환 실패:", err));
+        }
       } catch (err) {
         console.error("로컬 문제 데이터 로드 중 오류:", err);
       }
@@ -271,6 +298,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         main_solution: formData.solution || null,
         grade: formData.grade,
         image_data: imageData,
+        language: getAppLanguage(locale),
       };
 
       const result = await api.createCoT(requestData);
