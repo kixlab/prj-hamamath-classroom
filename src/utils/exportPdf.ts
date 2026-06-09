@@ -26,6 +26,7 @@ interface CotData {
   answer?: string;
   main_solution?: string;
   grade?: string;
+  image_data?: string | null;
 }
 
 interface SubQ {
@@ -89,6 +90,13 @@ export async function exportPdfFromGuideline(
   if (cotData.problem) {
     html += `<div style="margin-bottom: 24px;"><strong>${escapeHtml(L("exportPdf.problem"))}</strong>`;
     html += `<div style="margin-top: 8px; border: 1px solid #333; padding: 14px; border-radius: 4px;">${pdfText(cotData.problem)}</div>`;
+    html += `</div>`;
+  }
+  if (cotData.image_data) {
+    html += `<div style="margin-bottom: 24px;"><strong>${escapeHtml(L("app.problemImage"))}</strong>`;
+    html += `<div style="margin-top: 8px; border: 1px solid #333; padding: 10px; border-radius: 4px; text-align: center;">`;
+    html += `<img src="${cotData.image_data}" alt="${escapeHtml(L("app.problemImage"))}" style="max-width: 100%; max-height: 320px; object-fit: contain;" />`;
+    html += `</div>`;
     html += `</div>`;
   }
   html += `<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;" />`;
