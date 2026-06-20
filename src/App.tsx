@@ -11,7 +11,6 @@ import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
 import { ProblemInput } from './components/ProblemInput/ProblemInput';
 import { CoTSteps } from './components/CoTSteps/CoTSteps';
 import { SubQs } from './components/SubQs/SubQs';
-import { useMathJax } from './hooks/useMathJax';
 import { MainProblemSidebar } from './components/MainProblemSidebar/MainProblemSidebar';
 import { Rubrics } from './components/Rubrics/Rubrics';
 import { AdminDbView } from './components/AdminDbView/AdminDbView';
@@ -51,12 +50,10 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const mainSolution = (currentCotData as any)?.main_solution;
   const grade = (currentCotData as any)?.grade;
   const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
-  const mainProblemRef = useMathJax([mainProblem, mainAnswer, currentStep]);
 
   const renderWorkflowSplit = (main: ReactNode) => (
     <div className={styles.workflowSplitLayout}>
       <MainProblemSidebar
-        panelRef={mainProblemRef}
         problem={mainProblem}
         answer={mainAnswer}
         imageData={mainImage}

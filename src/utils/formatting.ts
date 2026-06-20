@@ -11,10 +11,58 @@ export const escapeHtml = (str: string | null | undefined): string => {
     .replace(/'/g, "&#39;");
 };
 
-/** LaTeX 구간 보존: $ 또는 \( \) 등이 있으면 백슬래시 제거하지 않음 */
-const looksLikeLatex = (s: string): boolean => /\$|\\\(|\\\[|\\times|\\frac|\\sqrt/.test(s);
+/** LaTeX 구간 보존: $ 또는 \( \) 등이 있거나 TeX 명령이 있으면 백슬래시 제거하지 않음 */
+const LATEX_COMMAND_RE = /\\[a-zA-Z]+|\\[,;!]/;
 
-const ANSWER_TAG_RE = /\{answer_tag\}/i;
+export const looksLikeMathContent = (s: string): boolean =>
+  /\$|\\\(|\\\[/.test(s) || LATEX_COMMAND_RE.test(s);
+
+/** $...$ / \( \) 없이 \div, \dots 등만 있는 수식을 MathJax가 인식하도록 구간을 감쌈 */
+function wrapInlineMathSegments(text: string): string {
+  if (!text || /\$|\\\(|\\\[/.test(text)) return text;
+
+  return text.replace(
+    /((?:\\[a-zA-Z]+(?:\{[^{}]*\})*|[0-9()]+)(?:\s*(?:\\[a-zA-Z]+(?:\{[^{}]*\})*|[0-9+\-=<>()[\].,^_]|\\[,;!])*)*)/g,
+    (match) => {
+      const trimmed = match.trim();
+      if (!trimmed) return match;
+      if (!LATEX_COMMAND_RE.test(trimmed) && !/=\s*\d/.test(trimmed)) return match;
+      if (!LATEX_COMMAND_RE.test(trimmed) && trimmed.length < 4) return match;
+      return `$${trimmed}$`;
+    },
+  );
+}
+
+function normalizeMathDelimiters(text: string): string {
+  let s = text.trim();
+  // LLM이 자주 내는 $...$$ 형태를 $...$로 정리
+  if (s.startsWith("$") && !s.startsWith("$$") && s.endsWith("$$")) {
+    s = s.slice(0, -1);
+  }
+  return s;
+}
+
+function prepareMathText(text: string): string {
+  let formatted = normalizeMathDelimiters(text.trim());
+  if (/^\\+$/.test(formatted)) return "";
+  if (!looksLikeMathContent(formatted)) {
+    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, "$1$2").trim();
+  } else {
+    formatted = wrapInlineMathSegments(formatted);
+  }
+  return formatted;
+}
+
+/** LLM 프롬프트용 플레이스홀더 — UI에서는 정답을 별도 영역에 표시 */
+const ANSWER_TAG_RE = /\{answer(?:_tag)?\}/i;
+const QUESTION_TAG_RE = /\{question(?:_tag)?\}/i;
+
+/** 문항 텍스트 끝에 붙은 정답/수식 블록 제거 (플레이스홀더 분리 실패 시 보조) */
+function stripTrailingAnswerSection(text: string): string {
+  return text
+    .replace(/\n\s*(?:정답|Answer)\s*[:：][\s\S]*$/i, "")
+    .trim();
+}
 
 /** LLM/오케스트레이터 프롬프트용 플레이스홀더 — UI에서는 정답을 별도 영역에 표시 */
 export const stripQuestionTemplateTags = (text: string | null | undefined): string => {
@@ -22,11 +70,11 @@ export const stripQuestionTemplateTags = (text: string | null | undefined): stri
   let cleaned = String(text);
   cleaned = cleaned
     .replace(ANSWER_TAG_RE, "")
-    .replace(/\{question_tag\}/gi, "")
-    .replace(/\{\{answer_tag\}\}/gi, "")
-    .replace(/\{\{question_tag\}\}/gi, "");
+    .replace(QUESTION_TAG_RE, "")
+    .replace(/\{\{answer(?:_tag)?\}\}/gi, "")
+    .replace(/\{\{question(?:_tag)?\}\}/gi, "");
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
-  return cleaned.trim();
+  return stripTrailingAnswerSection(cleaned);
 };
 
 /** guide_sub_question 안에 붙은 {answer_tag}·불릿 정답을 분리 (guide_sub_answer 우선) */
@@ -54,6 +102,8 @@ export const splitQuestionAndAnswer = (
 
   questionPart = stripQuestionTemplateTags(questionPart);
   embeddedAnswer = stripQuestionTemplateTags(embeddedAnswer).replace(/^[-•·]\s+/, "").trim();
+  // "정답: ..." 형태가 문항 끝에 남지 않도록
+  questionPart = stripTrailingAnswerSection(questionPart);
 
   return {
     question: questionPart,
@@ -63,25 +113,25 @@ export const splitQuestionAndAnswer = (
 
 export const formatAnswer = (answer: string | null | undefined): string => {
   if (!answer) return "";
-  let formatted = answer.trim();
-  if (/^\\+$/.test(formatted)) return "";
-  if (!looksLikeLatex(formatted)) {
-    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, "$1$2").trim();
-  }
+  const formatted = prepareMathText(answer);
   if (!formatted) return "";
-  formatted = formatted.replace(/\n/g, "<br>");
-  return formatted.replace(/(=\s*\d+)\s+(?=\d)/g, "$1<br>");
+  return formatted.replace(/\n/g, "<br>").replace(/(=\s*\d+)\s+(?=\d)/g, "$1<br>");
 };
 
 export const formatQuestion = (question: string | null | undefined): string => {
   if (!question) return "";
-  let formatted = stripQuestionTemplateTags(question);
-  if (/^\\+$/.test(formatted)) return "";
-  if (!looksLikeLatex(formatted)) {
-    formatted = formatted.replace(/(^|\s)\\(\s|$)/g, "$1$2").trim();
-  }
+  const formatted = prepareMathText(stripQuestionTemplateTags(question));
   return formatted || "";
 };
+
+/** formatQuestion + 줄바꿈을 <br>로 (dangerouslySetInnerHTML용) */
+export const formatQuestionHtml = (question: string | null | undefined): string => {
+  const formatted = formatQuestion(question);
+  return formatted ? formatted.replace(/\n/g, "<br>") : "";
+};
+
+/** 모범답안 등 긴 수식 텍스트 (formatAnswer와 동일) */
+export const formatSolution = formatAnswer;
 
 const VERIFIER_DISPLAY_NAMES: Record<string, string> = {
   stage_elicitation: "Stage Elicitation",

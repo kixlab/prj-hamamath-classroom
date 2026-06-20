@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
 import { formatCotStepGroup, formatCotSubSkill } from '../../i18n/translations';
+import { formatQuestion } from '../../utils/formatting';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -127,7 +128,10 @@ export const CoTSteps = () => {
             </div>
           </div>
         ) : (
-          <div className={styles.stepContent}>{step.step_content}</div>
+          <div
+            className={styles.stepContent}
+            dangerouslySetInnerHTML={{ __html: formatQuestion(step.step_content ?? '') }}
+          />
         )}
       </article>
     );

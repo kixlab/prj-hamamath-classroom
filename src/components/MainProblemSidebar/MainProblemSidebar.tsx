@@ -1,10 +1,9 @@
-import type { RefObject } from 'react';
 import { useLocale } from '../../i18n/LocaleContext';
-import { formatAnswer, formatQuestion } from '../../utils/formatting';
+import { formatAnswer, formatQuestionHtml, formatSolution } from '../../utils/formatting';
+import { MathHtml } from '../MathHtml';
 import styles from './MainProblemSidebar.module.css';
 
 export interface MainProblemSidebarProps {
-  panelRef?: RefObject<HTMLDivElement | null>;
   problem?: string;
   answer?: string;
   imageData?: string | null;
@@ -14,7 +13,6 @@ export interface MainProblemSidebarProps {
 }
 
 export const MainProblemSidebar = ({
-  panelRef,
   problem,
   answer,
   imageData,
@@ -28,7 +26,7 @@ export const MainProblemSidebar = ({
   const mainSolution = solution?.trim() || '';
 
   return (
-    <aside className={styles.column} ref={panelRef}>
+    <aside className={styles.column}>
       <div className={styles.panel}>
         <h3 className={styles.title}>{t('app.mainProblem')}</h3>
         {imageData && (
@@ -38,17 +36,17 @@ export const MainProblemSidebar = ({
         )}
         {mainProblem ? (
           <>
-            <div className={styles.content}>{formatQuestion(mainProblem)}</div>
+            <MathHtml className={styles.content} html={formatQuestionHtml(mainProblem)} />
             {mainAnswer && (
               <div className={styles.answer}>
                 <span className={styles.answerLabel}>{t('common.answerColon')}</span>{' '}
-                <span dangerouslySetInnerHTML={{ __html: formatAnswer(mainAnswer) }} />
+                <MathHtml className={styles.answerValue} html={formatAnswer(mainAnswer)} />
               </div>
             )}
             {mainSolution && (
               <div className={styles.solution}>
                 <span className={styles.solutionLabel}>{t('app.modelAnswer')}</span>
-                <div className={styles.solutionContent}>{mainSolution}</div>
+                <MathHtml className={styles.solutionContent} html={formatSolution(mainSolution)} />
               </div>
             )}
           </>

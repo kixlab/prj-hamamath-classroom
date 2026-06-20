@@ -57,6 +57,10 @@
   color: var(--color-text);
 }
 
+.answerValue {
+  display: inline;
+}
+
 .solution {
   margin-top: 16px;
   padding-top: 12px;

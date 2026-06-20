@@ -343,9 +343,38 @@
     min-height: 240px;
   }
 
-  .textareaFill {
-    min-height: 120px;
-  }
+.textareaFill {
+  min-height: 120px;
+}
+
+.mathPreview {
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.mathPreviewOnly {
+  margin-top: 0;
+  flex: 1;
+  min-height: 48px;
+  border-style: solid;
+  background: var(--color-bg);
+}
+
+.mathSourceHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 }
 
 @media (max-width: 520px) {

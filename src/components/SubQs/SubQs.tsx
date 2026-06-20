@@ -4,9 +4,10 @@ import { api } from "../../services/api";
 import { saveResult } from "../../hooks/useStorage";
 import { logUserEvent } from "../../services/eventLogger";
 import { exportPdfFromGuideline } from "../../utils/exportPdf";
+import { MathHtml } from "../MathHtml";
 import { useMathJax } from "../../hooks/useMathJax";
 import {
-  formatQuestion,
+  formatQuestionHtml,
   formatAnswer,
   formatVerificationResult,
   extractVerificationTexts,
@@ -145,6 +146,10 @@ export const SubQs = () => {
     locale,
     verificationStates,
     feedbackStates,
+    editingOriginalStates,
+    editingRegeneratedStates,
+    showOriginalStates,
+    bVisibleCount,
   ]);
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
@@ -979,15 +984,12 @@ export const SubQs = () => {
             <div className={styles.displayMode}>
               <div className={styles.questionBlock}>
                 <div className={styles.fieldLabel}>{t("common.questionColon")}</div>
-                <div className={styles.questionContent}>{formatQuestion(question)}</div>
+                <MathHtml className={styles.questionContent} html={formatQuestionHtml(question)} />
               </div>
               {answer ? (
                 <div className={styles.answerBlock}>
                   <div className={styles.fieldLabel}>{t("common.answerColon")}</div>
-                  <div
-                    className={styles.answerContent}
-                    dangerouslySetInnerHTML={{ __html: formatAnswer(answer) }}
-                  />
+                  <MathHtml className={styles.answerContent} html={formatAnswer(answer)} />
                 </div>
               ) : null}
             </div>

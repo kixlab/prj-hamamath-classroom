@@ -1,5 +1,7 @@
 import { useEffect, useRef, RefObject } from 'react';
 
+let typesetChain: Promise<void> = Promise.resolve();
+
 // MathJax가 로드될 때까지 기다리는 함수
 const waitForMathJax = (): Promise<void> => {
   return new Promise((resolve) => {
@@ -22,36 +24,37 @@ const waitForMathJax = (): Promise<void> => {
   });
 };
 
+async function typesetElement(el: HTMLElement): Promise<void> {
+  await waitForMathJax();
+  await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+  if (!el.isConnected || !window.MathJax?.typesetPromise) return;
+
+  if (window.MathJax.typesetClear) {
+    window.MathJax.typesetClear([el]);
+  }
+  await window.MathJax.typesetPromise([el]);
+  await new Promise((r) => setTimeout(r, 50));
+  if (el.isConnected && window.MathJax.typesetPromise) {
+    await window.MathJax.typesetPromise([el]);
+  }
+}
+
+function enqueueTypeset(el: HTMLElement): void {
+  typesetChain = typesetChain
+    .then(() => typesetElement(el))
+    .catch((err) => {
+      console.error('MathJax 렌더링 오류:', err);
+    });
+}
+
 export const useMathJax = (dependencies: unknown[] = []): RefObject<HTMLDivElement> => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const renderMath = async () => {
-      if (!containerRef.current) return;
-
-      await waitForMathJax();
-
-      // DOM 반영 + React 커밋 대기 후 수식 렌더링 (동적 콘텐츠에서 $ ... $ 인식 보장)
-      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-      await new Promise((r) => setTimeout(r, 100));
-
-      const el = containerRef.current;
-      if (!el || !window.MathJax?.typesetPromise) return;
-      try {
-        // Clear previous typeset so MathJax re-processes updated content
-        if (window.MathJax.typesetClear) {
-          window.MathJax.typesetClear([el]);
-        }
-        await window.MathJax.typesetPromise([el]);
-        // 동적 삽입 직후 한 번 놓치는 경우 대비 한 번 더 시도
-        await new Promise((r) => setTimeout(r, 50));
-        if (window.MathJax.typesetPromise) await window.MathJax.typesetPromise([el]);
-      } catch (err) {
-        console.error('MathJax 렌더링 오류:', err);
-      }
-    };
-
-    renderMath();
+    const el = containerRef.current;
+    if (!el) return;
+    enqueueTypeset(el);
   }, dependencies);
 
   return containerRef;

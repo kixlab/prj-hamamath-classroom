@@ -5,6 +5,8 @@ import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
+import { formatAnswer, formatSolution, looksLikeMathContent } from "../../utils/formatting";
+import { MathHtml } from "../MathHtml";
 import styles from "./ProblemInput.module.css";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
@@ -98,6 +100,76 @@ function InputPanel({ icon, title, children, className }: InputPanelProps) {
       </header>
       <div className={styles.panelBody}>{children}</div>
     </section>
+  );
+}
+
+interface LatexAwareFieldProps {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+  required?: boolean;
+  fieldClassName?: string;
+  formatHtml?: (text: string) => string;
+}
+
+function LatexAwareField({
+  id,
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
+  required = false,
+  fieldClassName,
+  formatHtml = formatAnswer,
+}: LatexAwareFieldProps) {
+  if (looksLikeMathContent(value)) {
+    return (
+      <>
+        <MathHtml
+          className={`${styles.mathPreview} ${styles.mathPreviewOnly}`}
+          html={formatHtml(value)}
+        />
+        {required ? (
+          <input
+            type="text"
+            id={id}
+            value={value}
+            readOnly
+            required
+            tabIndex={-1}
+            aria-hidden
+            className={styles.mathSourceHidden}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  if (multiline) {
+    return (
+      <textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        placeholder={placeholder}
+        className={`${fieldClassName ?? ""} tex2jax_ignore`.trim()}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      required={required}
+      placeholder={placeholder}
+      className={`${fieldClassName ?? ""} tex2jax_ignore`.trim()}
+    />
   );
 }
 
@@ -404,34 +476,36 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
           <div className={styles.fieldsCol}>
             <InputPanel icon={<IconProblem />} title={t("problemInput.problem")} className={styles.panelProblem}>
-              <textarea
+              <LatexAwareField
                 id="problem"
                 value={formData.problem}
-                onChange={(e) => setFormData((prev) => ({ ...prev, problem: e.target.value }))}
-                required
+                onChange={(problem) => setFormData((prev) => ({ ...prev, problem }))}
                 placeholder={t("problemInput.problemPlaceholder")}
-                className={`${styles.textarea} ${styles.textareaFill}`}
+                multiline
+                required
+                fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
               />
             </InputPanel>
 
             <InputPanel icon={<IconSolution />} title={t("problemInput.solution")} className={styles.panelSolution}>
-              <textarea
+              <LatexAwareField
                 id="solution"
                 value={formData.solution}
-                onChange={(e) => setFormData((prev) => ({ ...prev, solution: e.target.value }))}
+                onChange={(solution) => setFormData((prev) => ({ ...prev, solution }))}
                 placeholder={t("problemInput.solutionPlaceholder")}
-                className={`${styles.textarea} ${styles.textareaFill}`}
+                multiline
+                fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
+                formatHtml={formatSolution}
               />
             </InputPanel>
 
             <InputPanel icon={<IconAnswer />} title={t("problemInput.answer")} className={styles.panelAnswer}>
-              <input
-                type="text"
+              <LatexAwareField
                 id="answer"
                 value={formData.answer}
-                onChange={(e) => setFormData((prev) => ({ ...prev, answer: e.target.value }))}
+                onChange={(answer) => setFormData((prev) => ({ ...prev, answer }))}
                 placeholder={t("problemInput.answerPlaceholder")}
-                className={styles.input}
+                fieldClassName={styles.input}
               />
             </InputPanel>
           </div>

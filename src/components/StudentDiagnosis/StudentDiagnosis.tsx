@@ -1031,7 +1031,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
-  const mainProblemRef = useMathJax([mainProblem, mainAnswer, problemIdForDiagnosis]);
   const containerRef = useMathJax([activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
@@ -1314,7 +1313,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         <div className={styles.diagnosisSplitLayout}>
           {problemIdForDiagnosis ? (
             <MainProblemSidebar
-              panelRef={mainProblemRef}
               problem={mainProblem}
               answer={mainAnswer}
               imageData={mainImage}
