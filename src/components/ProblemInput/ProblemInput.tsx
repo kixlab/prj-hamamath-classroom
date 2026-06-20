@@ -280,7 +280,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           main_answer: data.answer || "",
           main_solution: data.main_solution || "",
           grade: data.grade || "",
-          semester: data.semester || "",
+          semester: typeof data.semester === "string" ? data.semester : "",
         }),
         imageData: data.image_data || null,
         imagePreview: data.image_data || null,
@@ -345,12 +345,13 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       };
 
       const result = await api.createCoT(requestData);
+      const { semester: _apiSemester, ...resultWithoutSemester } = result as { semester?: string };
       const cotDataWithExtras = {
-        ...result,
-        semester: semester || result.semester || undefined,
+        ...resultWithoutSemester,
         img_description: formData.imgDescription,
         image_data: imageData ?? formData.imageData,
         main_solution: formData.solution,
+        ...(semester ? { semester } : {}),
       };
 
       const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();

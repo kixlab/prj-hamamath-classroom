@@ -104,13 +104,16 @@ export const SubQs = () => {
   const [isGeneratingSteps, setIsGeneratingSteps] = useState<boolean>(false); // 문항 생성 중(확정 후 다음 / 나머지 자동 생성) 시각 요소용
   const bModeSyncedProblemId = useRef<string | null>(null);
 
-  const getTextbookRagParams = () => ({
-    semester: resolveSemester(
+  const getTextbookRagParams = () => {
+    const semester = resolveSemester(
       String((currentCotData as any)?.grade ?? ""),
       (currentCotData as any)?.semester,
-    ),
-    use_textbook_rag: true,
-  });
+    );
+    return {
+      ...(semester ? { semester } : {}),
+      use_textbook_rag: true,
+    };
+  };
 
   // 저장된 guideline만 복원된 경우(중간 이탈 후 재진입) — 진행 중 생성 UI 복원
   useEffect(() => {

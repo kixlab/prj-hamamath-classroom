@@ -6,6 +6,7 @@ export interface CoTStep {
   sub_skill_id?: string;
   step_name?: string;
   sub_skill_name?: string;
+  prompt_used?: string | null;
 }
 
 export interface CoTData {

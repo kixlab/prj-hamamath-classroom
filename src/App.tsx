@@ -16,6 +16,7 @@ import { Rubrics } from './components/Rubrics/Rubrics';
 import { AdminDbView } from './components/AdminDbView/AdminDbView';
 import { StudentDiagnosis } from './components/StudentDiagnosis/StudentDiagnosis';
 import styles from './App.module.css';
+import type { CoTStep } from './types';
 
 interface AppContentProps {
   userId: string;
@@ -51,6 +52,9 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const grade = (currentCotData as any)?.grade;
   const semester = (currentCotData as any)?.semester;
   const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
+  const cotSteps = (currentCotData as any)?.steps as CoTStep[] | undefined;
+  const guideSubQuestions = (currentGuidelineData as any)?.guide_sub_questions;
+  const considerations = (currentCotData as any)?.considerations as string[] | undefined;
 
   const renderWorkflowSplit = (main: ReactNode) => (
     <div className={styles.workflowSplitLayout}>
@@ -62,6 +66,9 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         grade={grade}
         semester={semester}
         subjectArea={subjectArea}
+        cotSteps={cotSteps}
+        guideSubQuestions={guideSubQuestions}
+        considerations={considerations}
       />
       <main className={styles.workflowMainColumn}>{main}</main>
     </div>

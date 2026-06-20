@@ -116,6 +116,34 @@ interface ExportWordData {
   }>;
 }
 
+export interface TextbookRagConcept {
+  id: string;
+  page: number;
+  unit?: string | null;
+  definition: string;
+  visual_description?: string | null;
+  image_path?: string | null;
+  keywords?: string[];
+  score?: number | null;
+}
+
+export interface TextbookRagPreviewResult {
+  query: string;
+  textbook_id?: string | null;
+  textbook_title?: string | null;
+  semester_auto_selected: boolean;
+  concepts: TextbookRagConcept[];
+  context_text: string;
+}
+
+export interface SubQuestionPromptPreviewResult {
+  sub_question_id: string;
+  step_name: string;
+  sub_skill_name: string;
+  system_prompt: string;
+  user_prompt: string;
+}
+
 export const api = {
   // 문제 목록 조회
   async getProblemList() {
@@ -798,5 +826,87 @@ export const api = {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+  },
+
+  /** 교과서 RAG가 하위문항 생성에 주입할 컨텍스트 미리보기 */
+  async previewTextbookRag(data: {
+    main_problem: string;
+    grade: string;
+    subject_area?: string | null;
+    sub_skill_name?: string | null;
+    semester?: string | null;
+    textbook_id?: string | null;
+    top_k?: number;
+  }): Promise<TextbookRagPreviewResult> {
+    const body: Record<string, unknown> = {
+      main_problem: data.main_problem,
+      grade: data.grade,
+      top_k: data.top_k ?? 3,
+    };
+    if (data.subject_area?.trim()) body.subject_area = data.subject_area.trim();
+    if (data.sub_skill_name?.trim()) body.sub_skill_name = data.sub_skill_name.trim();
+    if (data.semester?.trim()) body.semester = data.semester.trim();
+    if (data.textbook_id?.trim()) body.textbook_id = data.textbook_id.trim();
+
+    const response = await fetch(getApiUrl("/api/v1/textbook-rag/preview"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "교과서 RAG 조회 중 오류가 발생했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 하위 문항 생성 프롬프트 미리보기 (LLM 호출 없음) */
+  async previewSubQuestionPrompt(data: {
+    main_problem: string;
+    main_answer: string;
+    main_solution?: string | null;
+    grade: string;
+    cot_step: {
+      step_id: string | number;
+      sub_skill_id: string;
+      step_name: string;
+      step_name_en?: string;
+      sub_skill_name: string;
+      step_content: string;
+      prompt_used?: string | null;
+    };
+    subject_area?: string | null;
+    considerations?: string[];
+    previous_sub_questions?: unknown[];
+    semester?: string | null;
+    use_textbook_rag?: boolean;
+    language?: string;
+    image_data?: string | null;
+  }): Promise<SubQuestionPromptPreviewResult> {
+    const body: Record<string, unknown> = {
+      main_problem: data.main_problem,
+      main_answer: data.main_answer,
+      grade: data.grade,
+      cot_step: data.cot_step,
+      use_textbook_rag: data.use_textbook_rag ?? true,
+    };
+    if (data.main_solution) body.main_solution = data.main_solution;
+    if (data.subject_area?.trim()) body.subject_area = data.subject_area.trim();
+    if (data.considerations?.length) body.considerations = data.considerations;
+    if (data.previous_sub_questions?.length) body.previous_sub_questions = data.previous_sub_questions;
+    if (data.semester?.trim()) body.semester = data.semester.trim();
+    if (data.language) body.language = data.language;
+    if (data.image_data) body.image_data = data.image_data;
+
+    const response = await fetch(getApiUrl("/api/v1/guideline/preview-prompt"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "프롬프트 미리보기 중 오류가 발생했습니다.");
+    }
+    return response.json();
   },
 };
