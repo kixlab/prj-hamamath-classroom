@@ -6,10 +6,6 @@ import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
 import styles from "./ProblemInput.module.css";
-import example1Data from "../../../data/finalized_data/example1.json";
-import example1Image from "../../../data/finalized_data/example1.png";
-import example2Data from "../../../data/finalized_data/example2.json";
-import example2Image from "../../../data/finalized_data/example2.png";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
 const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/finalized_data/*.json");
@@ -28,8 +24,14 @@ function resolveLocalImageUrl(imageFile?: string | null): string | null {
   return entry ? entry[1] : null;
 }
 
-/** 드롭다운에 기본으로 표시할 로컬 문제들 */
-const DROPDOWN_OPTIONS = ["example3.json", "num1.json", "num2.json", "num3.json", "num4.json", "num5.json"] as const;
+/** 드롭다운 로컬 예시 문제 (file: data/finalized_data/ JSON, label: 표시 이름) */
+const DROPDOWN_OPTIONS = [
+  { file: "example4.json", label: "Grade 3" },
+  { file: "example1.json", label: "Grade 4" },
+  { file: "example2.json", label: "Grade 5" },
+  { file: "example5.json", label: "Grade 6" },
+  { file: "example3.json", label: "Grade 6 (Eng)" },
+] as const;
 
 const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
@@ -71,12 +73,7 @@ function answerFromMainAnswer(mainAnswer: string): string {
   return match ? match[1].trim() : trimmed;
 }
 
-function patchFromMainAnswer(fields: {
-  main_problem?: string;
-  main_answer?: string;
-  main_solution?: string;
-  grade?: string;
-}): Partial<FormData> {
+function patchFromMainAnswer(fields: { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string }): Partial<FormData> {
   return {
     problem: fields.main_problem ?? "",
     answer: answerFromMainAnswer(fields.main_answer ?? ""),
@@ -165,46 +162,15 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       );
 
   const handleProblemSelect = async (filename: string) => {
-    if (!filename || filename === "__example1_json__" || filename === "__example2_json__") {
-      if (filename === "__example1_json__") {
-        const data = example1Data as { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string };
-        setFormData((prev) => ({
-          ...prev,
-          ...patchFromMainAnswer(data),
-          imagePreview: example1Image,
-          imageData: example1Image,
-        }));
-        urlToBase64(example1Image)
-          .then((dataUrl) => {
-            setFormData((prev) => (prev.imagePreview === example1Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
-          })
-          .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
-      } else if (filename === "__example2_json__") {
-        const data = example2Data as { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string };
-        setFormData((prev) => ({
-          ...prev,
-          ...patchFromMainAnswer(data),
-          imagePreview: example2Image,
-          imageData: example2Image,
-        }));
-        urlToBase64(example2Image)
-          .then((dataUrl) => {
-            setFormData((prev) => (prev.imagePreview === example2Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
-          })
-          .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
-      }
-      return;
-    }
+    if (!filename) return;
 
-    // data/finalized_data/ 폴더의 로컬 JSON (num1, num2 등)
+    // data/finalized_data/ 폴더의 로컬 JSON
     const dataKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(filename));
     if (dataKey) {
       try {
         const mod = await dataJsonGlob[dataKey]();
         const data = mod.default as Record<string, unknown>;
-        const imageUrl = resolveLocalImageUrl(
-          typeof data.image_file === "string" ? data.image_file : null,
-        );
+        const imageUrl = resolveLocalImageUrl(typeof data.image_file === "string" ? data.image_file : null);
         setFormData((prev) => ({
           ...prev,
           ...patchFromMainAnswer({
@@ -219,9 +185,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         if (imageUrl) {
           urlToBase64(imageUrl)
             .then((dataUrl) => {
-              setFormData((prev) =>
-                prev.imagePreview === imageUrl ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev,
-              );
+              setFormData((prev) => (prev.imagePreview === imageUrl ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
             })
             .catch((err) => console.warn("로컬 이미지 base64 변환 실패:", err));
         }
@@ -309,8 +273,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         main_solution: formData.solution,
       };
 
-      const problemId =
-        selectedProblem === "__example1_json__" ? "example1.json" : selectedProblem === "__example2_json__" ? "example2.json" : selectedProblem || customProblemId.trim() || getNextProblemSeq();
+      const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
 
       logUserEvent("problem_input", {
         problem_id: problemId,
@@ -340,7 +303,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       saveResult(problemId, cotDataWithExtras, null, null, null, null, userId);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
-      setError(err.message || t('common.errorGeneric'));
+      setError(err.message || t("common.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -372,11 +335,9 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                     {file.replace(".json", "")}
                   </option>
                 ))}
-                <option value="__example1_json__">example1.json</option>
-                <option value="__example2_json__">example2.json</option>
-                {DROPDOWN_OPTIONS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
+                {DROPDOWN_OPTIONS.map(({ file, label }) => (
+                  <option key={file} value={file}>
+                    {label}
                   </option>
                 ))}
               </select>
@@ -418,14 +379,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         <div className={styles.contentGrid}>
           <div className={styles.imageCol}>
             <InputPanel icon={<IconImage />} title={t("problemInput.imageUpload")} className={styles.panelImage}>
-              <input
-                ref={imageInputRef}
-                type="file"
-                id="imageUpload"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className={styles.fileInputHidden}
-              />
+              <input ref={imageInputRef} type="file" id="imageUpload" accept="image/*" onChange={handleImageUpload} className={styles.fileInputHidden} />
               <div className={styles.imagePreviewBox}>
                 {formData.imagePreview ? (
                   <img src={formData.imagePreview} alt={t("problemInput.imagePreview")} className={styles.imagePreviewImg} />
@@ -441,12 +395,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                   </svg>
                   {t("problemInput.upload")}
                 </button>
-                <button
-                  type="button"
-                  className={styles.removeImageBtn}
-                  onClick={handleRemoveImage}
-                  disabled={!formData.imagePreview}
-                >
+                <button type="button" className={styles.removeImageBtn} onClick={handleRemoveImage} disabled={!formData.imagePreview}>
                   {t("problemInput.removeImage")}
                 </button>
               </div>
