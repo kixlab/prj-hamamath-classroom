@@ -630,6 +630,42 @@
   line-height: 1.65;
 }
 
+.answerContent p,
+.answerContent ul,
+.answerContent ol {
+  margin: 0.35em 0;
+}
+
+.answerContent ul,
+.answerContent ol {
+  padding-left: 1.4em;
+}
+
+.answerContent p:first-child,
+.answerContent ul:first-child,
+.answerContent ol:first-child {
+  margin-top: 0;
+}
+
+.answerContent p:last-child,
+.answerContent ul:last-child,
+.answerContent ol:last-child {
+  margin-bottom: 0;
+}
+
+.answerContent table {
+  border-collapse: collapse;
+  margin: 0.35em 0;
+  font-size: 0.9em;
+}
+
+.answerContent th,
+.answerContent td {
+  border: 1px solid var(--color-border, #dee2e6);
+  padding: 4px 8px;
+  text-align: left;
+}
+
 .editMode {
   display: flex;
   flex-direction: column;

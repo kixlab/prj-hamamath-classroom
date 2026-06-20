@@ -1,5 +1,8 @@
+import { marked } from "marked";
 import type { Locale, VerifierLanguage } from "../i18n/translations";
 import { toVerifierLanguage } from "../i18n/translations";
+
+marked.setOptions({ breaks: true, gfm: true });
 
 export const escapeHtml = (str: string | null | undefined): string => {
   if (str === null || str === undefined) return "";
@@ -53,6 +56,12 @@ function prepareMathText(text: string): string {
   return formatted;
 }
 
+/** LLM이 `-`만 넣는 경우 — marked가 빈 `<ul><li></li></ul>`로 렌더되어 점만 보임 */
+function isPlaceholderAnswer(text: string): boolean {
+  const t = text.trim();
+  return t === "" || /^[-•·―]\s*$/.test(t);
+}
+
 /** LLM 프롬프트용 플레이스홀더 — UI에서는 정답을 별도 영역에 표시 */
 const ANSWER_TAG_RE = /\{answer(?:_tag)?\}/i;
 const QUESTION_TAG_RE = /\{question(?:_tag)?\}/i;
@@ -84,6 +93,7 @@ export const splitQuestionAndAnswer = (
 ): { question: string; answer: string } => {
   const raw = (rawQuestion ?? "").trim();
   let explicit = (explicitAnswer ?? "").trim();
+  if (isPlaceholderAnswer(explicit)) explicit = "";
 
   let questionPart = raw;
   let embeddedAnswer = "";
@@ -105,17 +115,23 @@ export const splitQuestionAndAnswer = (
   // "정답: ..." 형태가 문항 끝에 남지 않도록
   questionPart = stripTrailingAnswerSection(questionPart);
 
+  const answer = explicit || embeddedAnswer;
   return {
     question: questionPart,
-    answer: explicit || embeddedAnswer,
+    answer: isPlaceholderAnswer(answer) ? "" : answer,
   };
 };
 
-export const formatAnswer = (answer: string | null | undefined): string => {
-  if (!answer) return "";
-  const formatted = prepareMathText(answer);
+/** LaTeX 전처리 후 마크다운 → HTML (정답·모범답안 등) */
+function formatRichTextHtml(text: string): string {
+  const formatted = prepareMathText(text);
   if (!formatted) return "";
-  return formatted.replace(/\n/g, "<br>").replace(/(=\s*\d+)\s+(?=\d)/g, "$1<br>");
+  return marked.parse(formatted, { async: false }) as string;
+}
+
+export const formatAnswer = (answer: string | null | undefined): string => {
+  if (!answer || isPlaceholderAnswer(answer)) return "";
+  return formatRichTextHtml(answer.trim());
 };
 
 export const formatQuestion = (question: string | null | undefined): string => {

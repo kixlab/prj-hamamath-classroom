@@ -61,6 +61,56 @@
   display: inline;
 }
 
+.answerValue p,
+.answerValue ul,
+.answerValue ol,
+.solutionContent p,
+.solutionContent ul,
+.solutionContent ol {
+  margin: 0.35em 0;
+}
+
+.answerValue ul,
+.answerValue ol,
+.solutionContent ul,
+.solutionContent ol {
+  padding-left: 1.4em;
+}
+
+.answerValue p:first-child,
+.answerValue ul:first-child,
+.answerValue ol:first-child,
+.solutionContent p:first-child,
+.solutionContent ul:first-child,
+.solutionContent ol:first-child {
+  margin-top: 0;
+}
+
+.answerValue p:last-child,
+.answerValue ul:last-child,
+.answerValue ol:last-child,
+.solutionContent p:last-child,
+.solutionContent ul:last-child,
+.solutionContent ol:last-child {
+  margin-bottom: 0;
+}
+
+.answerValue table,
+.solutionContent table {
+  border-collapse: collapse;
+  margin: 0.35em 0;
+  font-size: 0.9em;
+}
+
+.answerValue th,
+.answerValue td,
+.solutionContent th,
+.solutionContent td {
+  border: 1px solid var(--color-border, #dee2e6);
+  padding: 4px 8px;
+  text-align: left;
+}
+
 .solution {
   margin-top: 16px;
   padding-top: 12px;
@@ -76,7 +126,6 @@
 }
 
 .solutionContent {
-  white-space: pre-wrap;
   line-height: 1.6;
   color: var(--color-text-secondary);
   font-size: 0.875rem;
