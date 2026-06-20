@@ -3,5 +3,6 @@
   "main_answer": "90번",
   "main_solution": "\\[ \\text { (회전수의 비)=㉮: ㉯ }=\\frac{1}{30}: \\frac{1}{20}=2: 3 \\] 톱니바퀴 ㉯가 도는 횟수를 $\\square$라고 하면 \\[ \\begin{aligned} \\Rightarrow 2: 3=60: \\square, 2 \\times \\square=3 \\times 60, 2 \\times \\square=180, \\\\ \\square=180 \\div 2=90 \\text { (번) } \\end{aligned} \\]",
   "grade": "6",
+  "semester": "2",
   "image_file": "example5.png"
 }

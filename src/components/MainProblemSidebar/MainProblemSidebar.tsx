@@ -9,6 +9,7 @@ export interface MainProblemSidebarProps {
   imageData?: string | null;
   solution?: string | null;
   grade?: string;
+  semester?: string;
   subjectArea?: string;
 }
 
@@ -18,6 +19,7 @@ export const MainProblemSidebar = ({
   imageData,
   solution,
   grade,
+  semester,
   subjectArea,
 }: MainProblemSidebarProps) => {
   const { t } = useLocale();
@@ -53,11 +55,16 @@ export const MainProblemSidebar = ({
         ) : (
           !imageData && <p className={styles.empty}>{t('app.noProblemData')}</p>
         )}
-        {(grade || subjectArea) && (
+        {(grade || semester || subjectArea) && (
           <div className={styles.meta}>
             {grade && (
               <div>
                 <span className={styles.metaLabel}>{t('app.gradeLabel')}</span> {grade}
+              </div>
+            )}
+            {semester && (
+              <div>
+                <span className={styles.metaLabel}>{t('app.semesterLabel')}</span> {semester}
               </div>
             )}
             {subjectArea && (

@@ -62,6 +62,7 @@ interface FormData {
   answer: string;
   solution: string;
   grade: string;
+  semester: string;
   image: File | null;
   imagePreview: string | null;
   imageData: string | null;
@@ -75,12 +76,13 @@ function answerFromMainAnswer(mainAnswer: string): string {
   return match ? match[1].trim() : trimmed;
 }
 
-function patchFromMainAnswer(fields: { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string }): Partial<FormData> {
+function patchFromMainAnswer(fields: { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string; semester?: string }): Partial<FormData> {
   return {
     problem: fields.main_problem ?? "",
     answer: answerFromMainAnswer(fields.main_answer ?? ""),
     solution: fields.main_solution ?? "",
     grade: fields.grade ?? "",
+    semester: fields.semester ?? "",
   };
 }
 
@@ -212,6 +214,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     answer: "",
     solution: "",
     grade: "",
+    semester: "",
     image: null,
     imagePreview: null,
     imageData: null,
@@ -250,6 +253,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             main_answer: String(data.main_answer ?? ""),
             main_solution: String(data.main_solution ?? ""),
             grade: String(data.grade ?? ""),
+            semester: typeof data.semester === "string" ? data.semester : "",
           }),
           imagePreview: imageUrl,
           imageData: imageUrl,
@@ -276,6 +280,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           main_answer: data.answer || "",
           main_solution: data.main_solution || "",
           grade: data.grade || "",
+          semester: data.semester || "",
         }),
         imageData: data.image_data || null,
         imagePreview: data.image_data || null,
@@ -328,11 +333,13 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         }
       }
 
+      const semester = formData.semester.trim();
       const requestData = {
         main_problem: formData.problem,
         main_answer: formData.answer.trim(),
         main_solution: formData.solution || null,
         grade: formData.grade,
+        ...(semester ? { semester } : {}),
         image_data: imageData,
         language: getAppLanguage(locale),
       };
@@ -340,6 +347,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       const result = await api.createCoT(requestData);
       const cotDataWithExtras = {
         ...result,
+        semester: semester || result.semester || undefined,
         img_description: formData.imgDescription,
         image_data: imageData ?? formData.imageData,
         main_solution: formData.solution,
@@ -353,6 +361,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         answer: formData.answer.trim(),
         solution: formData.solution || null,
         grade: formData.grade,
+        semester: semester || null,
         hasImage: !!formData.imageData,
         imgDescription: formData.imgDescription || null,
       });
@@ -437,6 +446,20 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               value={formData.grade}
               onChange={(e) => setFormData((prev) => ({ ...prev, grade: e.target.value }))}
               placeholder={t("problemInput.gradePlaceholder")}
+              className={styles.input}
+            />
+          </div>
+
+          <div className={`${styles.topField} ${styles.topFieldSemester}`}>
+            <label htmlFor="semester" className={styles.topLabel}>
+              {t("problemInput.semester")}
+            </label>
+            <input
+              type="text"
+              id="semester"
+              value={formData.semester}
+              onChange={(e) => setFormData((prev) => ({ ...prev, semester: e.target.value }))}
+              placeholder={t("problemInput.semesterPlaceholder")}
               className={styles.input}
             />
           </div>

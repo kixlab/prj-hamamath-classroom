@@ -15,7 +15,7 @@
 /* ── 상단: 문제 ID · 학년 · 생성하기 ── */
 .topBar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px min-content;
+  grid-template-columns: minmax(0, 1fr) 100px 100px min-content;
   gap: 16px;
   align-items: end;
   padding: var(--card-padding) calc(var(--card-padding) + 2px);
@@ -32,8 +32,9 @@
   min-width: 0;
 }
 
-.topFieldGrade .input {
-  max-width: 120px;
+.topFieldGrade .input,
+.topFieldSemester .input {
+  max-width: 100px;
 }
 
 .topLabel {
@@ -327,7 +328,8 @@
     align-items: stretch;
   }
 
-  .topFieldGrade .input {
+  .topFieldGrade .input,
+  .topFieldSemester .input {
     max-width: none;
   }
 

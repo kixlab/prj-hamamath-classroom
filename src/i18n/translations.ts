@@ -99,6 +99,8 @@ const ko = {
   "problemInput.solutionPlaceholder": "모범답안을 입력하세요",
   "problemInput.grade": "학년",
   "problemInput.gradePlaceholder": "예: 3학년",
+  "problemInput.semester": "학기",
+  "problemInput.semesterPlaceholder": "예: 1 또는 2",
   "problemInput.imageUpload": "문제 이미지 업로드",
   "problemInput.imagePreview": "이미지 미리보기",
   "problemInput.removeImage": "이미지 제거",
@@ -117,6 +119,7 @@ const ko = {
   "app.modelAnswer": "모범답안",
   "app.noProblemData": "문제 데이터가 없습니다.",
   "app.gradeLabel": "학년:",
+  "app.semesterLabel": "학기:",
   "app.subjectArea": "수학 영역:",
 
   "cot.generateSubq": "하위문항 생성하기",
@@ -416,6 +419,8 @@ const en: Record<TranslationKey, string> = {
   "problemInput.solutionPlaceholder": "Enter the model answer",
   "problemInput.grade": "Grade",
   "problemInput.gradePlaceholder": "e.g. Grade 3",
+  "problemInput.semester": "Semester",
+  "problemInput.semesterPlaceholder": "e.g. 1 or 2",
   "problemInput.imageUpload": "Upload problem image",
   "problemInput.imagePreview": "Image preview",
   "problemInput.removeImage": "Remove image",
@@ -434,6 +439,7 @@ const en: Record<TranslationKey, string> = {
   "app.modelAnswer": "Model answer",
   "app.noProblemData": "No problem data.",
   "app.gradeLabel": "Grade:",
+  "app.semesterLabel": "Semester:",
   "app.subjectArea": "Math domain:",
 
   "cot.generateSubq": "Generate sub-questions",

@@ -49,6 +49,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const mainImage = (currentCotData as any)?.image_data;
   const mainSolution = (currentCotData as any)?.main_solution;
   const grade = (currentCotData as any)?.grade;
+  const semester = (currentCotData as any)?.semester;
   const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
 
   const renderWorkflowSplit = (main: ReactNode) => (
@@ -59,6 +60,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         imageData={mainImage}
         solution={mainSolution}
         grade={grade}
+        semester={semester}
         subjectArea={subjectArea}
       />
       <main className={styles.workflowMainColumn}>{main}</main>

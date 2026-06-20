@@ -193,6 +193,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const mainAnswer = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_answer : undefined) ?? effectiveCotData?.answer ?? "";
   const mainSolution = effectiveCotData?.main_solution ?? null;
   const grade = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
+  const semester = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.semester : undefined) ?? effectiveCotData?.semester ?? "";
   const subjectArea = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
 
   // sub_question_id 기준으로 루브릭을 빠르게 찾을 수 있도록 매핑
@@ -1318,6 +1319,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               imageData={mainImage}
               solution={mainSolution}
               grade={grade}
+              semester={semester}
               subjectArea={subjectArea}
             />
           ) : (

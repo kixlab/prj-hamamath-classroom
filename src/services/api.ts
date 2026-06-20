@@ -15,6 +15,7 @@ interface CoTCreateData {
   main_answer: string;
   main_solution?: string | null;
   grade: string;
+  semester?: string;
   image_data?: string | null;
   /** 파이프라인 출력 언어. 기본 ko, 영어 en */
   language?: string;
@@ -33,6 +34,9 @@ interface GenerateSubQuestionData {
   main_answer: string;
   main_solution?: string | null;
   grade: string;
+  semester?: string;
+  textbook_id?: string;
+  use_textbook_rag?: boolean;
   cot_step: {
     step_id: string;
     sub_skill_id: string;
