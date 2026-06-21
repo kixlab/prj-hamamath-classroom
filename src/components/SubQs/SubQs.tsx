@@ -109,10 +109,11 @@ export const SubQs = () => {
   // 원본 문항 / 재생성 문항 각각에 대한 편집 상태 및 최종 선택 상태
   const [editingOriginalStates, setEditingOriginalStates] = useState<Record<string, boolean>>({});
   const [editingRegeneratedStates, setEditingRegeneratedStates] = useState<Record<string, boolean>>({});
-  const [feedbackStates, setFeedbackStates] = useState<Record<string, boolean>>({});
   const [verificationStates, setVerificationStates] = useState<Record<string, boolean>>({});
   const [regeneratingStates, setRegeneratingStates] = useState<Record<string, boolean>>({});
-  const [showOriginalStates, setShowOriginalStates] = useState<Record<string, boolean>>({});
+  const [versionSelectionConfirmed, setVersionSelectionConfirmed] = useState<Record<string, boolean>>({});
+  const [versionCompareOpen, setVersionCompareOpen] = useState<Record<string, boolean>>({});
+  const [editContentRevision, setEditContentRevision] = useState<Record<string, number>>({});
   // B 생성 모드: 단계별로 교사 확정 후 다음 단계로 진행
   const [bMode, setBMode] = useState<boolean>(false);
   const [bVisibleCount, setBVisibleCount] = useState<number>(0);
@@ -175,10 +176,11 @@ export const SubQs = () => {
     preferredVersion,
     locale,
     verificationStates,
-    feedbackStates,
     editingOriginalStates,
     editingRegeneratedStates,
-    showOriginalStates,
+    versionSelectionConfirmed,
+    versionCompareOpen,
+    editContentRevision,
     bVisibleCount,
   ]);
 
@@ -751,19 +753,19 @@ export const SubQs = () => {
     logUserEvent("version_selected", { subqId, version });
   };
 
-  const toggleShowOriginal = (subqId: string) => {
-    setShowOriginalStates((prev) => ({
-      ...prev,
-      [subqId]: !prev[subqId],
-    }));
+  const openVersionCompare = (subqId: string) => {
+    setVersionCompareOpen((prev) => ({ ...prev, [subqId]: true }));
+    setVersionSelectionConfirmed((prev) => ({ ...prev, [subqId]: false }));
+    logUserEvent("version_compare_opened", { subqId });
   };
 
-  const toggleFeedback = (subqId: string, version: SubqPanelVersion) => {
-    const key = panelStateKey(subqId, version);
-    setFeedbackStates((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+  const confirmVersionSelection = (subqId: string) => {
+    setVersionSelectionConfirmed((prev) => ({ ...prev, [subqId]: true }));
+    setVersionCompareOpen((prev) => ({ ...prev, [subqId]: false }));
+    logUserEvent("version_selection_confirmed", {
+      subqId,
+      version: preferredVersion[subqId] ?? "regenerated",
+    });
   };
 
   const toggleVerification = (subqId: string, version: SubqPanelVersion) => {
@@ -881,10 +883,17 @@ export const SubQs = () => {
         guide_sub_answer: merged.guide_sub_answer,
       });
 
-      setFeedbackStates((prev) => ({
+      setVersionSelectionConfirmed((prev) => ({ ...prev, [subqId]: false }));
+      setVersionCompareOpen((prev) => ({ ...prev, [subqId]: false }));
+      setEditContentRevision((prev) => ({
         ...prev,
-        [regenKey]: false,
+        [subqId]: (prev[subqId] ?? 0) + 1,
       }));
+      if (version === "regenerated") {
+        setEditingRegeneratedStates((prev) => ({ ...prev, [subqId]: true }));
+      } else {
+        setEditingOriginalStates((prev) => ({ ...prev, [subqId]: true }));
+      }
     } catch (err: any) {
       setError(err.message || t('common.errorGeneric'));
     } finally {
@@ -1043,19 +1052,25 @@ export const SubQs = () => {
             </div>
           );
 
+          const isPanelRegenerating = (version: SubqPanelVersion) => {
+            const key = panelStateKey(subQ.sub_question_id, version);
+            if (version === "regenerated") {
+              return isRegeneratedPanelRegenerating || !!regeneratingStates[key];
+            }
+            return !!regeneratingStates[key];
+          };
+
           const renderEdit = (version: "original" | "regenerated") => {
             const q = version === "regenerated" ? regeneratedQuestion : originalQuestion;
             const a = version === "regenerated" ? regeneratedAnswer : originalAnswer;
-            const onCancel =
-              version === "regenerated"
-                ? () => toggleRegeneratedEdit(subQ.sub_question_id)
-                : () => toggleOriginalEdit(subQ.sub_question_id);
-            const onSave =
-              version === "regenerated"
-                ? () => handleSaveRegeneratedEdit(subQ.sub_question_id)
-                : () => handleSaveOriginalEdit(subQ.sub_question_id);
+            const panelVersion: SubqPanelVersion = version;
+            const panelRegenerating = isPanelRegenerating(panelVersion);
+            const editRevision = editContentRevision[subQ.sub_question_id] ?? 0;
             return (
-              <div className={styles.editMode}>
+              <div
+                className={styles.editMode}
+                key={`edit-${subQ.sub_question_id}-${version}-${editRevision}`}
+              >
                 <label className={styles.editField}>
                   <span className={styles.fieldLabel}>{t("common.questionColon")}</span>
                   <textarea
@@ -1064,6 +1079,7 @@ export const SubQs = () => {
                     rows={3}
                     data-subq-id={subQ.sub_question_id}
                     data-type={`${version}-question`}
+                    disabled={panelRegenerating}
                   />
                 </label>
                 <label className={styles.editField}>
@@ -1075,180 +1091,315 @@ export const SubQs = () => {
                     placeholder={t("problemInput.answerPlaceholder")}
                     data-subq-id={subQ.sub_question_id}
                     data-type={`${version}-answer`}
+                    disabled={panelRegenerating}
                   />
                 </label>
-                <div className={styles.editActions}>
-                  <button type="button" className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`} onClick={onCancel}>
-                    {t("common.cancel")}
-                  </button>
-                  <button type="button" className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`} onClick={onSave}>
-                    {t("common.save")}
+                <div className={styles.editDivider}>
+                  <span className={styles.editDividerLabel}>{t("subq.editFeedbackDivider")}</span>
+                </div>
+                <label className={styles.editField}>
+                  <span className={styles.fieldLabel}>{t("common.feedback")}</span>
+                  <textarea
+                    className={styles.editTextarea}
+                    rows={3}
+                    placeholder={t("subq.feedbackPlaceholder")}
+                    disabled={panelRegenerating}
+                    data-subq-id={subQ.sub_question_id}
+                    data-type={`${version}-feedback`}
+                  />
+                </label>
+                <div className={styles.feedbackActions}>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                    disabled={panelRegenerating}
+                    onClick={() => {
+                      const feedbackText =
+                        (document.querySelector(
+                          `textarea[data-subq-id="${subQ.sub_question_id}"][data-type="${version}-feedback"]`,
+                        ) as HTMLTextAreaElement)?.value || "";
+                      if (feedbackText.trim()) {
+                        handleFeedbackRegenerate(subQ.sub_question_id, feedbackText, panelVersion);
+                      }
+                    }}
+                  >
+                    {panelRegenerating ? (
+                      <>
+                        <span className={styles.spinnerInline} aria-hidden />
+                        {t("common.processing")}
+                      </>
+                    ) : (
+                      t("common.regenerate")
+                    )}
                   </button>
                 </div>
               </div>
             );
           };
 
-          const isPanelRegenerating = (version: SubqPanelVersion) => {
+          const renderVerificationToggle = (version: SubqPanelVersion) => {
             const key = panelStateKey(subQ.sub_question_id, version);
-            if (version === "regenerated") {
-              return isRegeneratedPanelRegenerating || !!regeneratingStates[key];
-            }
-            return !!regeneratingStates[key];
+            const isVerificationOpen = !!verificationStates[key];
+            return (
+              <button
+                type="button"
+                className={`${styles.toolLink} ${isVerificationOpen ? styles.toolLinkActive : ""}`}
+                onClick={() => toggleVerification(subQ.sub_question_id, version)}
+              >
+                {isVerificationOpen ? t("subq.hideVerification") : t("subq.viewVerification")}
+              </button>
+            );
+          };
+
+          const renderVersionSelectCheck = (version: "original" | "regenerated") => {
+            const isSelected =
+              version === "original"
+                ? effectiveSelectedVersion === "original"
+                : effectiveSelectedVersion !== "original";
+            const selectLabel =
+              version === "original" ? t("subq.useOriginalVersion") : t("subq.useRevisedVersion");
+
+            return (
+              <button
+                type="button"
+                className={`${styles.versionSelectCheck} ${isSelected ? styles.versionSelectCheckActive : ""}`}
+                onClick={() => selectSubqVersion(subQ.sub_question_id, version)}
+                aria-pressed={isSelected}
+                aria-label={isSelected ? t("subq.selected") : selectLabel}
+                title={isSelected ? t("subq.selected") : selectLabel}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden>
+                  <path
+                    d="M9 16.17 4.83 12 3.41 13.41 9 19 21 7l-1.41-1.41z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+            );
+          };
+
+          const renderVersionPanelHeader = (
+            version: "original" | "regenerated",
+            options: { showVerification?: boolean; showSelectCheck?: boolean } = {},
+          ) => {
+            const { showVerification = false, showSelectCheck = false } = options;
+            const title =
+              version === "regenerated" ? t("subq.regeneratedQuestion") : t("subq.originalQuestion");
+
+            return (
+              <div className={styles.versionPanelHeader}>
+                <span className={styles.versionPanelTitle}>{title}</span>
+                <div className={styles.versionPanelActions}>
+                  {showVerification && renderVerificationToggle(version)}
+                  {showSelectCheck && renderVersionSelectCheck(version)}
+                </div>
+              </div>
+            );
           };
 
           const renderPanelExtras = (version: SubqPanelVersion) => {
             const key = panelStateKey(subQ.sub_question_id, version);
             const isVerificationOpen = !!verificationStates[key];
-            const isFeedbackOpen = !!feedbackStates[key];
-            const panelRegenerating = isPanelRegenerating(version);
             const verificationText =
               version === "regenerated" ? subQ.re_verification_result : subQ.verification_result;
-            const feedbackTextareaClass = `feedback-textarea-${subQ.sub_question_id}-${version}`;
+
+            if (!isVerificationOpen) return null;
 
             return (
+              <div className={styles.verificationPanelInline}>
+                {(() => {
+                  const html = formatVerificationResult(verificationText, locale);
+                  return html ? (
+                    <div dangerouslySetInnerHTML={{ __html: html }} />
+                  ) : (
+                    <p className={styles.verificationEmpty}>{t("subq.noVerification")}</p>
+                  );
+                })()}
+              </div>
+            );
+          };
+
+          const isOriginalSelected = effectiveSelectedVersion === "original";
+          const isRegeneratedSelected = effectiveSelectedVersion !== "original";
+          const isCompareOpen =
+            showCompareLayout &&
+            !!versionCompareOpen[subQ.sub_question_id] &&
+            !versionSelectionConfirmed[subQ.sub_question_id];
+          const isConfirmedView =
+            showCompareLayout && !!versionSelectionConfirmed[subQ.sub_question_id];
+          const isDefaultRegeneratedView = showCompareLayout && !isCompareOpen && !isConfirmedView;
+          const collapsedVersion: "original" | "regenerated" = isOriginalSelected ? "original" : "regenerated";
+          const collapsedQuestion = isOriginalSelected ? originalQuestion : regeneratedQuestion;
+          const collapsedAnswer = isOriginalSelected ? originalAnswer : regeneratedAnswer;
+          const isCollapsedEditing = isOriginalSelected ? isOriginalEditing : isRegeneratedEditing;
+          const isCollapsedRegenerating = !isOriginalSelected && isRegeneratedPanelRegenerating;
+          const isTopBarEditing = showCompareLayout
+            ? isConfirmedView
+              ? isCollapsedEditing
+              : isRegeneratedEditing
+            : isOriginalEditing;
+
+          const activeEditVersion: "original" | "regenerated" = showCompareLayout
+            ? isConfirmedView && isOriginalSelected
+              ? "original"
+              : "regenerated"
+            : "original";
+
+          const handleTopBarCancel = () => {
+            if (activeEditVersion === "regenerated") toggleRegeneratedEdit(subQ.sub_question_id);
+            else toggleOriginalEdit(subQ.sub_question_id);
+          };
+
+          const handleTopBarSave = () => {
+            if (activeEditVersion === "regenerated") handleSaveRegeneratedEdit(subQ.sub_question_id);
+            else handleSaveOriginalEdit(subQ.sub_question_id);
+          };
+
+          const renderTopBarEditActions = () => {
+            const panelRegenerating = isPanelRegenerating(activeEditVersion);
+            return (
               <>
-                <div className={styles.comparePanelFooter}>
-                  <button
-                    type="button"
-                    className={`${styles.toolLink} ${isVerificationOpen ? styles.toolLinkActive : ""}`}
-                    onClick={() => toggleVerification(subQ.sub_question_id, version)}
-                  >
-                    {isVerificationOpen ? t("subq.hideVerification") : t("subq.viewVerification")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.toolLink} ${isFeedbackOpen ? styles.toolLinkActive : ""}`}
-                    onClick={() => toggleFeedback(subQ.sub_question_id, version)}
-                  >
-                    {t("common.feedback")}
-                  </button>
-                </div>
-                {isFeedbackOpen && (
-                  <div className={styles.feedbackPanelInline}>
-                    <textarea
-                      className={`${styles.feedbackTextarea} ${feedbackTextareaClass}`}
-                      rows={3}
-                      placeholder={t("subq.feedbackPlaceholder")}
-                      disabled={panelRegenerating}
-                    />
-                    <div className={styles.feedbackActions}>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                        onClick={() => toggleFeedback(subQ.sub_question_id, version)}
-                        disabled={panelRegenerating}
-                      >
-                        {t("common.cancel")}
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
-                        disabled={panelRegenerating}
-                        onClick={() => {
-                          const feedbackText =
-                            (document.querySelector(`.${feedbackTextareaClass}`) as HTMLTextAreaElement)?.value || "";
-                          if (feedbackText.trim()) {
-                            handleFeedbackRegenerate(subQ.sub_question_id, feedbackText, version);
-                          }
-                        }}
-                      >
-                        {panelRegenerating &&
-                        !(version === "regenerated" && isRegeneratedPanelRegenerating) ? (
-                          <>
-                            <span className={styles.spinnerInline} aria-hidden />
-                            {t("common.processing")}
-                          </>
-                        ) : (
-                          t("common.regenerate")
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {isVerificationOpen && (
-                  <div className={styles.verificationPanelInline}>
-                    {(() => {
-                      const html = formatVerificationResult(verificationText, locale);
-                      return html ? (
-                        <div dangerouslySetInnerHTML={{ __html: html }} />
-                      ) : (
-                        <p className={styles.verificationEmpty}>{t("subq.noVerification")}</p>
-                      );
-                    })()}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                  onClick={handleTopBarCancel}
+                  disabled={panelRegenerating}
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                  onClick={handleTopBarSave}
+                  disabled={panelRegenerating}
+                >
+                  {t("common.save")}
+                </button>
               </>
             );
           };
 
-          const showOriginal = !!showOriginalStates[subQ.sub_question_id];
-          const usingOriginal = effectiveSelectedVersion === "original";
-
           const skillDefinition = formatSubSkillDescription(subQ.sub_question_id, locale);
+
+          const handleTopBarEdit = () => {
+            if (showCompareLayout) {
+              if (isConfirmedView && isOriginalSelected) toggleOriginalEdit(subQ.sub_question_id);
+              else toggleRegeneratedEdit(subQ.sub_question_id);
+            } else {
+              toggleOriginalEdit(subQ.sub_question_id);
+            }
+          };
 
           return (
             <div key={subQ.sub_question_id} className={styles.subQuestionCard}>
-              <div className={styles.cardTop}>
-                <div className={styles.cardMeta}>
-                  <span className={styles.subQuestionId}>{subQ.sub_question_id}</span>
-                  <span className={styles.subQuestionSkill}>{formatCotSubSkill(subQ, locale)}</span>
-                </div>
-              </div>
-
               <div className={styles.cardTopBar}>
                 <div className={styles.cardTopBarMain}>
-                  {skillDefinition && (
-                    <p className={styles.subQuestionSkillDefinition}>{skillDefinition}</p>
-                  )}
-                  {showCompareLayout && usingOriginal && (
-                    <span className={styles.versionNote}>{t("subq.usingOriginalNote")}</span>
+                  <div className={styles.cardMeta}>
+                    <span className={styles.subQuestionId}>{subQ.sub_question_id}</span>
+                    <span className={styles.subQuestionSkill}>{formatCotSubSkill(subQ, locale)}</span>
+                    {skillDefinition && (
+                      <span className={styles.subQuestionSkillDefinition}>{skillDefinition}</span>
+                    )}
+                  </div>
+                  {isCompareOpen && (
+                    <p className={styles.selectVersionHint}>{t("subq.selectVersionHint")}</p>
                   )}
                 </div>
                 <div className={styles.cardTopActions}>
                   {showCompareLayout ? (
-                    <>
-                      {usingOriginal && (
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                          onClick={() => selectSubqVersion(subQ.sub_question_id, "regenerated")}
-                        >
-                          {t("subq.useRevisedVersion")}
-                        </button>
-                      )}
+                    isCompareOpen ? (
                       <button
                         type="button"
-                        className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
-                        onClick={() => toggleShowOriginal(subQ.sub_question_id)}
+                        className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                        onClick={() => confirmVersionSelection(subQ.sub_question_id)}
                       >
-                        {showOriginal ? t("subq.hideOriginal") : t("subq.viewOriginal")}
+                        {t("subq.confirmVersionSelection")}
                       </button>
-                      {!isRegeneratedEditing && !isRegeneratedPanelRegenerating && (
+                    ) : isTopBarEditing ? (
+                      renderTopBarEditActions()
+                    ) : (
+                      <>
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                          onClick={() => toggleRegeneratedEdit(subQ.sub_question_id)}
+                          onClick={() => openVersionCompare(subQ.sub_question_id)}
+                        >
+                          {t("subq.compareQuestion")}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                          onClick={handleTopBarEdit}
                         >
                           {t("common.edit")}
                         </button>
-                      )}
-                    </>
-                  ) : (
-                    !isOriginalEditing && (
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                        onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
-                      >
-                        {t("common.edit")}
-                      </button>
+                      </>
                     )
+                  ) : isTopBarEditing ? (
+                    renderTopBarEditActions()
+                  ) : (
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                      onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                    >
+                      {t("common.edit")}
+                    </button>
                   )}
                 </div>
               </div>
 
-              {showCompareLayout ? (
+              {isCompareOpen ? (
+                <div className={styles.contentPanel}>
+                  <div
+                    className={`${styles.versionPanel} ${isRegeneratedSelected ? styles.versionPanelSelected : ""}`}
+                  >
+                    {renderVersionPanelHeader("regenerated", {
+                      showVerification: true,
+                      showSelectCheck: true,
+                    })}
+                    <div className={styles.itemPanelBody}>
+                      {isRegeneratedPanelRegenerating ? (
+                        <div className={styles.comparePanelBodyLoading}>
+                          <div className={styles.spinner} aria-hidden />
+                          <div>{t("common.loading")}</div>
+                        </div>
+                      ) : (
+                        renderDisplay(regeneratedQuestion, regeneratedAnswer)
+                      )}
+                    </div>
+                    {!isRegeneratedPanelRegenerating && renderPanelExtras("regenerated")}
+                  </div>
+
+                  <div
+                    className={`${styles.versionPanel} ${isOriginalSelected ? styles.versionPanelSelected : ""}`}
+                  >
+                    {renderVersionPanelHeader("original", {
+                      showVerification: true,
+                      showSelectCheck: true,
+                    })}
+                    <div className={styles.itemPanelBody}>
+                      {renderDisplay(originalQuestion, originalAnswer)}
+                    </div>
+                    {renderPanelExtras("original")}
+                  </div>
+                </div>
+              ) : isConfirmedView ? (
+                <div className={styles.contentPanel}>
+                  <div className={styles.itemPanelBody}>
+                    {isCollapsedRegenerating ? (
+                      <div className={styles.comparePanelBodyLoading}>
+                        <div className={styles.spinner} aria-hidden />
+                        <div>{t("common.loading")}</div>
+                      </div>
+                    ) : isCollapsedEditing ? (
+                      renderEdit(collapsedVersion)
+                    ) : (
+                      renderDisplay(collapsedQuestion, collapsedAnswer)
+                    )}
+                  </div>
+                </div>
+              ) : isDefaultRegeneratedView ? (
                 <div className={styles.contentPanel}>
                   <div className={styles.itemPanelBody}>
                     {isRegeneratedPanelRegenerating ? (
@@ -1262,47 +1413,12 @@ export const SubQs = () => {
                       renderDisplay(regeneratedQuestion, regeneratedAnswer)
                     )}
                   </div>
-                  {!isRegeneratedPanelRegenerating && renderPanelExtras("regenerated")}
-
-                  {showOriginal && (
-                    <div className={styles.originalReveal}>
-                      <div className={styles.originalRevealHeader}>
-                        <span className={styles.originalRevealTitle}>{t("subq.originalQuestion")}</span>
-                        <div className={styles.originalRevealActions}>
-                          {!usingOriginal && (
-                            <button
-                              type="button"
-                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                              onClick={() => selectSubqVersion(subQ.sub_question_id, "original")}
-                            >
-                              {t("subq.useOriginalVersion")}
-                            </button>
-                          )}
-                          {usingOriginal && <span className={styles.selectedMark}>{t("subq.selected")}</span>}
-                          {!isOriginalEditing && (
-                            <button
-                              type="button"
-                              className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                              onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
-                            >
-                              {t("common.edit")}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className={styles.itemPanelBody}>
-                        {isOriginalEditing ? renderEdit("original") : renderDisplay(originalQuestion, originalAnswer)}
-                      </div>
-                      {renderPanelExtras("original")}
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className={styles.contentPanel}>
                   {isOriginalEditing
                     ? renderEdit("original")
                     : renderDisplay(originalQuestion, originalAnswer)}
-                  {renderPanelExtras("original")}
                 </div>
               )}
             </div>

@@ -336,21 +336,6 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
-.cardTop {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.cardMeta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
 .cardTopBar {
   display: flex;
   align-items: flex-start;
@@ -367,12 +352,20 @@
   flex: 1;
 }
 
+.cardMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
 .cardTopActions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px 12px;
   flex-shrink: 0;
 }
 
@@ -391,6 +384,7 @@
   font-weight: 600;
   font-size: 0.9375rem;
   line-height: 1.35;
+  flex-shrink: 0;
 }
 
 .subQuestionSkillDefinition {
@@ -399,6 +393,7 @@
   line-height: 1.55;
   color: var(--color-text-secondary);
   font-weight: 400;
+  min-width: 0;
 }
 
 .contentPanel {
@@ -416,25 +411,51 @@
   letter-spacing: 0;
 }
 
+.selectVersionHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
 .itemPanelBody {
   min-height: 80px;
 }
 
-.originalReveal {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--color-border);
+.versionPanel {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
-.originalRevealHeader {
+.versionPanel + .versionPanel {
+  margin-top: 12px;
+}
+
+.versionPanelSelected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35);
+}
+
+.versionPanelHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
-.originalRevealTitle {
+.versionPanelActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  flex-shrink: 0;
+}
+
+.versionPanelTitle {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -442,13 +463,40 @@
   color: var(--color-text-secondary);
 }
 
-.originalRevealActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+.versionSelectCheck {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: transparent;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.versionSelectCheck:hover {
+  border-color: var(--color-primary);
+}
+
+.versionSelectCheckActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.versionSelectCheck svg {
+  width: 16px;
+  height: 16px;
 }
 
 .compareGrid {
@@ -518,14 +566,6 @@
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
-}
-
-.selectedMark {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .comparePanelBody {
@@ -601,9 +641,10 @@
 
 .displayMode {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 3fr 2fr;
   gap: 12px;
+  align-items: start;
 }
 
 .fieldLabel {
@@ -620,6 +661,11 @@
   padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.questionBlock:only-child {
+  grid-column: 1 / -1;
 }
 
 .questionBlock {
@@ -684,6 +730,29 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.editDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.editDivider::before,
+.editDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.editDividerLabel {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .editField {
@@ -789,6 +858,14 @@
 
 /* 반응형 디자인 */
 @media (max-width: 768px) {
+  .displayMode {
+    grid-template-columns: 1fr;
+  }
+
+  .questionBlock:only-child {
+    grid-column: auto;
+  }
+
   .compareGrid,
   .verificationCompareGrid {
     grid-template-columns: 1fr;
@@ -817,7 +894,8 @@
   }
 
   .pageFooterActions {
-    flex: 1 1 100%;
+    flex-basis: 100%;
+    width: 100%;
     margin-left: 0;
     justify-content: flex-end;
   }
