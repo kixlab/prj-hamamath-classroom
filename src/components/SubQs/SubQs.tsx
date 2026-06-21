@@ -15,7 +15,7 @@ import {
 } from "../../utils/formatting";
 import { resolveSemester } from "../../utils/textbook";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatCotStepGroup, formatCotSubSkill, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
+import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
 import styles from "./SubQs.module.css";
 
 interface SubQuestion {
@@ -58,6 +58,24 @@ const normalizeSubQuestion = (subQ: SubQuestion): SubQuestion => {
 type SubqPanelVersion = "original" | "regenerated";
 
 const panelStateKey = (subqId: string, version: SubqPanelVersion) => `${subqId}:${version}`;
+
+/** 연속된 step_id 기준으로 대단계(문제 이해 등) 섹션 묶음 */
+function groupSubQuestionsByStep(subQuestions: SubQuestion[]): SubQuestion[][] {
+  const groups: SubQuestion[][] = [];
+  let current: SubQuestion[] = [];
+  let lastStepId: string | number | null = null;
+
+  for (const subQ of subQuestions) {
+    if (lastStepId !== null && subQ.step_id !== lastStepId) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(subQ);
+    lastStepId = subQ.step_id;
+  }
+  if (current.length) groups.push(current);
+  return groups;
+}
 
 export const SubQs = () => {
   const { t, locale } = useLocale();
@@ -977,7 +995,22 @@ export const SubQs = () => {
       {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.guidelineSubQuestions}>
-        {visibleSubQuestions.map((subQ: SubQuestion) => {
+        {groupSubQuestionsByStep(visibleSubQuestions).map((sectionSubs, sectionIndex) => {
+          const sectionLabel = formatCotStepGroup(sectionSubs[0], locale);
+          return (
+            <section
+              key={`subq-section-${sectionSubs[0].step_id}`}
+              className={styles.stepSection}
+              aria-label={sectionLabel}
+            >
+              <div className={styles.stepSectionHead}>
+                <span className={styles.stepSectionIndex} aria-hidden>
+                  {sectionIndex + 1}
+                </span>
+                <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
+              </div>
+              <div className={styles.stepSectionItems}>
+                {sectionSubs.map((subQ: SubQuestion) => {
           const hasRegenerated = !!(subQ.re_sub_question && subQ.re_sub_question.trim().length > 0);
           const isRegeneratedPanelRegenerating =
             !!regeneratingStates[subQ.sub_question_id] ||
@@ -1152,28 +1185,29 @@ export const SubQs = () => {
           const showOriginal = !!showOriginalStates[subQ.sub_question_id];
           const usingOriginal = effectiveSelectedVersion === "original";
 
+          const skillDefinition = formatSubSkillDescription(subQ.sub_question_id, locale);
+
           return (
             <div key={subQ.sub_question_id} className={styles.subQuestionCard}>
               <div className={styles.cardTop}>
                 <div className={styles.cardMeta}>
                   <span className={styles.subQuestionId}>{subQ.sub_question_id}</span>
-                  <div className={styles.cardTitles}>
-                    <span className={styles.subQuestionSkill}>{formatCotSubSkill(subQ, locale)}</span>
-                    <span className={styles.subQuestionGroup}>{formatCotStepGroup(subQ, locale)}</span>
-                  </div>
+                  <span className={styles.subQuestionSkill}>{formatCotSubSkill(subQ, locale)}</span>
                 </div>
               </div>
 
-              {showCompareLayout ? (
-                <div className={styles.contentPanel}>
-                  <div className={styles.itemPanelHeader}>
-                    <div className={styles.itemPanelHeaderMain}>
-                      <span className={styles.itemPanelTitle}>{t("subq.currentQuestion")}</span>
-                      {usingOriginal && (
-                        <span className={styles.versionNote}>{t("subq.usingOriginalNote")}</span>
-                      )}
-                    </div>
-                    <div className={styles.itemPanelActions}>
+              <div className={styles.cardTopBar}>
+                <div className={styles.cardTopBarMain}>
+                  {skillDefinition && (
+                    <p className={styles.subQuestionSkillDefinition}>{skillDefinition}</p>
+                  )}
+                  {showCompareLayout && usingOriginal && (
+                    <span className={styles.versionNote}>{t("subq.usingOriginalNote")}</span>
+                  )}
+                </div>
+                <div className={styles.cardTopActions}>
+                  {showCompareLayout ? (
+                    <>
                       {usingOriginal && (
                         <button
                           type="button"
@@ -1199,8 +1233,23 @@ export const SubQs = () => {
                           {t("common.edit")}
                         </button>
                       )}
-                    </div>
-                  </div>
+                    </>
+                  ) : (
+                    !isOriginalEditing && (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                        onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
+                      >
+                        {t("common.edit")}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {showCompareLayout ? (
+                <div className={styles.contentPanel}>
                   <div className={styles.itemPanelBody}>
                     {isRegeneratedPanelRegenerating ? (
                       <div className={styles.comparePanelBodyLoading}>
@@ -1250,17 +1299,6 @@ export const SubQs = () => {
                 </div>
               ) : (
                 <div className={styles.contentPanel}>
-                  <div className={styles.singlePanelHeader}>
-                    {!isOriginalEditing && (
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
-                        onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
-                      >
-                        {t("common.edit")}
-                      </button>
-                    )}
-                  </div>
                   {isOriginalEditing
                     ? renderEdit("original")
                     : renderDisplay(originalQuestion, originalAnswer)}
@@ -1268,6 +1306,10 @@ export const SubQs = () => {
                 </div>
               )}
             </div>
+          );
+                })}
+              </div>
+            </section>
           );
         })}
         {/* 다음 문항 생성 대기 — 패널 내 재생성 로딩이 있으면 중복 표시하지 않음 */}

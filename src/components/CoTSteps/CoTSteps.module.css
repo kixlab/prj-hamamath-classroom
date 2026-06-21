@@ -142,6 +142,22 @@
   flex: 1;
 }
 
+.stepTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.stepSkillDefinition {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
 .stepIdBadge {
   flex-shrink: 0;
   background: var(--color-primary);

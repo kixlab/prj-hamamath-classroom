@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
-import { formatCotStepGroup, formatCotSubSkill } from '../../i18n/translations';
+import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription } from '../../i18n/translations';
 import { formatQuestion } from '../../utils/formatting';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
@@ -88,6 +88,7 @@ export const CoTSteps = () => {
     const stepKey = step.sub_skill_id ?? `step-${stepIndex}`;
     const isEditing = editingStepId === step.sub_skill_id;
     const skillLabel = formatCotSubSkill(step, locale);
+    const skillDefinition = formatSubSkillDescription(step.sub_skill_id, locale);
 
     return (
       <article
@@ -99,9 +100,14 @@ export const CoTSteps = () => {
         <header className={styles.stepHeader}>
           <div className={styles.stepMeta}>
             <span className={styles.stepIdBadge}>{step.sub_skill_id ?? stepIndex + 1}</span>
-            <h3 className={styles.stepSkillTitle} id={`cot-step-title-${stepKey}`}>
-              {skillLabel}
-            </h3>
+            <div className={styles.stepTitleBlock}>
+              <h3 className={styles.stepSkillTitle} id={`cot-step-title-${stepKey}`}>
+                {skillLabel}
+              </h3>
+              {skillDefinition && (
+                <p className={styles.stepSkillDefinition}>{skillDefinition}</p>
+              )}
+            </div>
           </div>
           {!isEditing && (
             <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>

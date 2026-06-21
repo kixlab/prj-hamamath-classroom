@@ -149,7 +149,6 @@ const ko = {
   "subq.notGenerated": "하위문항이 생성되지 않았습니다.",
   "subq.originalQuestion": "원본 문항",
   "subq.regeneratedQuestion": "재생성 문항",
-  "subq.currentQuestion": "문항",
   "subq.viewOriginal": "원본 문항 보기",
   "subq.hideOriginal": "원본 문항 숨기기",
   "subq.useOriginalVersion": "원본 문항 사용",
@@ -354,6 +353,14 @@ const ko = {
   "category.3-2": "식, 모델 세우기",
   "category.4-1": "계산 실행하기",
   "category.4-2": "결과 정리하기",
+  "categoryDesc.1-1": "문제에서 중요한 정보를 구분하는 역량",
+  "categoryDesc.1-2": "질문이 요구하는 최종 결과를 파악하는 역량",
+  "categoryDesc.2-1": "문제에 주어진 조건과 제약을 표·목록·그림 등으로 정리‧재구성하여 문제 해결을 위한 기초적인 수학적 구조를 마련하는 역량",
+  "categoryDesc.2-2": "정리된 조건들이 어떻게 서로 이어지는지 이해하고, 이를 바탕으로 계산에 필요한 표현을 구성하는 역량",
+  "categoryDesc.3-1": "문제에 직접 주어진 조건 외에, 학습자가 기존에 배운 지식을 전이하여 적용하는 능력",
+  "categoryDesc.3-2": "계획에 따라 상황을 하나의 수학적 식·방정식·부등식 등 모델로 표현하는 역량",
+  "categoryDesc.4-1": "여러 단계의 계산을 순서에 따라 이어 가며 계산을 진행하는 역량",
+  "categoryDesc.4-2": "계산으로 얻은 값을 문제 맥락에 맞게 해석하고 단위·조건을 확인하여 최종 답을 도출하는 역량",
 } as const;
 
 const en: Record<TranslationKey, string> = {
@@ -491,7 +498,6 @@ const en: Record<TranslationKey, string> = {
   "subq.notGenerated": "Sub-questions have not been generated.",
   "subq.originalQuestion": "Original item",
   "subq.regeneratedQuestion": "Regenerated item",
-  "subq.currentQuestion": "Item",
   "subq.viewOriginal": "View original item",
   "subq.hideOriginal": "Hide original item",
   "subq.useOriginalVersion": "Use original item",
@@ -696,6 +702,14 @@ const en: Record<TranslationKey, string> = {
   "category.3-2": "Constructing mathematical expressions or models",
   "category.4-1": "Executing calculations",
   "category.4-2": "Interpreting and organizing results",
+  "categoryDesc.1-1": "The ability to distinguish important information in the problem",
+  "categoryDesc.1-2": "The ability to identify the final result required by the question",
+  "categoryDesc.2-1": "The ability to organize given conditions and constraints into tables, lists, or diagrams to build a basic mathematical structure for solving the problem",
+  "categoryDesc.2-2": "The ability to understand how organized conditions connect and form expressions needed for calculation",
+  "categoryDesc.3-1": "The ability to apply prior mathematical knowledge beyond the conditions given directly in the problem",
+  "categoryDesc.3-2": "The ability to represent a situation as a mathematical expression, equation, inequality, or other model according to a plan",
+  "categoryDesc.4-1": "The ability to carry out multi-step calculations in the correct order",
+  "categoryDesc.4-2": "The ability to interpret computed values in context, check units and conditions, and arrive at the final answer",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = { ko, en };
@@ -733,6 +747,13 @@ export function formatGrade(level: string, locale: Locale): string {
 export function formatCategory(code: string, locale: Locale): string {
   const key = `category.${code}` as TranslationKey;
   return translations[locale][key] ?? code;
+}
+
+/** 하위 역량(sub_skill) 정의 — framework.json 기준 */
+export function formatSubSkillDescription(code: string | undefined, locale: Locale): string {
+  if (!code) return "";
+  const key = `categoryDesc.${code}` as TranslationKey;
+  return translations[locale][key] ?? "";
 }
 
 function stepGroupCode(subSkillId?: string): string | undefined {
