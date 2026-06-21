@@ -16,6 +16,7 @@ import {
 import { resolveSemester } from "../../utils/textbook";
 import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
+import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
 import styles from "./SubQs.module.css";
 
 interface SubQuestion {
@@ -1006,15 +1007,17 @@ export const SubQs = () => {
       <div className={styles.guidelineSubQuestions}>
         {groupSubQuestionsByStep(visibleSubQuestions).map((sectionSubs, sectionIndex) => {
           const sectionLabel = formatCotStepGroup(sectionSubs[0], locale);
+          const frameworkStepId = resolveFrameworkStepId(sectionSubs[0]?.step_id, sectionIndex + 1);
           return (
             <section
               key={`subq-section-${sectionSubs[0].step_id}`}
               className={styles.stepSection}
+              style={frameworkStepSectionStyle(frameworkStepId)}
               aria-label={sectionLabel}
             >
               <div className={styles.stepSectionHead}>
                 <span className={styles.stepSectionIndex} aria-hidden>
-                  {sectionIndex + 1}
+                  {frameworkStepId}
                 </span>
                 <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
               </div>
@@ -1301,9 +1304,6 @@ export const SubQs = () => {
                       <span className={styles.subQuestionSkillDefinition}>{skillDefinition}</span>
                     )}
                   </div>
-                  {isCompareOpen && (
-                    <p className={styles.selectVersionHint}>{t("subq.selectVersionHint")}</p>
-                  )}
                 </div>
                 <div className={styles.cardTopActions}>
                   {showCompareLayout ? (
@@ -1350,7 +1350,7 @@ export const SubQs = () => {
               </div>
 
               {isCompareOpen ? (
-                <div className={styles.contentPanel}>
+                <>
                   <div
                     className={`${styles.versionPanel} ${isRegeneratedSelected ? styles.versionPanelSelected : ""}`}
                   >
@@ -1383,43 +1383,37 @@ export const SubQs = () => {
                     </div>
                     {renderPanelExtras("original")}
                   </div>
-                </div>
+                </>
               ) : isConfirmedView ? (
-                <div className={styles.contentPanel}>
-                  <div className={styles.itemPanelBody}>
-                    {isCollapsedRegenerating ? (
-                      <div className={styles.comparePanelBodyLoading}>
-                        <div className={styles.spinner} aria-hidden />
-                        <div>{t("common.loading")}</div>
-                      </div>
-                    ) : isCollapsedEditing ? (
-                      renderEdit(collapsedVersion)
-                    ) : (
-                      renderDisplay(collapsedQuestion, collapsedAnswer)
-                    )}
-                  </div>
+                <div className={styles.itemPanelBody}>
+                  {isCollapsedRegenerating ? (
+                    <div className={styles.comparePanelBodyLoading}>
+                      <div className={styles.spinner} aria-hidden />
+                      <div>{t("common.loading")}</div>
+                    </div>
+                  ) : isCollapsedEditing ? (
+                    renderEdit(collapsedVersion)
+                  ) : (
+                    renderDisplay(collapsedQuestion, collapsedAnswer)
+                  )}
                 </div>
               ) : isDefaultRegeneratedView ? (
-                <div className={styles.contentPanel}>
-                  <div className={styles.itemPanelBody}>
-                    {isRegeneratedPanelRegenerating ? (
-                      <div className={styles.comparePanelBodyLoading}>
-                        <div className={styles.spinner} aria-hidden />
-                        <div>{t("common.loading")}</div>
-                      </div>
-                    ) : isRegeneratedEditing ? (
-                      renderEdit("regenerated")
-                    ) : (
-                      renderDisplay(regeneratedQuestion, regeneratedAnswer)
-                    )}
-                  </div>
+                <div className={styles.itemPanelBody}>
+                  {isRegeneratedPanelRegenerating ? (
+                    <div className={styles.comparePanelBodyLoading}>
+                      <div className={styles.spinner} aria-hidden />
+                      <div>{t("common.loading")}</div>
+                    </div>
+                  ) : isRegeneratedEditing ? (
+                    renderEdit("regenerated")
+                  ) : (
+                    renderDisplay(regeneratedQuestion, regeneratedAnswer)
+                  )}
                 </div>
+              ) : isOriginalEditing ? (
+                renderEdit("original")
               ) : (
-                <div className={styles.contentPanel}>
-                  {isOriginalEditing
-                    ? renderEdit("original")
-                    : renderDisplay(originalQuestion, originalAnswer)}
-                </div>
+                renderDisplay(originalQuestion, originalAnswer)
               )}
             </div>
           );
@@ -1506,7 +1500,7 @@ export const SubQs = () => {
                 ) : (
                   <button
                     type="button"
-                    className={`${styles.btn} ${styles.btnSecondary} ${styles.btnStacked} ${styles.btnFinalize}`}
+                    className={`${styles.btn} ${styles.btnPrimary} ${styles.btnStacked} ${styles.btnFinalize}`}
                     onClick={handleFinalize}
                     disabled={footerBusy}
                   >

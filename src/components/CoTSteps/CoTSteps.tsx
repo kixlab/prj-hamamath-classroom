@@ -3,6 +3,7 @@ import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
 import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription } from '../../i18n/translations';
 import { formatQuestion } from '../../utils/formatting';
+import { frameworkStepSectionStyle, resolveFrameworkStepId } from '../../utils/frameworkStepColors';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -148,15 +149,17 @@ export const CoTSteps = () => {
       <div className={styles.cotSteps} ref={containerRef}>
         {stepRows.map((rowSteps, rowIndex) => {
           const sectionLabel = formatCotStepGroup(rowSteps[0], locale);
+          const frameworkStepId = resolveFrameworkStepId(rowSteps[0]?.sub_skill_id, rowIndex + 1);
           return (
             <section
               key={`cot-row-${rowIndex}`}
               className={styles.stepSection}
+              style={frameworkStepSectionStyle(frameworkStepId)}
               aria-label={sectionLabel}
             >
               <div className={styles.stepSectionHead}>
                 <span className={styles.stepSectionIndex} aria-hidden>
-                  {rowIndex + 1}
+                  {frameworkStepId}
                 </span>
                 <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
               </div>
