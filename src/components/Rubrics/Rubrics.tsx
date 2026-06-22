@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { api } from "../../services/api";
 import { saveResult } from "../../hooks/useStorage";
@@ -151,7 +151,10 @@ export const Rubrics = () => {
   const mainProblem = (guidelineGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
   const mainAnswer = (guidelineGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
   const rubrics = (currentRubrics ?? []) as RubricItem[];
-  const [generating, setGenerating] = useState(false);
+  const hasGuidelineSubs = !!(guidelineForStep4 as any)?.guide_sub_questions?.length;
+  const shouldAutoGenerate = rubrics.length === 0 && hasGuidelineSubs;
+  const [generating, setGenerating] = useState(shouldAutoGenerate);
+  const autoGenerateStartedRef = useRef(false);
 
   useEffect(() => {
     if (!currentProblemId || !currentRubrics?.length) return;
@@ -210,7 +213,7 @@ export const Rubrics = () => {
     window.alert(t('rubric.finalized'));
   };
 
-  const runGenerateRubrics = async () => {
+  const runGenerateRubrics = useCallback(async () => {
     const gd = guidelineForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
@@ -253,7 +256,17 @@ export const Rubrics = () => {
       setGenerating(false);
       setGeneratingMessage("");
     }
-  };
+  }, [guidelineForStep4, locale, setCurrentRubrics, t]);
+
+  useEffect(() => {
+    autoGenerateStartedRef.current = false;
+  }, [currentProblemId]);
+
+  useEffect(() => {
+    if (!shouldAutoGenerate || autoGenerateStartedRef.current) return;
+    autoGenerateStartedRef.current = true;
+    void runGenerateRubrics();
+  }, [shouldAutoGenerate, runGenerateRubrics, currentProblemId]);
 
   const toggleFeedback = (id: string) => {
     setFeedbackStates((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -466,32 +479,17 @@ export const Rubrics = () => {
     );
   }
 
-  if (!rubrics.length) {
+  if (!rubrics.length && !generating && !error && !hasGuidelineSubs) {
     return (
       <div className={styles.rubricContainer} ref={containerRef}>
         <div className={styles.emptyState}>
-          {!guidelineForStep4 || !(guidelineForStep4 as any).guide_sub_questions?.length ? (
-            <p>{t("rubric.noGuideline")}</p>
-          ) : (
-            <>
-              {renderMainProblemSection()}
-              <p>{t("rubric.clickGenerate")}</p>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnPrimary} ${styles.btnLg}`}
-                disabled={generating}
-                onClick={runGenerateRubrics}
-              >
-                {generating ? generatingMessage || t("common.generating") : t("rubric.generate")}
-              </button>
-            </>
-          )}
+          <p>{t("rubric.noGuideline")}</p>
         </div>
       </div>
     );
   }
 
-  const showRegenerateAllBanner = !!(guidelineForStep4 as any)?.guide_sub_questions?.length;
+  const showRegenerateAllBanner = hasGuidelineSubs;
 
   return (
     <div className={styles.rubricContainer} ref={containerRef}>

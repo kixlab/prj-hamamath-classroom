@@ -168,11 +168,12 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
       <div className={`${styles.container} ${styles.containerWithStepper}`}>
         <WorkflowTabs />
         <div className={styles.workflowContent}>
-          {currentStep === 1 && (
-            <div className={styles.workflowPanel}>
-              <ProblemInput onSubmit={handleCoTSubmit} />
-            </div>
-          )}
+          <div
+            className={`${styles.workflowPanel} ${currentStep !== 1 ? styles.workflowPanelHidden : ""}`}
+            aria-hidden={currentStep !== 1}
+          >
+            <ProblemInput onSubmit={handleCoTSubmit} />
+          </div>
           {currentStep === 2 && (
             <div className={styles.workflowPanel}>
               {loading && (

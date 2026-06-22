@@ -1,5 +1,6 @@
-import { useState, useRef, ChangeEvent, FormEvent, ReactNode } from "react";
+import { useState, useRef, ChangeEvent, FormEvent, ReactNode, useEffect } from "react";
 import { useApp } from "../../contexts/AppContext";
+import type { CoTData } from "../../types";
 import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
@@ -84,6 +85,47 @@ function patchFromMainAnswer(fields: { main_problem?: string; main_answer?: stri
     grade: fields.grade ?? "",
     semester: fields.semester ?? "",
   };
+}
+
+const INITIAL_FORM_DATA: FormData = {
+  problem: "",
+  answer: "",
+  solution: "",
+  grade: "",
+  semester: "",
+  image: null,
+  imagePreview: null,
+  imageData: null,
+  imgDescription: "",
+};
+
+function formDataFromCot(cot: CoTData): Partial<FormData> {
+  const c = cot as CoTData & {
+    main_problem?: string;
+    main_answer?: string;
+    img_description?: string;
+  };
+  return {
+    problem: c.problem ?? c.problem_text ?? c.main_problem ?? "",
+    answer: c.answer ?? c.final_answer ?? answerFromMainAnswer(c.main_answer ?? ""),
+    solution: c.main_solution ?? "",
+    grade: c.grade ?? "",
+    semester: c.semester ?? "",
+    imagePreview: c.image_data ?? null,
+    imageData: c.image_data ?? null,
+    imgDescription: c.img_description ?? "",
+  };
+}
+
+function resolveProblemIdSelection(problemId: string): { selectedProblem: string; customProblemId: string } {
+  const dropdownMatch = DROPDOWN_OPTIONS.find(({ file }) => file === problemId);
+  if (dropdownMatch) {
+    return { selectedProblem: dropdownMatch.file, customProblemId: "" };
+  }
+  if (problemId.endsWith(".json")) {
+    return { selectedProblem: problemId, customProblemId: "" };
+  }
+  return { selectedProblem: "", customProblemId: problemId };
 }
 
 interface InputPanelProps {
@@ -203,24 +245,48 @@ const IconImage = () => (
 );
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { userId, setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId } = useApp();
+  const {
+    userId,
+    currentCotData,
+    currentProblemId,
+    setCurrentCotData,
+    setCurrentGuidelineData,
+    setCurrentStep,
+    setLoading,
+    setError,
+    setCurrentProblemId,
+  } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
   /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
   const [customProblemId, setCustomProblemId] = useState<string>("");
-  const [formData, setFormData] = useState<FormData>({
-    problem: "",
-    answer: "",
-    solution: "",
-    grade: "",
-    semester: "",
-    image: null,
-    imagePreview: null,
-    imageData: null,
-    imgDescription: "",
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const hydratedProblemIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!currentProblemId && !currentCotData) {
+      hydratedProblemIdRef.current = null;
+      setFormData(INITIAL_FORM_DATA);
+      setSelectedProblem("");
+      setCustomProblemId("");
+      return;
+    }
+    if (!currentCotData || !currentProblemId) return;
+    if (hydratedProblemIdRef.current === currentProblemId) return;
+    hydratedProblemIdRef.current = currentProblemId;
+
+    setFormData((prev) => ({
+      ...prev,
+      ...formDataFromCot(currentCotData),
+      image: null,
+    }));
+
+    const { selectedProblem: nextSelected, customProblemId: nextCustom } = resolveProblemIdSelection(currentProblemId);
+    setSelectedProblem(nextSelected);
+    setCustomProblemId(nextCustom);
+  }, [currentCotData, currentProblemId]);
 
   /** 이미지 URL을 base64 data URL로 변환 (API는 base64만 허용) */
   const urlToBase64 = (url: string): Promise<string> =>
