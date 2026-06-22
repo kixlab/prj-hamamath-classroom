@@ -410,10 +410,9 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         language: getAppLanguage(locale),
       };
 
-      const result = await api.createCoT(requestData);
-      const { semester: _apiSemester, ...resultWithoutSemester } = result as { semester?: string };
-      const cotDataWithExtras = {
-        ...resultWithoutSemester,
+      const result = (await api.createCoT(requestData)) as CoTData;
+      const cotDataWithExtras: CoTData & { img_description: string } = {
+        ...result,
         img_description: formData.imgDescription,
         image_data: imageData ?? formData.imageData,
         main_solution: formData.solution,
