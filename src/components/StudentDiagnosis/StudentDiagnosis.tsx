@@ -82,7 +82,7 @@ function isDisplayCode(value?: string): boolean {
 }
 
 export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: StudentDiagnosisProps) => {
-  const { currentProblemId, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
+  const { currentProblemId, currentCotData, currentSubQuestionData, finalizedSubQuestionForRubric, currentRubrics } = useApp();
   const { t, formatLevel, formatGrade, formatCategory, locale } = useLocale();
 
   const defaultStudentName = useCallback((n: number) => t("diagnosis.studentDefault", { n }), [t]);
@@ -138,7 +138,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           const rubricsFromLocal = Array.isArray((local as any)?.rubrics) ? (local as any).rubrics : null;
           setApiRubrics(rubricsFromServer ?? rubricsFromLocal ?? null);
 
-          const gd = (result as any).guidelineData || (local as any)?.guidelineData || null;
+          const gd = (result as any).subQuestionData || (result as any).guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData || null;
           if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
             setApiGuideSubQuestions(gd.guide_sub_questions);
           } else {
@@ -149,7 +149,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           if (local) {
             setDiagnosisCotData(local.cotData ?? null);
             setApiRubrics((local as any).rubrics ?? null);
-            const gd = (local as any).guidelineData;
+            const gd = (local as any).subQuestionData || (local as any).guidelineData;
             if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
               setApiGuideSubQuestions(gd.guide_sub_questions);
             } else {
@@ -180,21 +180,21 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // - 현재 문제를 진단하는 경우: 3단계 확정 JSON → API 저장값 → 현재 가이드라인
   // - 과거 문제를 진단하는 경우: API 저장값만 사용
   const guideSubQuestions: any[] = isCurrentProblemSelected
-    ? ((finalizedGuidelineForRubric as any)?.guide_sub_questions ?? apiGuideSubQuestions ?? ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ?? [])
-    : (apiGuideSubQuestions ?? ((currentGuidelineData as any)?.guide_sub_questions as any[] | undefined) ?? []);
+    ? ((finalizedSubQuestionForRubric as any)?.guide_sub_questions ?? apiGuideSubQuestions ?? ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ?? [])
+    : (apiGuideSubQuestions ?? ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ?? []);
 
   // 메인 문제/정답/학년/수학 영역은
   // - 진단용 problemId가 선택된 경우: 해당 저장 결과의 cotData를 우선 사용
-  // - 그 외: 현재 워크플로우의 cotData / finalizedGuidelineForRubric 사용
+  // - 그 외: 현재 워크플로우의 cotData / finalizedSubQuestionForRubric 사용
   const effectiveCotData: any = (problemIdForDiagnosis ? diagnosisCotData : null) ?? (currentCotData as any) ?? null;
 
-  const mainProblem = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_problem : undefined) ?? effectiveCotData?.problem ?? "";
+  const mainProblem = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.main_problem : undefined) ?? effectiveCotData?.problem ?? "";
   const mainImage = effectiveCotData?.image_data ?? null;
-  const mainAnswer = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.main_answer : undefined) ?? effectiveCotData?.answer ?? "";
+  const mainAnswer = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.main_answer : undefined) ?? effectiveCotData?.answer ?? "";
   const mainSolution = effectiveCotData?.main_solution ?? null;
-  const grade = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
-  const semester = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.semester : undefined) ?? effectiveCotData?.semester ?? "";
-  const subjectArea = (!problemIdForDiagnosis ? (finalizedGuidelineForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
+  const grade = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
+  const semester = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.semester : undefined) ?? effectiveCotData?.semester ?? "";
+  const subjectArea = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
   const cotStepsForPrompt = effectiveCotData?.steps;
   const considerationsForPrompt = effectiveCotData?.considerations as string[] | undefined;
 
@@ -436,7 +436,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           try {
             const result = await api.getResult(problemId);
             const local = getSavedResults()[problemId] || null;
-            const gd = (result as any)?.guidelineData || (local as any)?.guidelineData;
+            const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData;
             if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
               guideSubQuestions = gd.guide_sub_questions;
             }
@@ -1034,7 +1034,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
-  const containerRef = useMathJax([activeItem, finalizedGuidelineForRubric, currentRubrics, currentStudentId, studentAnswers]);
+  const containerRef = useMathJax([activeItem, finalizedSubQuestionForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
   /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
   const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
@@ -1099,7 +1099,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       try {
         const result = await api.getResult(problemId);
         const local = saved[problemId] || null;
-        const gd = (result as any)?.guidelineData || (local as any)?.guidelineData;
+        const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData;
         if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
           guideSubQuestions = gd.guide_sub_questions;
         }

@@ -35,7 +35,7 @@ export const CoTSteps = () => {
     return null;
   }
 
-  const handleGenerateGuideline = () => {
+  const handleGoToSubQuestion = () => {
     const cot = currentCotData as CoTData | null;
     if (cot) {
       logUserEvent("cot_finalized", {
@@ -183,7 +183,7 @@ export const CoTSteps = () => {
         })}
       </div>
       <footer className={styles.cotFooter}>
-        <button type="button" className={styles.generateButton} onClick={handleGenerateGuideline}>
+        <button type="button" className={styles.generateButton} onClick={handleGoToSubQuestion}>
           {t('cot.generateSubq')}
         </button>
       </footer>

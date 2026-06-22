@@ -34,14 +34,14 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
     currentStep,
     setCurrentStep,
     currentCotData,
-    currentGuidelineData,
+    currentSubQuestionData,
     loading,
     error,
     reset,
     setCurrentProblemId,
     setCurrentCotData,
     setCurrentSubQData,
-    setCurrentGuidelineData,
+    setCurrentSubQuestionData,
     setPreferredVersion,
     setCurrentRubrics,
   } = useApp();
@@ -51,9 +51,9 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   const mainSolution = (currentCotData as any)?.main_solution;
   const grade = (currentCotData as any)?.grade;
   const semester = (currentCotData as any)?.semester;
-  const subjectArea = (currentGuidelineData as any)?.subject_area || (currentCotData as any)?.subject_area;
+  const subjectArea = (currentSubQuestionData as any)?.subject_area || (currentCotData as any)?.subject_area;
   const cotSteps = (currentCotData as any)?.steps as CoTStep[] | undefined;
-  const guideSubQuestions = (currentGuidelineData as any)?.guide_sub_questions;
+  const guideSubQuestions = (currentSubQuestionData as any)?.guide_sub_questions;
   const considerations = (currentCotData as any)?.considerations as string[] | undefined;
 
   const renderWorkflowSplit = (main: ReactNode) => (
@@ -95,10 +95,10 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         setCurrentProblemId(result.problemId ?? problemId);
         setCurrentCotData(result.cotData ?? null);
         setCurrentSubQData(result.subQData ?? null);
-        setCurrentGuidelineData(result.guidelineData ?? null);
+        setCurrentSubQuestionData(result.subQuestionData ?? (result as { guidelineData?: unknown }).guidelineData ?? null);
         if (setPreferredVersion) setPreferredVersion(result.preferredVersion ?? {});
         if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
-        if (result.guidelineData && result.cotData) setCurrentStep(3);
+        if ((result.subQuestionData || (result as { guidelineData?: unknown }).guidelineData) && result.cotData) setCurrentStep(3);
         else if (result.subQData && result.cotData) setCurrentStep(2);
         else if (result.cotData) setCurrentStep(2);
       } catch (e) {

@@ -96,9 +96,9 @@ function preprocessLatex(text: string): string {
   return result.join("");
 }
 
-function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricItem[] {
+function mapApiResponseToRubrics(apiResponse: any, subQuestionData: any): RubricItem[] {
   const simulationRubrics = apiResponse?.simulation_rubrics || [];
-  const subQuestions = guidelineData?.guide_sub_questions || [];
+  const subQuestions = subQuestionData?.guide_sub_questions || [];
 
   return simulationRubrics.map((sr: any, idx: number) => {
     const sq = subQuestions[idx] || {};
@@ -138,21 +138,21 @@ export const Rubrics = () => {
   const {
     userId,
     currentCotData,
-    currentGuidelineData,
+    currentSubQuestionData,
     currentRubrics,
     setCurrentRubrics,
     currentProblemId,
-    finalizedGuidelineForRubric,
+    finalizedSubQuestionForRubric,
     preferredVersion = {},
   } = useApp();
-  /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 guideline */
-  const guidelineForStep4 = finalizedGuidelineForRubric ?? currentGuidelineData;
-  const guidelineGd = guidelineForStep4 as { main_problem?: string; main_answer?: string } | null;
-  const mainProblem = (guidelineGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
-  const mainAnswer = (guidelineGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
+  /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 subQuestion */
+  const subQuestionForStep4 = finalizedSubQuestionForRubric ?? currentSubQuestionData;
+  const subQuestionGd = subQuestionForStep4 as { main_problem?: string; main_answer?: string } | null;
+  const mainProblem = (subQuestionGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
+  const mainAnswer = (subQuestionGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
   const rubrics = (currentRubrics ?? []) as RubricItem[];
-  const hasGuidelineSubs = !!(guidelineForStep4 as any)?.guide_sub_questions?.length;
-  const shouldAutoGenerate = rubrics.length === 0 && hasGuidelineSubs;
+  const hasSubQuestionSubs = !!(subQuestionForStep4 as any)?.guide_sub_questions?.length;
+  const shouldAutoGenerate = rubrics.length === 0 && hasSubQuestionSubs;
   const [generating, setGenerating] = useState(shouldAutoGenerate);
   const autoGenerateStartedRef = useRef(false);
 
@@ -170,7 +170,7 @@ export const Rubrics = () => {
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
-  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen, mainProblem, mainAnswer, guidelineForStep4, preferredVersion]);
+  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen, mainProblem, mainAnswer, subQuestionForStep4, preferredVersion]);
 
   const renderMainProblemSection = () => {
     if (!mainProblem && !mainAnswer) return null;
@@ -214,7 +214,7 @@ export const Rubrics = () => {
   };
 
   const runGenerateRubrics = useCallback(async () => {
-    const gd = guidelineForStep4 as any;
+    const gd = subQuestionForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
     setGeneratingMessage(t('rubric.generatingLong'));
@@ -256,7 +256,7 @@ export const Rubrics = () => {
       setGenerating(false);
       setGeneratingMessage("");
     }
-  }, [guidelineForStep4, locale, setCurrentRubrics, t]);
+  }, [subQuestionForStep4, locale, setCurrentRubrics, t]);
 
   useEffect(() => {
     autoGenerateStartedRef.current = false;
@@ -362,12 +362,12 @@ export const Rubrics = () => {
   };
 
   const findSubQuestion = (id: string) => {
-    const gd = guidelineForStep4 as any;
+    const gd = subQuestionForStep4 as any;
     return (gd?.guide_sub_questions || []).find((sq: any) => sq.sub_question_id === id);
   };
 
   const handleRegenerateSingle = async (id: string, feedback?: string | null) => {
-    const gd = guidelineForStep4 as any;
+    const gd = subQuestionForStep4 as any;
     const rubricItem = rubrics.find((r) => r.sub_question_id === id);
     const subQuestion = findSubQuestion(id);
     if (!rubricItem || !subQuestion || !gd) return;
@@ -479,17 +479,17 @@ export const Rubrics = () => {
     );
   }
 
-  if (!rubrics.length && !generating && !error && !hasGuidelineSubs) {
+  if (!rubrics.length && !generating && !error && !hasSubQuestionSubs) {
     return (
       <div className={styles.rubricContainer} ref={containerRef}>
         <div className={styles.emptyState}>
-          <p>{t("rubric.noGuideline")}</p>
+          <p>{t("rubric.noSubQuestion")}</p>
         </div>
       </div>
     );
   }
 
-  const showRegenerateAllBanner = hasGuidelineSubs;
+  const showRegenerateAllBanner = hasSubQuestionSubs;
 
   return (
     <div className={styles.rubricContainer} ref={containerRef}>

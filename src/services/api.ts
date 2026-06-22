@@ -193,7 +193,7 @@ export const api = {
 
   // 단일 하위 문항 생성
   async generateSingleSubQuestion(data: GenerateSubQuestionData) {
-    const response = await fetch(getApiUrl("/api/v1/guideline/generate-single"), {
+    const response = await fetch(getApiUrl("/api/v1/sub-question/generate-single"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -207,7 +207,7 @@ export const api = {
 
   // 하위 문항 재생성
   async regenerateSingleSubQuestion(data: GenerateSubQuestionData) {
-    const response = await fetch(getApiUrl("/api/v1/guideline/regenerate-single"), {
+    const response = await fetch(getApiUrl("/api/v1/sub-question/regenerate-single"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -755,9 +755,9 @@ export const api = {
   /**
    * 확정된 문제(사용자가 원본/재생성 중 선택한 버전)를 Word로 다운로드
    */
-  async exportWordFromGuideline(
+  async exportWordFromSubQuestion(
     cotData: { problem?: string; answer?: string; main_solution?: string; grade?: string },
-    guidelineData: {
+    subQuestionData: {
       subject_area?: string;
       guide_sub_questions?: Array<{
         sub_question_id: string;
@@ -774,7 +774,7 @@ export const api = {
     preferredVersion: Record<string, "original" | "regenerated">,
     problemId: string | null,
   ) {
-    const finalSubQuestions = (guidelineData.guide_sub_questions || []).map((subQ) => {
+    const finalSubQuestions = (subQuestionData.guide_sub_questions || []).map((subQ) => {
       const originalQ = (subQ.guide_sub_question || "").trim();
       const originalA = (subQ.guide_sub_answer || "").trim();
       const reQ = (subQ.re_sub_question || "").trim();
@@ -803,7 +803,7 @@ export const api = {
       main_answer: cotData.answer || "",
       main_solution: cotData.main_solution || null,
       grade: cotData.grade || "",
-      subject_area: guidelineData.subject_area || null,
+      subject_area: subQuestionData.subject_area || null,
       guide_sub_questions: finalSubQuestions,
     };
     const response = await fetch(getApiUrl("/api/v1/word-export/"), {
@@ -898,7 +898,7 @@ export const api = {
     if (data.language) body.language = data.language;
     if (data.image_data) body.image_data = data.image_data;
 
-    const response = await fetch(getApiUrl("/api/v1/guideline/preview-prompt"), {
+    const response = await fetch(getApiUrl("/api/v1/sub-question/preview-prompt"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

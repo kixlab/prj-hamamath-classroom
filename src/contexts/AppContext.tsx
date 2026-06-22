@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { AppContextType, CoTData, GuidelineData } from '../types';
+import type { AppContextType, CoTData, SubQuestionData } from '../types';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -20,28 +20,28 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const [currentProblemId, setCurrentProblemId] = useState<string | null>(null);
   const [currentCotData, setCurrentCotData] = useState<CoTData | null>(null);
   const [currentSubQData, setCurrentSubQData] = useState<any | null>(null);
-  const [currentGuidelineData, setCurrentGuidelineData] = useState<GuidelineData | null>(null);
-  const [lastGuidelineDataBeforeVerifyFix, setLastGuidelineDataBeforeVerifyFix] = useState<GuidelineData | null>(null);
+  const [currentSubQuestionData, setCurrentSubQuestionData] = useState<SubQuestionData | null>(null);
+  const [lastSubQuestionDataBeforeVerifyFix, setLastSubQuestionDataBeforeVerifyFix] = useState<SubQuestionData | null>(null);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
   const [currentRubrics, setCurrentRubrics] = useState<any[] | null>(null);
-  const [finalizedGuidelineForRubric, setFinalizedGuidelineForRubric] = useState<any | null>(null);
+  const [finalizedSubQuestionForRubric, setFinalizedSubQuestionForRubric] = useState<any | null>(null);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
     setCurrentCotData(null);
     setCurrentSubQData(null);
-    setCurrentGuidelineData(null);
-    setLastGuidelineDataBeforeVerifyFix(null);
+    setCurrentSubQuestionData(null);
+    setLastSubQuestionDataBeforeVerifyFix(null);
     setCurrentStep(1);
     setLoading(false);
     setError(null);
     setPreferredVersion({});
     setCurrentRubrics(null);
-    setFinalizedGuidelineForRubric(null);
+    setFinalizedSubQuestionForRubric(null);
   }, []);
 
   const value: AppContextType = {
@@ -52,10 +52,10 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setCurrentCotData,
     currentSubQData,
     setCurrentSubQData,
-    currentGuidelineData,
-    setCurrentGuidelineData,
-    lastGuidelineDataBeforeVerifyFix,
-    setLastGuidelineDataBeforeVerifyFix,
+    currentSubQuestionData,
+    setCurrentSubQuestionData,
+    lastSubQuestionDataBeforeVerifyFix,
+    setLastSubQuestionDataBeforeVerifyFix,
     currentStep,
     setCurrentStep,
     loading,
@@ -69,8 +69,8 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setPreferredVersion,
     currentRubrics,
     setCurrentRubrics,
-    finalizedGuidelineForRubric,
-    setFinalizedGuidelineForRubric,
+    finalizedSubQuestionForRubric,
+    setFinalizedSubQuestionForRubric,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

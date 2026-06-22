@@ -7,13 +7,15 @@ interface HistorySummary {
   timestamp: string;
   has_cot: boolean;
   has_subq: boolean;
-  has_guideline: boolean;
+  has_sub_question?: boolean;
+  has_guideline?: boolean;
   filename?: string;
 }
 
 interface SavedResultDetail {
   problemId: string;
   timestamp?: string;
+  subQuestionData?: { guide_sub_questions?: any[]; subject_area?: string };
   guidelineData?: { guide_sub_questions?: any[]; subject_area?: string };
   rubrics?: any[];
   cotData?: any;
@@ -82,7 +84,7 @@ export const AdminDbView = ({ onClose }: AdminDbViewProps) => {
     }
   };
 
-  const subQuestions = detail?.guidelineData?.guide_sub_questions ?? [];
+  const subQuestions = detail?.subQuestionData?.guide_sub_questions ?? detail?.guidelineData?.guide_sub_questions ?? [];
   const rubrics = detail?.rubrics ?? [];
 
   return (
@@ -131,7 +133,7 @@ export const AdminDbView = ({ onClose }: AdminDbViewProps) => {
                     <span className={styles.problemId}>{item.problem_id}</span>
                     <span className={styles.meta}>
                       {item.timestamp ? new Date(item.timestamp).toLocaleString("ko-KR") : ""}
-                      {item.has_guideline && " · Guideline"}
+                      {(item.has_sub_question || item.has_guideline) && " · SubQuestion"}
                       {item.has_subq && " · SubQ"}
                     </span>
                   </li>

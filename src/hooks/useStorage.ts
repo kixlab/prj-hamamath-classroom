@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { CoTData, GuidelineData } from '../types';
+import type { CoTData, SubQuestionData } from '../types';
 import { USER_ID_STORAGE_KEY } from '../components/UserIdPage/UserIdPage';
 import { getApiUrl } from '../services/api';
 
@@ -63,7 +63,7 @@ export interface SavedResult {
   timestamp: string;
   cotData: CoTData | null;
   subQData: any | null;
-  guidelineData: GuidelineData | null;
+  subQuestionData: SubQuestionData | null;
   preferredVersion?: Record<string, 'original' | 'regenerated'>;
   rubrics?: any[] | null;
 }
@@ -76,7 +76,14 @@ interface SavedResults {
 export function getSavedResults(): SavedResults {
   try {
     const stored = localStorage.getItem(getStorageKey());
-    return stored ? JSON.parse(stored) : {};
+    const parsed = stored ? JSON.parse(stored) : {};
+    for (const key of Object.keys(parsed)) {
+      const item = parsed[key];
+      if (item && !item.subQuestionData && item.guidelineData) {
+        item.subQuestionData = item.guidelineData;
+      }
+    }
+    return parsed;
   } catch (e) {
     console.error('저장된 결과 불러오기 실패:', e);
     return {};
@@ -90,7 +97,12 @@ function normalizeServerResult(serverItem: Record<string, unknown>): SavedResult
     timestamp: (serverItem.timestamp as string) ?? '',
     cotData: (serverItem.cot_data ?? serverItem.cotData) as SavedResult['cotData'],
     subQData: (serverItem.subq_data ?? serverItem.subQData) as SavedResult['subQData'],
-    guidelineData: (serverItem.guideline_data ?? serverItem.guidelineData) as SavedResult['guidelineData'],
+    subQuestionData: (
+      serverItem.sub_question_data ??
+      serverItem.subQuestionData ??
+      serverItem.guideline_data ??
+      serverItem.guidelineData
+    ) as SavedResult['subQuestionData'],
     preferredVersion: (serverItem.preferred_version ?? serverItem.preferredVersion) as SavedResult['preferredVersion'],
     rubrics: (serverItem.rubrics as SavedResult['rubrics']) ?? null,
   };
@@ -174,7 +186,7 @@ export function saveResult(
   problemId: string,
   cotData?: CoTData | null,
   subQData?: any | null,
-  guidelineData?: GuidelineData | null,
+  subQuestionData?: SubQuestionData | null,
   preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
   rubrics?: any[] | null,
   userId?: string | null
@@ -186,7 +198,7 @@ export function saveResult(
     timestamp: new Date().toISOString(),
     cotData: cotData !== undefined ? cotData : (existing?.cotData ?? null),
     subQData: subQData !== undefined ? subQData : (existing?.subQData ?? null),
-    guidelineData: guidelineData !== undefined ? guidelineData : (existing?.guidelineData ?? null),
+    subQuestionData: subQuestionData !== undefined ? subQuestionData : (existing?.subQuestionData ?? (existing as { guidelineData?: SubQuestionData | null } | undefined)?.guidelineData ?? null),
     preferredVersion: preferredVersion !== undefined ? (preferredVersion ?? undefined) : (existing?.preferredVersion),
     rubrics: rubrics !== undefined ? (rubrics ?? null) : (existing?.rubrics ?? null),
   };
@@ -259,12 +271,12 @@ export async function saveResultAsync(
   problemId: string,
   cotData?: CoTData | null,
   subQData?: any | null,
-  guidelineData?: GuidelineData | null,
+  subQuestionData?: SubQuestionData | null,
   preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
   rubrics?: any[] | null,
   userId?: string | null
 ): Promise<void> {
-  saveResult(problemId, cotData, subQData, guidelineData, preferredVersion, rubrics, userId);
+  saveResult(problemId, cotData, subQData, subQuestionData, preferredVersion, rubrics, userId);
   const savedResults = getSavedResults();
   const resultData = savedResults[problemId];
   if (!resultData) return;
@@ -296,9 +308,9 @@ export const useStorage = () => {
     problemId: string,
     cotData: CoTData | null,
     subQData: any | null,
-    guidelineData: GuidelineData | null
+    subQuestionData: SubQuestionData | null
   ) => {
-    saveResult(problemId, cotData, subQData, guidelineData);
+    saveResult(problemId, cotData, subQData, subQuestionData);
     setSavedResults(getSavedResults());
   }, []);
 

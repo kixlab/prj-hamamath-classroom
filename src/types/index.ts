@@ -29,7 +29,7 @@ export interface SubQuestion {
   sub_question_number: number;
 }
 
-export interface GuidelineData {
+export interface SubQuestionData {
   problem_id: string;
   grade: string;
   subject_area: string;
@@ -51,10 +51,10 @@ export interface AppContextType {
   setCurrentCotData: (data: CoTData | null) => void;
   currentSubQData: any | null;
   setCurrentSubQData: (data: any | null) => void;
-  currentGuidelineData: GuidelineData | null;
-  setCurrentGuidelineData: (data: GuidelineData | null) => void;
-  lastGuidelineDataBeforeVerifyFix: GuidelineData | null;
-  setLastGuidelineDataBeforeVerifyFix: (data: GuidelineData | null) => void;
+  currentSubQuestionData: SubQuestionData | null;
+  setCurrentSubQuestionData: (data: SubQuestionData | null) => void;
+  lastSubQuestionDataBeforeVerifyFix: SubQuestionData | null;
+  setLastSubQuestionDataBeforeVerifyFix: (data: SubQuestionData | null) => void;
   currentStep: number;
   setCurrentStep: (step: number) => void;
   loading: boolean;
@@ -69,8 +69,8 @@ export interface AppContextType {
   currentRubrics: any[] | null;
   setCurrentRubrics: (rubrics: any[] | null) => void;
   /** 3단계에서 확정 시 4단계로 넘기는 JSON (원본/재생성 선택 반영된 guide_sub_questions) */
-  finalizedGuidelineForRubric: any | null;
-  setFinalizedGuidelineForRubric: (data: any | null) => void;
+  finalizedSubQuestionForRubric: any | null;
+  setFinalizedSubQuestionForRubric: (data: any | null) => void;
 }
 
 // MathJax 타입 확장

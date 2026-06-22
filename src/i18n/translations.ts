@@ -190,7 +190,7 @@ const ko = {
   "subq.cotStepNotFound": "CoT 단계를 찾을 수 없습니다: {id}",
 
   "rubric.mainProblem": "본문 문제",
-  "rubric.noGuideline": "하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.",
+  "rubric.noSubQuestion": "하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.",
   "rubric.clickGenerate": "루브릭을 생성하려면 아래 버튼을 눌러주세요.",
   "rubric.generate": "루브릭 생성",
   "rubric.generatingLong": "루브릭 생성 중... (시간이 다소 소요될 수 있습니다)",
@@ -541,7 +541,7 @@ const en: Record<TranslationKey, string> = {
   "subq.cotStepNotFound": "CoT step not found: {id}",
 
   "rubric.mainProblem": "Main problem",
-  "rubric.noGuideline": "No sub-question data. Please generate sub-questions first.",
+  "rubric.noSubQuestion": "No sub-question data. Please generate sub-questions first.",
   "rubric.clickGenerate": "Click the button below to generate rubrics.",
   "rubric.generate": "Generate rubric",
   "rubric.generatingLong": "Generating rubric... (this may take a while)",
@@ -686,7 +686,7 @@ const en: Record<TranslationKey, string> = {
   "diagnosis.nothingToSave": "No answers to save.",
   "diagnosis.saveError": "An error occurred while saving.",
   "diagnosis.completeOneProblem": "Complete diagnosis for at least one problem for this student.",
-  "diagnosis.reportBuildFail": "Cannot build a report from this student’s results. (Guideline per problem required)",
+  "diagnosis.reportBuildFail": "Cannot build a report from this student’s results. (Sub-questions per problem required)",
   "diagnosis.reportLoadError": "An error occurred while loading the student diagnosis report.",
   "diagnosis.noDiagnosedProblems": "No diagnosed problems. Select a problem and run diagnosis first.",
   "diagnosis.reportRefreshError": "An error occurred while refreshing the report.",

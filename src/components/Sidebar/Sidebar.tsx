@@ -67,7 +67,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
     setCurrentStep,
     setCurrentCotData,
     setCurrentSubQData,
-    setCurrentGuidelineData,
+    setCurrentSubQuestionData,
     setCurrentProblemId,
     setPreferredVersion,
     setCurrentRubrics,
@@ -135,11 +135,11 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
         setCurrentProblemId(result.problemId || problemId);
         setCurrentCotData(result.cotData);
         setCurrentSubQData(result.subQData);
-        setCurrentGuidelineData(result.guidelineData);
+        setCurrentSubQuestionData(result.subQuestionData ?? (result as { guidelineData?: unknown }).guidelineData ?? null);
         if (setPreferredVersion) setPreferredVersion(result.preferredVersion || {});
         if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
 
-        if (result.guidelineData && result.cotData) {
+        if ((result.subQuestionData || (result as { guidelineData?: unknown }).guidelineData) && result.cotData) {
           setCurrentStep(3);
         } else if (result.cotData) {
           setCurrentStep(2);
@@ -181,7 +181,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
         alert(t("sidebar.renameLoadFail"));
         return;
       }
-      await saveResultAsync(trimmed, result.cotData, result.subQData, result.guidelineData, result.preferredVersion ?? undefined, result.rubrics ?? undefined, userId);
+      await saveResultAsync(trimmed, result.cotData, result.subQData, result.subQuestionData ?? (result as { guidelineData?: unknown }).guidelineData ?? null, result.preferredVersion ?? undefined, result.rubrics ?? undefined, userId);
       await api.renameProblemId(oldId, trimmed, userId);
       await deleteResult(oldId, userId);
       setSavedResults((prev) => prev.map((item) => (item.problemId === oldId ? { ...item, problemId: trimmed } : item)));

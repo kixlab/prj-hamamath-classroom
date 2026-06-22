@@ -250,7 +250,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     currentCotData,
     currentProblemId,
     setCurrentCotData,
-    setCurrentGuidelineData,
+    setCurrentSubQuestionData,
     setCurrentStep,
     setLoading,
     setError,
@@ -445,7 +445,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         })),
       });
       setCurrentProblemId(problemId);
-      setCurrentGuidelineData(null as any);
+      setCurrentSubQuestionData(null as any);
       setCurrentCotData(cotDataWithExtras);
       saveResult(problemId, cotDataWithExtras, null, null, null, null, userId);
       onSubmit?.(cotDataWithExtras);
