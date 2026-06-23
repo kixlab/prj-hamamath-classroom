@@ -7,6 +7,7 @@ import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, getAppLanguage } from "../../i18n/translations";
 import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
+import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -53,6 +54,28 @@ function getSubqDisplayQA(
     return splitQuestionAndAnswer(reQ || originalQ, reQ ? reA || originalA : originalA);
   }
   return splitQuestionAndAnswer(reQ || originalQ, reQ ? reA || originalA : originalA);
+}
+
+/** 연속된 step_id 기준으로 대단계(문제 이해 등) 섹션 묶음 */
+function groupRubricsByStep(
+  items: RubricItem[],
+  resolveStepId: (rubric: RubricItem) => string | number | undefined,
+): RubricItem[][] {
+  const groups: RubricItem[][] = [];
+  let current: RubricItem[] = [];
+  let lastStepId: string | number | null = null;
+
+  for (const rubric of items) {
+    const stepId = resolveStepId(rubric);
+    if (lastStepId !== null && stepId !== lastStepId) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(rubric);
+    lastStepId = stepId ?? null;
+  }
+  if (current.length) groups.push(current);
+  return groups;
 }
 
 /**
@@ -366,6 +389,9 @@ export const Rubrics = () => {
     return (gd?.guide_sub_questions || []).find((sq: any) => sq.sub_question_id === id);
   };
 
+  const resolveRubricStepId = (rubric: RubricItem) =>
+    findSubQuestion(rubric.sub_question_id)?.step_id ?? rubric.sub_question_id.split("-")[0];
+
   const handleRegenerateSingle = async (id: string, feedback?: string | null) => {
     const gd = subQuestionForStep4 as any;
     const rubricItem = rubrics.find((r) => r.sub_question_id === id);
@@ -509,7 +535,29 @@ export const Rubrics = () => {
       )}
 
       <div className={styles.rubricList}>
-        {rubrics.map((rubric) => {
+        {groupRubricsByStep(rubrics, resolveRubricStepId).map((sectionRubrics, sectionIndex) => {
+          const sectionAnchor = findSubQuestion(sectionRubrics[0].sub_question_id) ?? sectionRubrics[0];
+          const sectionLabel = formatCotStepGroup(sectionAnchor, locale);
+          const frameworkStepId = resolveFrameworkStepId(
+            (sectionAnchor as { step_id?: string | number }).step_id ?? sectionRubrics[0].sub_question_id,
+            sectionIndex + 1,
+          );
+
+          return (
+            <section
+              key={`rubric-section-${frameworkStepId}-${sectionRubrics[0].sub_question_id}`}
+              className={styles.stepSection}
+              style={frameworkStepSectionStyle(frameworkStepId)}
+              aria-label={sectionLabel}
+            >
+              <div className={styles.stepSectionHead}>
+                <span className={styles.stepSectionIndex} aria-hidden>
+                  {frameworkStepId}
+                </span>
+                <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
+              </div>
+              <div className={styles.stepSectionItems}>
+                {sectionRubrics.map((rubric) => {
           const isFeedbackOpen = feedbackStates[rubric.sub_question_id];
           const isRegenerating = regeneratingIds.has(rubric.sub_question_id);
           const subQ = findSubQuestion(rubric.sub_question_id);
@@ -522,28 +570,25 @@ export const Rubrics = () => {
               <header className={styles.cardTop}>
                 <div className={styles.cardMeta}>
                   <span className={styles.cardIdBadge}>{rubric.sub_question_id}</span>
-                  <div className={styles.cardTitles}>
-                    <span className={styles.cardSkillTitle}>{formatCotSubSkill(rubric, locale)}</span>
-                    <span className={styles.cardGroupTitle}>{formatCotStepGroup(rubric, locale)}</span>
-                  </div>
+                  <span className={styles.cardSkillTitle}>{formatCotSubSkill(rubric, locale)}</span>
                 </div>
               </header>
 
-              <div className={styles.questionPanel}>
+              <div className={styles.displayMode}>
                 {subqQuestion ? (
-                  <div className={styles.subqQuestionBlock}>
-                    <div className={styles.subqFieldLabel}>{t("common.questionColon")}</div>
+                  <div className={styles.questionBlock}>
+                    <div className={styles.fieldLabel}>{t("common.questionColon")}</div>
                     <div
-                      className={styles.subqQuestion}
+                      className={styles.questionContent}
                       dangerouslySetInnerHTML={{ __html: formatQuestion(subqQuestion) }}
                     />
                   </div>
                 ) : null}
                 {subqAnswer ? (
-                  <div className={styles.subqAnswerBlock}>
-                    <div className={styles.subqFieldLabel}>{t("common.answerColon")}</div>
+                  <div className={styles.answerBlock}>
+                    <div className={styles.fieldLabel}>{t("common.answerColon")}</div>
                     <div
-                      className={styles.subqAnswer}
+                      className={styles.answerContent}
                       dangerouslySetInnerHTML={{ __html: formatAnswer(subqAnswer) }}
                     />
                   </div>
@@ -560,13 +605,11 @@ export const Rubrics = () => {
                 {rubric.levels.map((lv) => {
                   const isLevelEditing = editingLevels[rubric.sub_question_id]?.[lv.level];
                   const draft = editDrafts[rubric.sub_question_id]?.[lv.level];
-                  const levelStyle = lv.level === "상" ? styles.levelHigh : lv.level === "중" ? styles.levelMid : styles.levelLow;
-                  const badgeStyle = lv.level === "상" ? styles.badgeHigh : lv.level === "중" ? styles.badgeMid : styles.badgeLow;
 
                   return (
-                    <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
+                    <div key={lv.level} className={styles.levelCard}>
                       <div className={styles.levelHeader}>
-                        <span className={`${styles.levelBadge} ${badgeStyle}`}>{formatLevel(lv.level)}</span>
+                        <span className={styles.levelBadge}>{formatLevel(lv.level)}</span>
                         {!isLevelEditing && lv.description ? (
                           <span className={styles.levelLabel}>{preprocessLatex(lv.description)}</span>
                         ) : null}
@@ -729,6 +772,10 @@ export const Rubrics = () => {
                 )}
               </div>
             </article>
+          );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>
