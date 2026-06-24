@@ -138,6 +138,10 @@ export const MainProblemSidebar = ({
 
       const cotStep = cotSteps.find((s) => s.sub_skill_id === stepId);
       if (!cotStep?.sub_skill_id) return;
+      const numericStepId =
+        typeof cotStep.step_id === "number"
+          ? cotStep.step_id
+          : Number.parseInt(String(cotStep.step_id ?? cotStep.sub_skill_id).split("-")[0], 10) || 1;
 
       const generated = guideSubQuestions.find((q) => q.sub_question_id === stepId);
       if (generated?.system_prompt && generated?.user_prompt) {
@@ -161,7 +165,7 @@ export const MainProblemSidebar = ({
           main_solution: mainSolution || null,
           grade: gradeText,
           cot_step: {
-            step_id: cotStep.sub_skill_id,
+            step_id: numericStepId,
             sub_skill_id: cotStep.sub_skill_id,
             step_name: cotStep.step_name || cotStep.step_title || '',
             step_name_en: '',
