@@ -7,6 +7,7 @@ import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
 import { formatAnswer, formatSolution, looksLikeMathContent } from "../../utils/formatting";
+import { resolveSemester } from "../../utils/textbook";
 import { MathHtml } from "../MathHtml";
 import styles from "./ProblemInput.module.css";
 
@@ -399,13 +400,14 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         }
       }
 
-      const semester = formData.semester.trim();
+      const semester = resolveSemester(formData.grade, formData.semester.trim() || undefined);
       const requestData = {
         main_problem: formData.problem,
         main_answer: formData.answer.trim(),
         main_solution: formData.solution || null,
         grade: formData.grade,
         ...(semester ? { semester } : {}),
+        use_textbook_rag: true,
         image_data: imageData,
         language: getAppLanguage(locale),
       };
