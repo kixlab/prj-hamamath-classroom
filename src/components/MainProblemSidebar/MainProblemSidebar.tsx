@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
 import { getAppLanguage } from '../../i18n/translations';
 import { api, type SubQuestionPromptPreviewResult, type TextbookRagPreviewResult } from '../../services/api';
@@ -82,6 +83,7 @@ export const MainProblemSidebar = ({
   guideSubQuestions = [],
   considerations = [],
 }: MainProblemSidebarProps) => {
+  const { currentStep } = useApp();
   const { t, locale } = useLocale();
   const mainProblem = problem?.trim() || '';
   const mainAnswer = answer?.trim() || '';
@@ -102,6 +104,8 @@ export const MainProblemSidebar = ({
 
   const cotPrompt = cotSteps.find((s) => s.prompt_used?.trim())?.prompt_used?.trim() || '';
   const canPreviewPrompts = cotSteps.length > 0;
+  const showCotPromptSection = currentStep === 2;
+  const showSubqPromptSection = currentStep === 3;
 
   const handleRagPreview = async () => {
     if (!mainProblem) return;
@@ -215,11 +219,16 @@ export const MainProblemSidebar = ({
       return;
     }
 
-    const firstStepId = cotSteps[0]?.sub_skill_id || '';
-    setSelectedStepId(firstStepId);
     setPromptOpen(true);
     setPromptView(null);
     setPromptError(null);
+    if (!showSubqPromptSection) {
+      setPromptLoading(false);
+      return;
+    }
+
+    const firstStepId = cotSteps[0]?.sub_skill_id || '';
+    setSelectedStepId(firstStepId);
     if (firstStepId) {
       await loadPromptForStep(firstStepId);
     }
@@ -398,41 +407,44 @@ export const MainProblemSidebar = ({
               </button>
             </header>
             <div className={styles.ragBody}>
-              {cotPrompt ? (
-                <section className={styles.ragSection}>
-                  <div className={styles.ragSectionLabel}>{t('app.promptCotSection')}</div>
-                  <pre className={styles.ragContextPre}>{cotPrompt}</pre>
-                </section>
-              ) : (
-                <p className={styles.ragStatus}>{t('app.promptNoCot')}</p>
-              )}
+              {showCotPromptSection &&
+                (cotPrompt ? (
+                  <section className={styles.ragSection}>
+                    <div className={styles.ragSectionLabel}>{t('app.promptCotSection')}</div>
+                    <pre className={styles.ragContextPre}>{cotPrompt}</pre>
+                  </section>
+                ) : (
+                  <p className={styles.ragStatus}>{t('app.promptNoCot')}</p>
+                ))}
 
-              <section className={styles.ragSection}>
-                <div className={styles.ragSectionLabel}>{t('app.promptSubqSection')}</div>
-                <label className={styles.promptSelectLabel}>
-                  {t('app.promptSelectStep')}
-                  <select
-                    className={styles.promptSelect}
-                    value={selectedStepId}
-                    onChange={(e) => handleStepChange(e.target.value)}
-                  >
-                    {cotSteps.map((step) => {
-                      const id = step.sub_skill_id || '';
-                      if (!id) return null;
-                      const label = `${id} · ${step.sub_skill_name || step.step_title || ''}`;
-                      return (
-                        <option key={id} value={id}>
-                          {label}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
-              </section>
+              {showSubqPromptSection && (
+                <section className={styles.ragSection}>
+                  <div className={styles.ragSectionLabel}>{t('app.promptSubqSection')}</div>
+                  <label className={styles.promptSelectLabel}>
+                    {t('app.promptSelectStep')}
+                    <select
+                      className={styles.promptSelect}
+                      value={selectedStepId}
+                      onChange={(e) => handleStepChange(e.target.value)}
+                    >
+                      {cotSteps.map((step) => {
+                        const id = step.sub_skill_id || '';
+                        if (!id) return null;
+                        const label = `${id} · ${step.sub_skill_name || step.step_title || ''}`;
+                        return (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                </section>
+              )}
 
               {promptLoading && <p className={styles.ragStatus}>{t('app.promptLoading')}</p>}
               {promptError && <p className={styles.ragError}>{promptError}</p>}
-              {!promptLoading && !promptError && promptView && (
+              {showSubqPromptSection && !promptLoading && !promptError && promptView && (
                 <>
                   <p className={styles.ragHint}>
                     {promptView.source === 'generated'
