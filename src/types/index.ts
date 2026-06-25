@@ -45,6 +45,7 @@ export interface VerifyResult {
 
 export interface AppContextType {
   userId?: string | null;
+  isDemoMode: boolean;
   currentProblemId: string | null;
   setCurrentProblemId: (id: string | null) => void;
   currentCotData: CoTData | null;
@@ -71,6 +72,9 @@ export interface AppContextType {
   /** 3단계에서 확정 시 4단계로 넘기는 JSON (원본/재생성 선택 반영된 guide_sub_questions) */
   finalizedSubQuestionForRubric: any | null;
   setFinalizedSubQuestionForRubric: (data: any | null) => void;
+  /** 2단계「하위문항 생성하기」→ 3단계 진입 시 자동 생성 */
+  pendingSubqAutoStart: boolean;
+  setPendingSubqAutoStart: (pending: boolean) => void;
 }
 
 // MathJax 타입 확장

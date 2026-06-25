@@ -8,6 +8,8 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, getAppLanguage } from "../../i18n/translations";
 import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
+import { demoDelay, DEMO_RUBRIC_LOADING_MS, DEMO_REGENERATE_MS } from "../../demo/demoDelay";
+import { getDemoWorkspaceSnapshot } from "../../demo/demoWorkspace";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -167,6 +169,7 @@ export const Rubrics = () => {
     currentProblemId,
     finalizedSubQuestionForRubric,
     preferredVersion = {},
+    isDemoMode,
   } = useApp();
   /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 subQuestion */
   const subQuestionForStep4 = finalizedSubQuestionForRubric ?? currentSubQuestionData;
@@ -243,6 +246,11 @@ export const Rubrics = () => {
     setGeneratingMessage(t('rubric.generatingLong'));
     setError(null);
     try {
+      if (isDemoMode) {
+        await demoDelay(DEMO_RUBRIC_LOADING_MS);
+        setCurrentRubrics(getDemoWorkspaceSnapshot().rubrics);
+        return;
+      }
       const response = await api.generateRubricPipeline({
         main_problem: gd.main_problem,
         main_answer: gd.main_answer,
@@ -279,7 +287,7 @@ export const Rubrics = () => {
       setGenerating(false);
       setGeneratingMessage("");
     }
-  }, [subQuestionForStep4, locale, setCurrentRubrics, t]);
+  }, [subQuestionForStep4, locale, setCurrentRubrics, t, isDemoMode]);
 
   useEffect(() => {
     autoGenerateStartedRef.current = false;
@@ -402,6 +410,11 @@ export const Rubrics = () => {
     setFeedbackStates((prev) => ({ ...prev, [id]: false }));
 
     try {
+      if (isDemoMode) {
+        await demoDelay(DEMO_REGENERATE_MS);
+        return;
+      }
+
       const response = await api.regenerateRubricSingle({
         main_problem: gd.main_problem,
         main_answer: gd.main_answer,

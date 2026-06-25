@@ -9,6 +9,8 @@ import { getAppLanguage } from "../../i18n/translations";
 import { formatAnswer, formatSolution, looksLikeMathContent } from "../../utils/formatting";
 import { resolveSemester } from "../../utils/textbook";
 import { MathHtml } from "../MathHtml";
+import { demoDelay, DEMO_COT_LOADING_MS } from "../../demo/demoDelay";
+import { getDemoWorkspaceSnapshot } from "../../demo/demoWorkspace";
 import styles from "./ProblemInput.module.css";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
@@ -250,12 +252,15 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     userId,
     currentCotData,
     currentProblemId,
+    isDemoMode,
     setCurrentCotData,
     setCurrentSubQuestionData,
     setCurrentStep,
     setLoading,
     setError,
     setCurrentProblemId,
+    setFinalizedSubQuestionForRubric,
+    setCurrentRubrics,
   } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
@@ -385,6 +390,24 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isDemoMode) {
+      setLoading(true);
+      setError(null);
+      setCurrentStep(2);
+      try {
+        await demoDelay(DEMO_COT_LOADING_MS);
+        const { cotData, problemId } = getDemoWorkspaceSnapshot();
+        setCurrentProblemId(problemId);
+        setCurrentSubQuestionData(null as any);
+        setFinalizedSubQuestionForRubric(null);
+        setCurrentRubrics(null);
+        setCurrentCotData(cotData);
+        onSubmit?.(cotData);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     setLoading(true);
     setError(null);
     setCurrentStep(2);

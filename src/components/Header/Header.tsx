@@ -2,11 +2,13 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
 import type { Locale } from '../../i18n/translations';
+import { getSwitchableAccountIds, isDemoUserId } from '../../demo/demoAccount';
 import styles from './Header.module.css';
 
 interface HeaderProps {
   onNewProblem: () => void;
   onShowUserIdPage?: () => void;
+  onSwitchAccount?: (targetUserId: string) => void;
   userId?: string | null;
   mode?: 'workflow' | 'diagnosis';
   onSelectWorkflow?: () => void;
@@ -60,16 +62,27 @@ const ModeDiagnosisIcon = () => (
 export const Header = ({
   onNewProblem,
   onShowUserIdPage,
+  onSwitchAccount,
   userId,
   mode,
   onSelectWorkflow,
   onSelectDiagnosis,
 }: HeaderProps) => {
-  const { sidebarOpen, setSidebarOpen } = useApp();
+  const { sidebarOpen, setSidebarOpen, isDemoMode } = useApp();
   const { locale, setLocale, t } = useLocale();
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const switchableAccountIds = userId ? getSwitchableAccountIds(userId) : [];
+
+  const accountLabel = (accountId: string) =>
+    isDemoUserId(accountId) ? t('header.demoAccount') : accountId;
+
+  const handleSwitchAccount = (targetUserId: string) => {
+    if (!onSwitchAccount || targetUserId === userId) return;
+    setAccountOpen(false);
+    onSwitchAccount(targetUserId);
+  };
 
   const handleHamburgerClick = () => {
     setSidebarOpen(!sidebarOpen);
@@ -182,16 +195,38 @@ export const Header = ({
               <span className={styles.accountAvatar} aria-hidden>
                 {userInitial(userId)}
               </span>
-              <span className={styles.accountId}>{userId}</span>
+              <span className={styles.accountId}>
+                {isDemoMode ? t('header.demoAccount') : userId}
+              </span>
               <svg className={styles.accountChevron} viewBox="0 0 24 24" aria-hidden>
                 <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
             {accountOpen && (
               <div id={menuId} className={styles.accountMenu} role="menu">
-                <div className={styles.accountMenuUser} role="presentation">
-                  {userId}
-                </div>
+                {onSwitchAccount && switchableAccountIds.length > 1 ? (
+                  <div className={styles.accountMenuSection}>
+                    <span className={styles.accountMenuLabel}>{t('header.switchAccount')}</span>
+                    <div className={styles.accountSwitchList}>
+                      {switchableAccountIds.map((accountId) => {
+                        const isActive = accountId === userId;
+                        return (
+                          <button
+                            key={accountId}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={isActive}
+                            className={`${styles.accountSwitchBtn} ${isActive ? styles.accountSwitchBtnActive : ''}`}
+                            onClick={() => handleSwitchAccount(accountId)}
+                            disabled={isActive}
+                          >
+                            <span className={styles.accountSwitchLabel}>{accountLabel(accountId)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 <div className={styles.accountMenuSection}>
                   <span className={styles.accountMenuLabel}>{t('header.language')}</span>
                   <div className={styles.langToggle} role="group">

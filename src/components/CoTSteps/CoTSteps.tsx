@@ -19,7 +19,7 @@ function chunkSteps<T>(items: T[], size: number): T[][] {
 }
 
 export const CoTSteps = () => {
-  const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
+  const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId, currentSubQuestionData, setPendingSubqAutoStart, setFinalizedSubQuestionForRubric } = useApp();
   const { t, locale } = useLocale();
   const containerRef = useMathJax([currentCotData?.steps]);
 
@@ -50,6 +50,13 @@ export const CoTSteps = () => {
           step_content: s.step_content,
         })),
       });
+    }
+    const existingCount =
+      ((currentSubQuestionData as { guide_sub_questions?: unknown[] } | null)?.guide_sub_questions ?? [])
+        .length;
+    if (existingCount === 0) {
+      setFinalizedSubQuestionForRubric(null);
+      setPendingSubqAutoStart(true);
     }
     setCurrentStep(3);
   };

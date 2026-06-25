@@ -27,6 +27,8 @@ const ko = {
   "header.newProblem": "문제 입력하기",
   "header.logout": "로그아웃",
   "header.logoutConfirm": "로그아웃 하시겠습니까?",
+  "header.switchAccount": "계정 전환",
+  "header.demoAccount": "데모",
   "header.switchToEnglish": "영어로 보기",
   "header.switchToKorean": "한국어로 보기",
 
@@ -378,6 +380,8 @@ const en: Record<TranslationKey, string> = {
   "header.newProblem": "Enter problem",
   "header.logout": "Log out",
   "header.logoutConfirm": "Do you want to log out?",
+  "header.switchAccount": "Switch account",
+  "header.demoAccount": "Demo",
   "header.switchToEnglish": "View in English",
   "header.switchToKorean": "View in Korean",
 

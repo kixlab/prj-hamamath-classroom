@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import type { AppContextType, CoTData, SubQuestionData } from '../types';
+import { isDemoUserId } from '../demo/demoAccount';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -17,6 +18,7 @@ interface AppProviderProps {
 }
 
 export const AppProvider = ({ children, userId }: AppProviderProps) => {
+  const isDemoMode = isDemoUserId(userId);
   const [currentProblemId, setCurrentProblemId] = useState<string | null>(null);
   const [currentCotData, setCurrentCotData] = useState<CoTData | null>(null);
   const [currentSubQData, setCurrentSubQData] = useState<any | null>(null);
@@ -29,6 +31,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const [preferredVersion, setPreferredVersion] = useState<Record<string, 'original' | 'regenerated'>>({});
   const [currentRubrics, setCurrentRubrics] = useState<any[] | null>(null);
   const [finalizedSubQuestionForRubric, setFinalizedSubQuestionForRubric] = useState<any | null>(null);
+  const [pendingSubqAutoStart, setPendingSubqAutoStart] = useState(false);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -42,10 +45,12 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setPreferredVersion({});
     setCurrentRubrics(null);
     setFinalizedSubQuestionForRubric(null);
+    setPendingSubqAutoStart(false);
   }, []);
 
   const value: AppContextType = {
     userId,
+    isDemoMode,
     currentProblemId,
     setCurrentProblemId,
     currentCotData,
@@ -71,6 +76,8 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setCurrentRubrics,
     finalizedSubQuestionForRubric,
     setFinalizedSubQuestionForRubric,
+    pendingSubqAutoStart,
+    setPendingSubqAutoStart,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

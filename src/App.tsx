@@ -5,6 +5,13 @@ import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdP
 import { initEventLogger, stopEventLogger } from './services/eventLogger';
 import { loadResult } from './hooks/useStorage';
 import { api } from './services/api';
+import {
+  clearPreviousUserId,
+  DEMO_USER_ID,
+  isDemoUserId,
+  rememberPreviousUserId,
+} from './demo/demoAccount';
+import { applyDemoWorkspace } from './demo/demoWorkspace';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowTabs } from './components/WorkflowTabs/WorkflowTabs';
@@ -21,9 +28,10 @@ import type { CoTStep } from './types';
 interface AppContentProps {
   userId: string;
   onShowUserIdPage?: () => void;
+  onSwitchAccount: (targetUserId: string) => void;
 }
 
-const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
+const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentProps) => {
   const { t } = useLocale();
   const [showAdminDbView, setShowAdminDbView] = useState(false);
   const [showStudentDiagnosis, setShowStudentDiagnosis] = useState(false);
@@ -44,6 +52,10 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
     setCurrentSubQuestionData,
     setPreferredVersion,
     setCurrentRubrics,
+    setFinalizedSubQuestionForRubric,
+    setLoading,
+    setError,
+    isDemoMode,
   } = useApp();
   const mainProblem = (currentCotData as any)?.problem;
   const mainAnswer = (currentCotData as any)?.answer;
@@ -74,8 +86,39 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
     </div>
   );
 
+  // 데모 계정: 미리 채운 워크스페이스 로드 (API 호출 없음)
+  useEffect(() => {
+    if (!isDemoUserId(userId)) return;
+    restoredOnce.current = true;
+    void applyDemoWorkspace({
+      setCurrentProblemId,
+      setCurrentCotData,
+      setCurrentSubQData,
+      setCurrentSubQuestionData,
+      setFinalizedSubQuestionForRubric,
+      setCurrentRubrics,
+      setPreferredVersion: setPreferredVersion ?? (() => {}),
+      setCurrentStep,
+      setLoading,
+      setError,
+    });
+  }, [
+    userId,
+    setCurrentProblemId,
+    setCurrentCotData,
+    setCurrentSubQData,
+    setCurrentSubQuestionData,
+    setFinalizedSubQuestionForRubric,
+    setCurrentRubrics,
+    setPreferredVersion,
+    setCurrentStep,
+    setLoading,
+    setError,
+  ]);
+
   // 다른 기기/브라우저에서 동일 ID로 로그인 시 서버에 저장된 최근 결과 자동 복원
   useEffect(() => {
+    if (isDemoUserId(userId)) return;
     if (showAdminDbView || showStudentDiagnosis) return;
     if (currentCotData !== null || currentProblemId !== null) return;
     if (restoredOnce.current) return;
@@ -95,10 +138,10 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         setCurrentProblemId(result.problemId ?? problemId);
         setCurrentCotData(result.cotData ?? null);
         setCurrentSubQData(result.subQData ?? null);
-        setCurrentSubQuestionData(result.subQuestionData ?? (result as { guidelineData?: unknown }).guidelineData ?? null);
+        setCurrentSubQuestionData(result.subQuestionData ?? null);
         if (setPreferredVersion) setPreferredVersion(result.preferredVersion ?? {});
         if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
-        if ((result.subQuestionData || (result as { guidelineData?: unknown }).guidelineData) && result.cotData) setCurrentStep(3);
+        if (result.subQuestionData && result.cotData) setCurrentStep(3);
         else if (result.subQData && result.cotData) setCurrentStep(2);
         else if (result.cotData) setCurrentStep(2);
       } catch (e) {
@@ -111,6 +154,21 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
   }, [userId, showAdminDbView, showStudentDiagnosis, currentCotData, currentProblemId]);
 
   const handleNewProblem = () => {
+    if (isDemoMode) {
+      void applyDemoWorkspace({
+        setCurrentProblemId,
+        setCurrentCotData,
+        setCurrentSubQData,
+        setCurrentSubQuestionData,
+        setFinalizedSubQuestionForRubric,
+        setCurrentRubrics,
+        setPreferredVersion: setPreferredVersion ?? (() => {}),
+        setCurrentStep,
+        setLoading,
+        setError,
+      });
+      return;
+    }
     reset();
   };
 
@@ -124,6 +182,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
         <Header
           onNewProblem={handleNewProblem}
           onShowUserIdPage={onShowUserIdPage}
+          onSwitchAccount={onSwitchAccount}
           userId={userId}
           mode="diagnosis"
           onSelectWorkflow={() => setShowStudentDiagnosis(false)}
@@ -154,6 +213,7 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
       <Header
         onNewProblem={handleNewProblem}
         onShowUserIdPage={onShowUserIdPage}
+        onSwitchAccount={onSwitchAccount}
         userId={userId}
         mode="workflow"
         onSelectWorkflow={() => setShowStudentDiagnosis(false)}
@@ -162,7 +222,6 @@ const AppContent = ({ userId, onShowUserIdPage }: AppContentProps) => {
       <Sidebar
         userId={userId}
         onOpenAdminDb={() => setShowAdminDbView(true)}
-        onOpenStudentDiagnosis={() => setShowStudentDiagnosis(true)}
         onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
       />
       <div className={`${styles.container} ${styles.containerWithStepper}`}>
@@ -224,14 +283,29 @@ function App() {
 
   const showUserIdPage = () => {
     if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+    clearPreviousUserId();
     setUserId(null);
+  };
+
+  const handleSwitchAccount = (targetUserId: string) => {
+    const next = targetUserId.trim();
+    if (!next || next === userId) return;
+    if (isDemoUserId(next)) {
+      rememberPreviousUserId(userId);
+    } else if (isDemoUserId(userId)) {
+      clearPreviousUserId();
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(USER_ID_STORAGE_KEY, next);
+    }
+    setUserId(next);
   };
 
   return (
     <LocaleProvider>
       <AppWithClickLogger userId={userId}>
-        <AppProvider userId={userId}>
-          <AppContent userId={userId} onShowUserIdPage={showUserIdPage} />
+        <AppProvider key={userId} userId={userId}>
+          <AppContent userId={userId} onShowUserIdPage={showUserIdPage} onSwitchAccount={handleSwitchAccount} />
         </AppProvider>
       </AppWithClickLogger>
     </LocaleProvider>

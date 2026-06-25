@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { CoTData, SubQuestionData } from '../types';
 import { USER_ID_STORAGE_KEY } from '../components/UserIdPage/UserIdPage';
 import { getApiUrl } from '../services/api';
+import { isDemoUserId } from '../demo/demoAccount';
 
 const STORAGE_KEY_PREFIX = 'hamamath_saved_results';
 const LAST_PROBLEM_KEY_PREFIX = 'hamamath_last_problem_id';
@@ -191,6 +192,9 @@ export function saveResult(
   rubrics?: any[] | null,
   userId?: string | null
 ): void {
+  const effectiveUserId = userId ?? getStoredUserId();
+  if (isDemoUserId(effectiveUserId)) return;
+
   const savedResults = getSavedResults();
   const existing = savedResults[problemId];
   const resultData: SavedResult = {
