@@ -11,6 +11,7 @@ import {
   isDemoUserId,
   rememberPreviousUserId,
 } from './demo/demoAccount';
+import { clearMirroredTestResultCache } from './demo/demoMirror';
 import { applyDemoWorkspace } from './demo/demoWorkspace';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
@@ -283,6 +284,7 @@ function App() {
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem(USER_ID_STORAGE_KEY, next);
     }
+    clearMirroredTestResultCache();
     setUserId(next);
   };
 

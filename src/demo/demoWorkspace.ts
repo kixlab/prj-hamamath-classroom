@@ -1,7 +1,7 @@
 import type { CoTData, CoTStep } from "../types";
 import { demoDelay, DEMO_LOADING_MS, DEMO_RESULT_LOAD_MS } from "./demoDelay";
+import { type SavedResult, fetchHistoryListForUser, loadResultForUser } from "../hooks/useStorage";
 import { getDemoSourceUserId } from "./demoAccount";
-import { fetchHistoryListForUser, loadResultForUser, type SavedResult } from "../hooks/useStorage";
 import example1Meta from "../../data/finalized_data/example1.json";
 import example1Image from "../../data/finalized_data/example1.png?url";
 import example4Meta from "../../data/finalized_data/example4.json";

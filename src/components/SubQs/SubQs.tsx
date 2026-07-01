@@ -453,12 +453,9 @@ export const SubQs = () => {
           currentStep: t('subq.stepProcessing', { stepId }),
         });
         await demoDelay(DEMO_SUBQ_STEP_MS);
-        const subQuestion = demoSubs[index];
-        const newGuideSubQuestions = demoSubs.slice(0, index + 1);
-        (setCurrentSubQuestionData as any)({
-          ...demoData,
-          guide_sub_questions: newGuideSubQuestions,
-        });
+        const subQuestion = demoSubs[index] ?? (demoData.guide_sub_questions as SubQuestion[])[index];
+        const newGuideSubQuestions = demoSubs;
+        (setCurrentSubQuestionData as any)(demoData);
         setBCurrentIndex(index + 1);
         setBVisibleCount(index + 1);
         setRegeneratingStates((prev) => ({

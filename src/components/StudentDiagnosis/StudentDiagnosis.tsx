@@ -126,6 +126,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       return;
     }
     if (isDemo) {
+      const sourceUserId = getDemoSourceUserId();
+      if (!sourceUserId) {
+        setHistoryItems([]);
+        return;
+      }
+      void (async () => {
+        try {
+          const list = await fetchHistoryListForUser(sourceUserId);
+          setHistoryItems(list.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp })));
+        } catch (err) {
+          console.error("데모 저장 결과 목록 불러오기 오류:", err);
+          setHistoryItems([]);
+        }
+      })();
       return;
     }
     const fetchHistory = async () => {
@@ -218,7 +232,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         resolveDemoRubrics(mirrored, subQuestionData);
       const cotData = mirrored?.cotData ?? currentCotData ?? snapshot.cotData;
       const seed = getDemoDiagnosisSeed(problemId, rubrics);
-      setHistoryItems([seed.historyItem]);
+      setHistoryItems(problemId ? [{ problem_id: problemId }] : []);
       setSelectedProblemId(seed.problemId);
       setStudents(seed.students);
       setStudentAnswers(seed.studentAnswers);
@@ -303,7 +317,29 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   useEffect(() => {
     const fetchRubrics = async () => {
       if (!problemIdForDiagnosis) return;
-      if (isDemo) return;
+      if (isDemo) {
+        const isCurrent =
+          !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
+        if (isCurrent && currentRubrics?.length) return;
+        const sourceUserId = getDemoSourceUserId();
+        if (!sourceUserId) return;
+        try {
+          const saved = await loadResultForUser(problemIdForDiagnosis, sourceUserId);
+          if (saved) {
+            setDiagnosisCotData(saved.cotData ?? null);
+            setApiRubrics(saved.rubrics?.length ? saved.rubrics : null);
+            const gd = saved.subQuestionData;
+            if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
+              setApiGuideSubQuestions(gd.guide_sub_questions);
+            } else {
+              setApiGuideSubQuestions(null);
+            }
+          }
+        } catch (err) {
+          console.error("데모 루브릭 불러오기 오류:", err);
+        }
+        return;
+      }
       try {
         const result = await api.getResult(problemIdForDiagnosis);
         const saved = getSavedResults();
@@ -348,7 +384,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }
     };
     fetchRubrics();
-  }, [problemIdForDiagnosis, isDemo]);
+  }, [problemIdForDiagnosis, isDemo, currentProblemId, currentRubrics]);
 
   // 현재 워크플로우에서 작업 중인 문제를 선택한 경우에는,
   // 3·4단계에서 수정된 최신 문항/루브릭(컨텍스트 값)을 우선 사용하고,

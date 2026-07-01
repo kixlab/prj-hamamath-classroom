@@ -165,9 +165,28 @@ function normalizeServerResult(serverItem: Record<string, unknown>): SavedResult
   };
 }
 
+export function fetchLocalHistoryList(): HistoryListItem[] {
+  const saved = getSavedResults();
+  return Object.entries(saved)
+    .map(([problemId, result]) => ({
+      problemId,
+      timestamp: result.timestamp ?? '',
+    }))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
 export async function loadResult(problemId: string): Promise<SavedResult | null> {
   const uid = getStoredUserId();
   const savedResults = getSavedResults();
+
+  // 데모 계정: 서버 없이 localStorage만 사용
+  if (isDemoUserId(uid)) {
+    const local = savedResults[problemId];
+    if (local) {
+      localStorage.setItem(getLastProblemKey(), problemId);
+    }
+    return local ?? null;
+  }
 
   // 동일 ID로 다른 기기/브라우저에서도 같은 내용이 보이도록 서버를 먼저 조회
   if (uid) {
@@ -248,6 +267,9 @@ export async function deleteResult(problemId: string, userId?: string | null): P
   delete savedResults[id];
   localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
 
+  const effectiveUserId = userId ?? getStoredUserId();
+  if (isDemoUserId(effectiveUserId)) return;
+
   // 서버에서도 삭제 (Firestore/파일). userId 있으면 헤더 폴백 사용
   try {
     const url = getApiUrl(`/api/v1/history/${encodeURIComponent(id)}`);
@@ -282,7 +304,7 @@ export function saveResult(
   userId?: string | null
 ): void {
   const effectiveUserId = userId ?? getStoredUserId();
-  if (isDemoUserId(effectiveUserId)) return;
+  const isDemo = isDemoUserId(effectiveUserId);
 
   const savedResults = getSavedResults();
   const existing = savedResults[problemId];
@@ -317,7 +339,9 @@ export function saveResult(
   try {
     localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
     localStorage.setItem(getLastProblemKey(), problemId);
-    
+
+    if (isDemo) return;
+
     // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리). userId 있으면 헤더 폴백으로 사용
     fetch(getApiUrl('/api/v1/history/save'), {
       method: 'POST',
@@ -369,7 +393,9 @@ export async function saveResultAsync(
   rubrics?: any[] | null,
   userId?: string | null
 ): Promise<void> {
+  const effectiveUserId = userId ?? getStoredUserId();
   saveResult(problemId, cotData, subQData, subQuestionData, preferredVersion, rubrics, userId);
+  if (isDemoUserId(effectiveUserId)) return;
   const savedResults = getSavedResults();
   const resultData = savedResults[problemId];
   if (!resultData) return;
