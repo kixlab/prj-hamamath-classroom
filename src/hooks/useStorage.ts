@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CoTData, SubQuestionData } from '../types';
 import { USER_ID_STORAGE_KEY } from '../components/UserIdPage/UserIdPage';
-import { getApiUrl } from '../services/api';
+import { getApiUrl, api } from '../services/api';
 import { isDemoUserId } from '../demo/demoAccount';
 
 const STORAGE_KEY_PREFIX = 'hamamath_saved_results';
@@ -13,10 +13,16 @@ function getStoredUserId(): string | null {
   return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(USER_ID_STORAGE_KEY) : null;
 }
 
+/** 특정 사용자 ID 기준 localStorage 저장 키 */
+export function getStorageKeyForUser(userId: string): string {
+  const uid = userId?.trim();
+  return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
+}
+
 /** 현재 로그인한 사용자 ID 기준 저장 키 (아이디별로 저장 결과 분리) */
 function getStorageKey(): string {
   const uid = getStoredUserId();
-  return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
+  return getStorageKeyForUser(uid ?? '');
 }
 
 /** HTTP 헤더 값은 ISO-8859-1만 허용. 한글 등이 있으면 Base64로 인코딩해 반환 (다른 커스텀 헤더용 export) */
@@ -73,22 +79,72 @@ interface SavedResults {
   [problemId: string]: SavedResult;
 }
 
+function normalizeSavedResults(parsed: SavedResults): SavedResults {
+  for (const key of Object.keys(parsed)) {
+    const item = parsed[key];
+    if (item && !item.subQuestionData && item.guidelineData) {
+      item.subQuestionData = item.guidelineData;
+    }
+  }
+  return parsed;
+}
+
+/** 지정한 사용자 ID의 localStorage 저장 결과 */
+export function getSavedResultsForUser(userId: string): SavedResults {
+  try {
+    const stored = localStorage.getItem(getStorageKeyForUser(userId));
+    const parsed = stored ? JSON.parse(stored) : {};
+    return normalizeSavedResults(parsed);
+  } catch (e) {
+    console.error('저장된 결과 불러오기 실패:', e);
+    return {};
+  }
+}
+
 // 전역 함수로 export (현재 로그인한 사용자 ID 기준)
 export function getSavedResults(): SavedResults {
   try {
     const stored = localStorage.getItem(getStorageKey());
     const parsed = stored ? JSON.parse(stored) : {};
-    for (const key of Object.keys(parsed)) {
-      const item = parsed[key];
-      if (item && !item.subQuestionData && item.guidelineData) {
-        item.subQuestionData = item.guidelineData;
-      }
-    }
-    return parsed;
+    return normalizeSavedResults(parsed);
   } catch (e) {
     console.error('저장된 결과 불러오기 실패:', e);
     return {};
   }
+}
+
+export interface HistoryListItem {
+  problemId: string;
+  timestamp: string;
+}
+
+/** 서버 목록 + 로컬 캐시를 병합한 저장 이력 (데모가 test 계정과 동기화할 때 사용) */
+export async function fetchHistoryListForUser(userId: string): Promise<HistoryListItem[]> {
+  const uid = userId?.trim();
+  if (!uid) return [];
+
+  let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string }> = [];
+  try {
+    const data = await api.getMyHistoryList(uid);
+    serverResults = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('저장 목록 조회 실패:', err);
+  }
+
+  const local = getSavedResultsForUser(uid);
+  const merged = new Map<string, string>();
+
+  for (const item of serverResults) {
+    const pid = (item.problem_id ?? item.problemId ?? '').trim();
+    if (pid) merged.set(pid, item.timestamp ?? '');
+  }
+  for (const [pid, result] of Object.entries(local)) {
+    if (!merged.has(pid)) merged.set(pid, result.timestamp ?? '');
+  }
+
+  return Array.from(merged.entries())
+    .map(([problemId, timestamp]) => ({ problemId, timestamp }))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 /** 서버 응답을 SavedResult 형태로 정규화 (snake_case → camelCase 등) */
@@ -148,6 +204,39 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
     return local;
   }
   return null;
+}
+
+/** 지정한 소유자 계정의 저장 결과 로드 (데모가 test 데이터를 읽을 때 사용) */
+export async function loadResultForUser(problemId: string, ownerUserId: string): Promise<SavedResult | null> {
+  const uid = ownerUserId?.trim();
+  if (!uid) return null;
+
+  const storageKey = getStorageKeyForUser(uid);
+  const savedResults = getSavedResultsForUser(uid);
+
+  try {
+    const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
+      headers: encodeUserIdForHeader(uid),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const result = normalizeServerResult(data);
+      savedResults[problemId] = result;
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(savedResults));
+      } catch {
+        // 로컬 캐시 실패해도 서버 결과는 반환
+      }
+      return result;
+    }
+    if (response.status !== 404) {
+      console.error(`서버에서 결과를 불러오는 중 오류 발생: ${response.status}`);
+    }
+  } catch (err) {
+    console.warn('서버에서 결과를 불러오는 중 오류:', err);
+  }
+
+  return savedResults[problemId] ?? null;
 }
 
 export async function deleteResult(problemId: string, userId?: string | null): Promise<void> {

@@ -10,7 +10,9 @@ import { formatAnswer, formatSolution, looksLikeMathContent } from "../../utils/
 import { resolveSemester } from "../../utils/textbook";
 import { MathHtml } from "../MathHtml";
 import { demoDelay, DEMO_COT_LOADING_MS } from "../../demo/demoDelay";
-import { getDemoWorkspaceSnapshot } from "../../demo/demoWorkspace";
+import { buildDemoCotFromProblemInput } from "../../demo/demoWorkspace";
+import { loadMirroredTestResult } from "../../demo/demoMirror";
+import { PROBLEM_DROPDOWN_OPTIONS } from "../../utils/problemIdAlias";
 import styles from "./ProblemInput.module.css";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
@@ -31,13 +33,7 @@ function resolveLocalImageUrl(imageFile?: string | null): string | null {
 }
 
 /** 드롭다운 로컬 예시 문제 (file: data/finalized_data/ JSON, label: 표시 이름) */
-const DROPDOWN_OPTIONS = [
-  { file: "example4.json", label: "Grade 3" },
-  { file: "example1.json", label: "Grade 4" },
-  { file: "example2.json", label: "Grade 5" },
-  { file: "example5.json", label: "Grade 6" },
-  { file: "example3.json", label: "Grade 6 (Eng)" },
-] as const;
+const DROPDOWN_OPTIONS = PROBLEM_DROPDOWN_OPTIONS;
 
 const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
@@ -261,6 +257,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     setCurrentProblemId,
     setFinalizedSubQuestionForRubric,
     setCurrentRubrics,
+    setPreferredVersion,
   } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
@@ -396,8 +393,21 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentStep(2);
       try {
         await demoDelay(DEMO_COT_LOADING_MS);
-        const { cotData, problemId } = getDemoWorkspaceSnapshot();
+        const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
+        const mirrored = await loadMirroredTestResult(problemId);
+        const cotData =
+          mirrored?.cotData ??
+          buildDemoCotFromProblemInput({
+            problem: formData.problem,
+            answer: formData.answer,
+            solution: formData.solution,
+            grade: formData.grade,
+            semester: formData.semester.trim() || undefined,
+            imageData: formData.imageData,
+            problemId,
+          });
         setCurrentProblemId(problemId);
+        setPreferredVersion?.(mirrored?.preferredVersion ?? {});
         setCurrentSubQuestionData(null as any);
         setFinalizedSubQuestionForRubric(null);
         setCurrentRubrics(null);

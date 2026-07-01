@@ -154,21 +154,6 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
   }, [userId, showAdminDbView, showStudentDiagnosis, currentCotData, currentProblemId]);
 
   const handleNewProblem = () => {
-    if (isDemoMode) {
-      void applyDemoWorkspace({
-        setCurrentProblemId,
-        setCurrentCotData,
-        setCurrentSubQData,
-        setCurrentSubQuestionData,
-        setFinalizedSubQuestionForRubric,
-        setCurrentRubrics,
-        setPreferredVersion: setPreferredVersion ?? (() => {}),
-        setCurrentStep,
-        setLoading,
-        setError,
-      });
-      return;
-    }
     reset();
   };
 

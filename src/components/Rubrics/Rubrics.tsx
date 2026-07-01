@@ -5,11 +5,12 @@ import { saveResult } from "../../hooks/useStorage";
 import { useMathJax } from "../../hooks/useMathJax";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatCotStepGroup, formatCotSubSkill, getAppLanguage } from "../../i18n/translations";
+import { formatCotStepGroup, formatCotSubSkill, resolveProblemLanguage } from "../../i18n/translations";
 import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
 import { demoDelay, DEMO_RUBRIC_LOADING_MS, DEMO_REGENERATE_MS } from "../../demo/demoDelay";
-import { getDemoWorkspaceSnapshot } from "../../demo/demoWorkspace";
+import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
+import { buildRandomAnswersFromRubrics } from "../../utils/randomStudentAnswers";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -170,6 +171,7 @@ export const Rubrics = () => {
     finalizedSubQuestionForRubric,
     preferredVersion = {},
     isDemoMode,
+    setStudentAnswerSeed,
   } = useApp();
   /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 subQuestion */
   const subQuestionForStep4 = finalizedSubQuestionForRubric ?? currentSubQuestionData;
@@ -229,6 +231,14 @@ export const Rubrics = () => {
       // 확정 시 서버·사이드바에 저장 (다른 기기/새로고침 시에도 목록에 표시)
       if (currentProblemId && currentRubrics?.length) {
         saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics, userId);
+        if (!isDemoMode) {
+          setStudentAnswerSeed({
+            problemId: currentProblemId,
+            byStudentId: {
+              "student-1": buildRandomAnswersFromRubrics(currentRubrics as RubricItem[]),
+            },
+          });
+        }
       }
       logUserEvent("rubric_finalized", {
         count: rubrics.length,
@@ -248,9 +258,20 @@ export const Rubrics = () => {
     try {
       if (isDemoMode) {
         await demoDelay(DEMO_RUBRIC_LOADING_MS);
-        setCurrentRubrics(getDemoWorkspaceSnapshot().rubrics);
+        const mirrored = await loadMirroredTestResult(currentProblemId);
+        setCurrentRubrics(resolveDemoRubrics(mirrored, gd));
         return;
       }
+      const rubricLanguage = resolveProblemLanguage(
+        gd.main_problem,
+        gd.main_answer,
+        ...gd.guide_sub_questions.flatMap((sq: any) => [
+          sq.re_sub_question,
+          sq.guide_sub_question,
+          sq.re_sub_answer,
+          sq.guide_sub_answer,
+        ]),
+      );
       const response = await api.generateRubricPipeline({
         main_problem: gd.main_problem,
         main_answer: gd.main_answer,
@@ -258,7 +279,7 @@ export const Rubrics = () => {
         subject_area: gd.subject_area,
         sub_questions: gd.guide_sub_questions,
         variant: "with_error_types",
-        language: getAppLanguage(locale),
+        language: rubricLanguage,
       });
       const mapped = mapApiResponseToRubrics(response, gd);
       setCurrentRubrics(mapped);
@@ -287,7 +308,7 @@ export const Rubrics = () => {
       setGenerating(false);
       setGeneratingMessage("");
     }
-  }, [subQuestionForStep4, locale, setCurrentRubrics, t, isDemoMode]);
+  }, [subQuestionForStep4, locale, setCurrentRubrics, t, isDemoMode, currentProblemId]);
 
   useEffect(() => {
     autoGenerateStartedRef.current = false;
@@ -424,7 +445,14 @@ export const Rubrics = () => {
         current_rubric: buildCurrentRubric(rubricItem),
         feedback: feedback || null,
         variant: "with_error_types",
-        language: getAppLanguage(locale),
+        language: resolveProblemLanguage(
+          gd.main_problem,
+          gd.main_answer,
+          subQuestion.re_sub_question,
+          subQuestion.guide_sub_question,
+          subQuestion.re_sub_answer,
+          subQuestion.guide_sub_answer,
+        ),
       });
 
       const rubricData = response.rubric || {};

@@ -18,7 +18,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
 import { demoDelay, DEMO_REGENERATE_MS, DEMO_SUBQ_STEP_MS } from "../../demo/demoDelay";
-import { getDemoWorkspaceSnapshot } from "../../demo/demoWorkspace";
+import { loadMirroredTestResult, resolveDemoSubQuestionData } from "../../demo/demoMirror";
 import styles from "./SubQs.module.css";
 
 interface SubQuestion {
@@ -442,10 +442,11 @@ export const SubQs = () => {
     setIsGeneratingSteps(true);
     try {
       if (isDemoMode) {
-        const snapshot = getDemoWorkspaceSnapshot();
-        const demoSubs = snapshot.subQuestionData.guide_sub_questions as SubQuestion[];
+        const mirrored = await loadMirroredTestResult(currentProblemId);
+        const demoData = resolveDemoSubQuestionData(currentProblemId, currentCotData as any, mirrored, index + 1);
+        const demoSubs = demoData.guide_sub_questions as SubQuestion[];
         const stepId = stepOrder[index];
-        if (!bSubjectArea) setBSubjectArea(snapshot.subQuestionData.subject_area);
+        if (!bSubjectArea) setBSubjectArea(demoData.subject_area);
         setProgress({
           current: index + 1,
           total: steps.length,
@@ -455,7 +456,7 @@ export const SubQs = () => {
         const subQuestion = demoSubs[index];
         const newGuideSubQuestions = demoSubs.slice(0, index + 1);
         (setCurrentSubQuestionData as any)({
-          ...snapshot.subQuestionData,
+          ...demoData,
           guide_sub_questions: newGuideSubQuestions,
         });
         setBCurrentIndex(index + 1);
@@ -467,7 +468,7 @@ export const SubQs = () => {
         await runBackgroundVerify({
           cotStep: steps[index],
           subQuestion,
-          matchedSubjectArea: snapshot.subQuestionData.subject_area,
+          matchedSubjectArea: demoData.subject_area,
           considerations: (currentCotData as any).considerations || [],
           previousSubQuestions: newGuideSubQuestions.slice(0, -1),
         });
@@ -607,19 +608,18 @@ export const SubQs = () => {
     setIsGeneratingSteps(true);
     try {
       if (isDemoMode) {
-        const snapshot = getDemoWorkspaceSnapshot();
-        const demoSubs = snapshot.subQuestionData.guide_sub_questions as SubQuestion[];
-        const subjectArea = snapshot.subQuestionData.subject_area;
+        const mirrored = await loadMirroredTestResult(currentProblemId);
+        const subjectArea =
+          resolveDemoSubQuestionData(currentProblemId, currentCotData as any, mirrored, totalSteps).subject_area;
         if (!bSubjectArea) setBSubjectArea(subjectArea);
         for (let i = resumeIndex; i < totalSteps; i++) {
           const stepId = stepOrder[i];
           setProgress({ current: i + 1, total: totalSteps, currentStep: t('subq.stepProcessing', { stepId }) });
           await demoDelay(DEMO_SUBQ_STEP_MS);
-          const subQuestion = demoSubs[i];
-          (setCurrentSubQuestionData as any)({
-            ...snapshot.subQuestionData,
-            guide_sub_questions: demoSubs.slice(0, i + 1),
-          });
+          const stepData = resolveDemoSubQuestionData(currentProblemId, currentCotData as any, mirrored, i + 1);
+          const stepSubs = stepData.guide_sub_questions as SubQuestion[];
+          const subQuestion = stepSubs[i];
+          (setCurrentSubQuestionData as any)(stepData);
           setBCurrentIndex(i + 1);
           setBVisibleCount(i + 1);
           setRegeneratingStates((prev) => ({ ...prev, [subQuestion.sub_question_id]: true }));
@@ -628,7 +628,7 @@ export const SubQs = () => {
             subQuestion,
             matchedSubjectArea: subjectArea,
             considerations: (currentCotData as any).considerations || [],
-            previousSubQuestions: demoSubs.slice(0, i),
+            previousSubQuestions: stepSubs.slice(0, i),
           });
           setRegeneratingStates((prev) => ({ ...prev, [subQuestion.sub_question_id]: false }));
         }

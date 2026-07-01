@@ -25,3 +25,11 @@ export function clearPreviousUserId(): void {
   if (typeof sessionStorage === "undefined") return;
   sessionStorage.removeItem(PREVIOUS_USER_ID_KEY);
 }
+
+/** 데모 계정이 미러링할 test(또는 이전) 계정 ID */
+export function getDemoSourceUserId(): string | null {
+  if (typeof sessionStorage === "undefined") return null;
+  const previous = sessionStorage.getItem(PREVIOUS_USER_ID_KEY)?.trim();
+  if (!previous || isDemoUserId(previous)) return null;
+  return previous;
+}

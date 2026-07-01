@@ -1,6 +1,9 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { useApp } from "../../contexts/AppContext";
-import { loadResult, deleteResult, clearAllResults, saveResultAsync } from "../../hooks/useStorage";
+import { loadResult, deleteResult, clearAllResults, saveResultAsync, fetchHistoryListForUser } from "../../hooks/useStorage";
+import { getProblemDisplayLabel } from "../../utils/problemIdAlias";
+import { getDemoSourceUserId } from "../../demo/demoAccount";
+import { loadDemoSavedWorkflow } from "../../demo/demoWorkspace";
 import { api } from "../../services/api";
 import { isAdmin } from "../../utils/admin";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -71,6 +74,10 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
     setCurrentProblemId,
     setPreferredVersion,
     setCurrentRubrics,
+    setFinalizedSubQuestionForRubric,
+    setLoading,
+    setError,
+    isDemoMode,
     reset,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
@@ -89,6 +96,34 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
     setListLoadError(null);
     if (!userId?.trim()) {
       setSavedResults([]);
+      return;
+    }
+    if (isDemoMode) {
+      const sourceUserId = getDemoSourceUserId();
+      if (!sourceUserId) {
+        setSavedResults([]);
+        return;
+      }
+      try {
+        const list = await fetchHistoryListForUser(sourceUserId);
+        const allResults: SavedResultItem[] = list.map((item) => {
+          const date = new Date(item.timestamp);
+          const dateStr = Number.isNaN(date.getTime())
+            ? ""
+            : date.toLocaleString(undefined, {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+          return { problemId: item.problemId, timestamp: item.timestamp, dateStr };
+        });
+        setSavedResults(allResults);
+      } catch (err: unknown) {
+        console.warn("데모 저장 목록 조회 실패:", err);
+        setSavedResults([]);
+      }
       return;
     }
     let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string }> = [];
@@ -130,16 +165,36 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
 
   const handleLoadResult = async (problemId: string) => {
     try {
+      if (isDemoMode) {
+        const loaded = await loadDemoSavedWorkflow(problemId, {
+          setCurrentProblemId,
+          setCurrentCotData,
+          setCurrentSubQData,
+          setCurrentSubQuestionData,
+          setFinalizedSubQuestionForRubric,
+          setCurrentRubrics,
+          setPreferredVersion: setPreferredVersion ?? (() => {}),
+          setCurrentStep,
+          setLoading,
+          setError,
+        });
+        if (loaded) {
+          setSidebarOpen(false);
+        } else {
+          alert(t("sidebar.loadFail"));
+        }
+        return;
+      }
       const result = await loadResult(problemId);
       if (result) {
         setCurrentProblemId(result.problemId || problemId);
         setCurrentCotData(result.cotData);
-        setCurrentSubQData(result.subQData);
-        setCurrentSubQuestionData(result.subQuestionData ?? (result as { guidelineData?: unknown }).guidelineData ?? null);
+        setCurrentSubQData(result.subQData ?? null);
+        setCurrentSubQuestionData(result.subQuestionData ?? null);
         if (setPreferredVersion) setPreferredVersion(result.preferredVersion || {});
         if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
 
-        if ((result.subQuestionData || (result as { guidelineData?: unknown }).guidelineData) && result.cotData) {
+        if (result.subQuestionData && result.cotData) {
           setCurrentStep(3);
         } else if (result.cotData) {
           setCurrentStep(2);
@@ -181,7 +236,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
         alert(t("sidebar.renameLoadFail"));
         return;
       }
-      await saveResultAsync(trimmed, result.cotData, result.subQData, result.subQuestionData ?? (result as { guidelineData?: unknown }).guidelineData ?? null, result.preferredVersion ?? undefined, result.rubrics ?? undefined, userId);
+      await saveResultAsync(trimmed, result.cotData, result.subQData, result.subQuestionData ?? null, result.preferredVersion ?? undefined, result.rubrics ?? undefined, userId);
       await api.renameProblemId(oldId, trimmed, userId);
       await deleteResult(oldId, userId);
       setSavedResults((prev) => prev.map((item) => (item.problemId === oldId ? { ...item, problemId: trimmed } : item)));
@@ -253,28 +308,32 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
                         className={styles.historyItemMain}
                         onClick={() => handleLoadResult(item.problemId)}
                       >
-                        <div className={styles.historyItemTitle}>{item.problemId}</div>
+                        <div className={styles.historyItemTitle}>{getProblemDisplayLabel(item.problemId)}</div>
                         {item.dateStr && <div className={styles.historyItemDate}>{item.dateStr}</div>}
                       </button>
                       <div className={styles.historyItemActions}>
-                        <button
-                          type="button"
-                          className={styles.itemActionBtn}
-                          onClick={(e) => handleRenameResult(item.problemId, e)}
-                          aria-label={t("sidebar.renameProblem")}
-                          title={t("sidebar.renameProblem")}
-                        >
-                          <RenameIcon />
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.itemActionBtn} ${styles.itemActionBtnDanger}`}
-                          onClick={(e) => handleDeleteResult(item.problemId, e)}
-                          aria-label={t("sidebar.delete")}
-                          title={t("sidebar.delete")}
-                        >
-                          <DeleteIcon />
-                        </button>
+                        {!isDemoMode && (
+                          <>
+                            <button
+                              type="button"
+                              className={styles.itemActionBtn}
+                              onClick={(e) => handleRenameResult(item.problemId, e)}
+                              aria-label={t("sidebar.renameProblem")}
+                              title={t("sidebar.renameProblem")}
+                            >
+                              <RenameIcon />
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.itemActionBtn} ${styles.itemActionBtnDanger}`}
+                              onClick={(e) => handleDeleteResult(item.problemId, e)}
+                              aria-label={t("sidebar.delete")}
+                              title={t("sidebar.delete")}
+                            >
+                              <DeleteIcon />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </li>
                   );
@@ -282,7 +341,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
               )}
             </ul>
 
-            {savedResults.length > 0 && (
+            {savedResults.length > 0 && !isDemoMode && (
               <button type="button" className={styles.clearAllBtn} onClick={handleClearAllResults}>
                 {t("sidebar.clearAll")}
               </button>

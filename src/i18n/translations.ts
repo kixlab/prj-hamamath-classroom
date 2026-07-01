@@ -12,6 +12,28 @@ export function getAppLanguage(locale: Locale): VerifierLanguage {
   return toVerifierLanguage(locale);
 }
 
+/** 문제·하위문항 본문에서 출력 언어 추정 (UI locale과 무관). */
+export function resolveProblemLanguage(
+  ...texts: Array<string | null | undefined>
+): VerifierLanguage {
+  let hasContent = false;
+  for (const text of texts) {
+    const value = String(text ?? "").trim();
+    if (!value) continue;
+    hasContent = true;
+    const hangul = (value.match(/[\uAC00-\uD7A3]/g) || []).length;
+    const latin = (value.match(/[a-zA-Z]/g) || []).length;
+    if (latin >= 10 && latin > hangul) return "en";
+  }
+  for (const text of texts) {
+    const value = String(text ?? "").trim();
+    if (!value) continue;
+    if (/[\uAC00-\uD7A3]/.test(value)) return "ko";
+  }
+  if (hasContent) return "ko";
+  return "ko";
+}
+
 export type TranslationKey = keyof typeof ko;
 
 const ko = {

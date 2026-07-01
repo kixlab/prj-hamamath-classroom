@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { AppContextType, CoTData, SubQuestionData } from '../types';
+import type { AppContextType, CoTData, StudentAnswerSeed, SubQuestionData } from '../types';
 import { isDemoUserId } from '../demo/demoAccount';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -32,6 +32,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const [currentRubrics, setCurrentRubrics] = useState<any[] | null>(null);
   const [finalizedSubQuestionForRubric, setFinalizedSubQuestionForRubric] = useState<any | null>(null);
   const [pendingSubqAutoStart, setPendingSubqAutoStart] = useState(false);
+  const [studentAnswerSeed, setStudentAnswerSeed] = useState<StudentAnswerSeed | null>(null);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -46,6 +47,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setCurrentRubrics(null);
     setFinalizedSubQuestionForRubric(null);
     setPendingSubqAutoStart(false);
+    setStudentAnswerSeed(null);
   }, []);
 
   const value: AppContextType = {
@@ -78,6 +80,8 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setFinalizedSubQuestionForRubric,
     pendingSubqAutoStart,
     setPendingSubqAutoStart,
+    studentAnswerSeed,
+    setStudentAnswerSeed,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

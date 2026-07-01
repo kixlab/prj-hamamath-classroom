@@ -75,6 +75,15 @@ export interface AppContextType {
   /** 2단계「하위문항 생성하기」→ 3단계 진입 시 자동 생성 */
   pendingSubqAutoStart: boolean;
   setPendingSubqAutoStart: (pending: boolean) => void;
+  /** 4단계 루브릭 확정 시 학생 진단에 채울 랜덤 답안 시드 */
+  studentAnswerSeed: StudentAnswerSeed | null;
+  setStudentAnswerSeed: (seed: StudentAnswerSeed | null) => void;
+}
+
+/** 루브릭 확정 후 학생 진단 화면에 주입할 답안 시드 */
+export interface StudentAnswerSeed {
+  problemId: string;
+  byStudentId: Record<string, Record<string, string>>;
 }
 
 // MathJax 타입 확장

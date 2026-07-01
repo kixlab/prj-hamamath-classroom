@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "./StudentDiagnosis.module.css";
 import { useApp } from "../../contexts/AppContext";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -7,9 +7,21 @@ import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { MainProblemSidebar } from "../MainProblemSidebar/MainProblemSidebar";
 import { api } from "../../services/api";
-import { getSavedResults } from "../../hooks/useStorage";
+import { getSavedResults, fetchHistoryListForUser, loadResultForUser } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
 import { compressImageDataUrl } from "../../utils/imageCompression";
+import { getDemoSourceUserId, isDemoUserId } from "../../demo/demoAccount";
+import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
+import { buildDemoWorkflowPack, getDemoWorkspaceSnapshot, type DemoSubQuestionData } from "../../demo/demoWorkspace";
+import { demoDelay, DEMO_DIAGNOSIS_LOAD_MS, DEMO_REPORT_LOAD_MS } from "../../demo/demoDelay";
+import {
+  buildDemoDiagnosisReportFromSummaries,
+  diagnoseDemoStudentAnswer,
+  getDemoDiagnosisSeed,
+  type DemoDiagnosisReport,
+} from "../../demo/demoDiagnosis";
+import { getProblemDisplayLabel } from "../../utils/problemIdAlias";
+import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
 
 interface StudentDiagnosisProps {
   userId: string;
@@ -82,8 +94,13 @@ function isDisplayCode(value?: string): boolean {
 }
 
 export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: StudentDiagnosisProps) => {
-  const { currentProblemId, currentCotData, currentSubQuestionData, finalizedSubQuestionForRubric, currentRubrics } = useApp();
+  const { currentProblemId, currentCotData, currentSubQuestionData, finalizedSubQuestionForRubric, currentRubrics, isDemoMode, studentAnswerSeed, setStudentAnswerSeed } = useApp();
   const { t, formatLevel, formatGrade, formatCategory, locale } = useLocale();
+  const isDemo = isDemoMode || isDemoUserId(userId);
+  const demoDiagnosisSeededRef = useRef(false);
+  const answerSeedProblemIdRef = useRef<string | null>(null);
+  const demoReportsByStudentRef = useRef<Record<string, DemoDiagnosisReport>>({});
+  const [demoDataLoading, setDemoDataLoading] = useState(false);
 
   const defaultStudentName = useCallback((n: number) => t("diagnosis.studentDefault", { n }), [t]);
 
@@ -108,6 +125,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       setHistoryItems([]);
       return;
     }
+    if (isDemo) {
+      return;
+    }
     const fetchHistory = async () => {
       try {
         const list = await api.getMyHistoryList(userId);
@@ -117,7 +137,165 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }
     };
     fetchHistory();
-  }, [userId, currentProblemId, historyRefreshToken]);
+  }, [userId, currentProblemId, historyRefreshToken, isDemo]);
+
+  // 데모 계정: test 저장 이력과 동기화된 목록·시드 데이터 적용
+  useEffect(() => {
+    if (!isDemo || demoDiagnosisSeededRef.current) return;
+    demoDiagnosisSeededRef.current = true;
+    let cancelled = false;
+    (async () => {
+      setDemoDataLoading(true);
+      await demoDelay(DEMO_DIAGNOSIS_LOAD_MS);
+      if (cancelled) return;
+
+      const sourceUserId = getDemoSourceUserId();
+      const snapshot = getDemoWorkspaceSnapshot();
+
+      if (sourceUserId) {
+        const list = await fetchHistoryListForUser(sourceUserId);
+        if (cancelled) return;
+
+        setHistoryItems(list.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp })));
+
+        if (list.length === 0) {
+          setSelectedProblemId(null);
+          setStudents([]);
+          setStudentAnswers({});
+          setDiagnosisResults({});
+          setCanDiagnose({});
+          setStudentProblemSummaries({});
+          demoReportsByStudentRef.current = {};
+          setCurrentStudentId("");
+          setDiagnosisCotData(null);
+          setApiRubrics(null);
+          setApiGuideSubQuestions(null);
+          setDemoDataLoading(false);
+          return;
+        }
+
+        const primaryProblemId = list[0].problemId;
+        const saved = await loadResultForUser(primaryProblemId, sourceUserId);
+        if (cancelled) return;
+
+        const subQuestionData: DemoSubQuestionData | null =
+          (saved?.subQuestionData as DemoSubQuestionData | null) ??
+          (finalizedSubQuestionForRubric as DemoSubQuestionData | null) ??
+          (currentSubQuestionData as DemoSubQuestionData | null);
+        const rubrics = saved?.rubrics?.length
+          ? (saved.rubrics as ReturnType<typeof resolveDemoRubrics>)
+          : resolveDemoRubrics(saved, subQuestionData ?? undefined);
+        const cotData = saved?.cotData ?? currentCotData ?? snapshot.cotData;
+        const guideSubQuestions =
+          (subQuestionData as { guide_sub_questions?: unknown[] } | null)?.guide_sub_questions ??
+          snapshot.subQuestionData.guide_sub_questions;
+
+        const seed = getDemoDiagnosisSeed(primaryProblemId, rubrics);
+        setSelectedProblemId(seed.problemId);
+        setStudents(seed.students);
+        setStudentAnswers(seed.studentAnswers);
+        setDiagnosisResults(seed.diagnosisResults);
+        setCanDiagnose(seed.canDiagnose);
+        setStudentProblemSummaries(seed.studentProblemSummaries);
+        demoReportsByStudentRef.current = seed.reportsByStudentId;
+        setCurrentStudentId(seed.currentStudentId);
+        setDiagnosisCotData(cotData);
+        setApiRubrics(rubrics);
+        setApiGuideSubQuestions(guideSubQuestions);
+        setDemoDataLoading(false);
+        return;
+      }
+
+      const workflowPack = buildDemoWorkflowPack(currentProblemId, currentCotData);
+      const problemId = currentProblemId ?? workflowPack.subQuestionData.problem_id;
+      const subQuestionData: DemoSubQuestionData =
+        (finalizedSubQuestionForRubric as DemoSubQuestionData | null) ??
+        (currentSubQuestionData as DemoSubQuestionData | null) ??
+        workflowPack.subQuestionData;
+      const mirrored = await loadMirroredTestResult(problemId);
+      const rubrics =
+        (currentRubrics as ReturnType<typeof resolveDemoRubrics> | null) ??
+        resolveDemoRubrics(mirrored, subQuestionData);
+      const cotData = mirrored?.cotData ?? currentCotData ?? snapshot.cotData;
+      const seed = getDemoDiagnosisSeed(problemId, rubrics);
+      setHistoryItems([seed.historyItem]);
+      setSelectedProblemId(seed.problemId);
+      setStudents(seed.students);
+      setStudentAnswers(seed.studentAnswers);
+      setDiagnosisResults(seed.diagnosisResults);
+      setCanDiagnose(seed.canDiagnose);
+      setStudentProblemSummaries(seed.studentProblemSummaries);
+      demoReportsByStudentRef.current = seed.reportsByStudentId;
+      setCurrentStudentId(seed.currentStudentId);
+      setDiagnosisCotData(cotData);
+      setApiRubrics(rubrics);
+      setApiGuideSubQuestions(
+        (subQuestionData as { guide_sub_questions?: unknown[] }).guide_sub_questions ??
+          workflowPack.subQuestionData.guide_sub_questions,
+      );
+      setDemoDataLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo]);
+
+  // test 등 일반 계정: 4단계 루브릭 확정 시 주입된 랜덤 답안 반영 (저장 전까지 진단 불가)
+  useEffect(() => {
+    if (!studentAnswerSeed || isDemo) return;
+    const { problemId, byStudentId } = studentAnswerSeed;
+    answerSeedProblemIdRef.current = problemId;
+
+    setStudentAnswers((prev) => {
+      const next = { ...prev };
+      for (const [studentId, answers] of Object.entries(byStudentId)) {
+        next[studentId] = {
+          ...(next[studentId] ?? {}),
+          [problemId]: { ...answers },
+        };
+      }
+      return next;
+    });
+
+    setCanDiagnose((prev) => {
+      const next = { ...prev };
+      for (const studentId of Object.keys(byStudentId)) {
+        next[studentId] = { ...(next[studentId] ?? {}), [problemId]: false };
+      }
+      return next;
+    });
+
+    setDiagnosisResults((prev) => {
+      const next = { ...prev };
+      for (const studentId of Object.keys(byStudentId)) {
+        if (!next[studentId]?.[problemId]) continue;
+        const { [problemId]: _removed, ...rest } = next[studentId];
+        if (Object.keys(rest).length === 0) {
+          delete next[studentId];
+        } else {
+          next[studentId] = rest;
+        }
+      }
+      return next;
+    });
+
+    setStudentProblemSummaries((prev) => {
+      const next = { ...prev };
+      for (const studentId of Object.keys(byStudentId)) {
+        if (!next[studentId]?.[problemId]) continue;
+        const { [problemId]: _removed, ...rest } = next[studentId];
+        if (Object.keys(rest).length === 0) {
+          delete next[studentId];
+        } else {
+          next[studentId] = rest;
+        }
+      }
+      return next;
+    });
+
+    setSelectedProblemId((prev) => prev ?? problemId);
+    setStudentAnswerSeed(null);
+  }, [studentAnswerSeed, isDemo, setStudentAnswerSeed]);
 
   const problemIdForDiagnosis = selectedProblemId;
   const isCurrentProblemSelected = !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
@@ -125,6 +303,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   useEffect(() => {
     const fetchRubrics = async () => {
       if (!problemIdForDiagnosis) return;
+      if (isDemo) return;
       try {
         const result = await api.getResult(problemIdForDiagnosis);
         const saved = getSavedResults();
@@ -169,19 +348,33 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }
     };
     fetchRubrics();
-  }, [problemIdForDiagnosis]);
+  }, [problemIdForDiagnosis, isDemo]);
 
   // 현재 워크플로우에서 작업 중인 문제를 선택한 경우에는,
   // 3·4단계에서 수정된 최신 문항/루브릭(컨텍스트 값)을 우선 사용하고,
   // 그 외(이전에 저장만 된 다른 문제)는 서버에 저장된 값(API 응답)을 사용한다.
-  const rubrics = (isCurrentProblemSelected ? (currentRubrics ?? apiRubrics ?? []) : (apiRubrics ?? [])) as any[];
+  const demoWorkflowFallback = buildDemoWorkflowPack(currentProblemId, currentCotData);
+
+  const rubrics = (
+    isDemo
+      ? (isCurrentProblemSelected
+          ? (currentRubrics ?? apiRubrics ?? resolveDemoRubrics(null, demoWorkflowFallback.subQuestionData))
+          : (apiRubrics ?? resolveDemoRubrics(null, demoWorkflowFallback.subQuestionData)))
+      : (isCurrentProblemSelected ? (currentRubrics ?? apiRubrics ?? []) : (apiRubrics ?? []))
+  ) as any[];
 
   // 하위문항 소스 우선순위:
   // - 현재 문제를 진단하는 경우: 3단계 확정 JSON → API 저장값 → 현재 가이드라인
   // - 과거 문제를 진단하는 경우: API 저장값만 사용
-  const guideSubQuestions: any[] = isCurrentProblemSelected
-    ? ((finalizedSubQuestionForRubric as any)?.guide_sub_questions ?? apiGuideSubQuestions ?? ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ?? [])
-    : (apiGuideSubQuestions ?? ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ?? []);
+  const guideSubQuestions: any[] =
+    isDemo
+      ? ((finalizedSubQuestionForRubric as any)?.guide_sub_questions ??
+          apiGuideSubQuestions ??
+          ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ??
+          demoWorkflowFallback.subQuestionData.guide_sub_questions)
+      : isCurrentProblemSelected
+        ? ((finalizedSubQuestionForRubric as any)?.guide_sub_questions ?? apiGuideSubQuestions ?? ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ?? [])
+        : (apiGuideSubQuestions ?? ((currentSubQuestionData as any)?.guide_sub_questions as any[] | undefined) ?? []);
 
   // 메인 문제/정답/학년/수학 영역은
   // - 진단용 problemId가 선택된 경우: 해당 저장 결과의 cotData를 우선 사용
@@ -301,6 +494,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
   useEffect(() => {
+    if (isDemo) return;
     try {
       const raw = window.localStorage.getItem(getStudentDiagnosisStateKey(userId));
       if (raw) {
@@ -339,10 +533,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     } catch (err) {
       console.error("저장된 학생 진단 상태를 불러오는 중 오류:", err);
     }
-  }, [userId, historyItems]);
+  }, [userId, historyItems, isDemo]);
 
   // 서버에 저장된 학생 목록 불러오기 (단일 소스: 삭제 반영·다른 브라우저 복원)
   useEffect(() => {
+    if (isDemo) return;
     let cancelled = false;
     (async () => {
       try {
@@ -359,15 +554,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId, defaultStudentName]);
+  }, [userId, defaultStudentName, isDemo]);
 
   // 서버에 저장된 학생 답안 불러와서 복원 (다른 브라우저/기기에서도 접근 가능). 학생 목록은 건드리지 않음(삭제 반영 유지).
   useEffect(() => {
+    if (isDemo) return;
     let cancelled = false;
     (async () => {
       try {
         const { items } = await api.getStudentAnswersList();
         if (cancelled || !items?.length) return;
+        const mergedFromServer: Array<{ studentId: string; problemId: string }> = [];
         setStudentAnswers((prev) => {
           const next = JSON.parse(JSON.stringify(prev));
           for (const item of items) {
@@ -376,22 +573,21 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             const existing = next[item.student_id][item.problem_id];
             if (!existing || Object.keys(existing).length === 0) {
               next[item.student_id][item.problem_id] = { ...(item.answers || {}) };
+              mergedFromServer.push({ studentId: item.student_id, problemId: item.problem_id });
             }
           }
           return next;
         });
-        // 서버에서 답안을 불러온 (학생, 문제)는 진단 가능으로 표시 → 다른 브라우저(사파리 등)에서도 "전체 하위문항 진단" 버튼 노출
-        setCanDiagnose((prev) => {
-          const next = { ...prev };
-          for (const item of items) {
-            if (!item.student_id || !item.problem_id) continue;
-            const hasAnswers = item.answers && typeof item.answers === "object" && Object.keys(item.answers).length > 0;
-            if (!hasAnswers) continue;
-            if (!next[item.student_id]) next[item.student_id] = {};
-            next[item.student_id][item.problem_id] = true;
-          }
-          return next;
-        });
+        if (mergedFromServer.length > 0) {
+          setCanDiagnose((prevCan) => {
+            const nextCan = { ...prevCan };
+            for (const { studentId, problemId } of mergedFromServer) {
+              if (answerSeedProblemIdRef.current === problemId) continue;
+              nextCan[studentId] = { ...(nextCan[studentId] ?? {}), [problemId]: true };
+            }
+            return nextCan;
+          });
+        }
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안 목록 불러오기 오류:", err);
       }
@@ -399,11 +595,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, isDemo]);
 
   // 서버에 저장된 진단 결과 불러와서 복원 (다른 브라우저/기기 동기화)
   // + 모든 문제에 대해 studentProblemSummaries 복원 → 리포트가 여러 문제를 반영하도록 함
   useEffect(() => {
+    if (isDemo) return;
     let cancelled = false;
     (async () => {
       try {
@@ -484,11 +681,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, isDemo]);
 
   // 동일 로그인 id·문제·학생에 해당하는 저장 답안이 있으면 화면에 표시
   useEffect(() => {
-    if (!problemIdForDiagnosis || !currentStudentId) return;
+    if (isDemo || !problemIdForDiagnosis || !currentStudentId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -516,11 +713,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId, problemIdForDiagnosis, currentStudentId]);
+  }, [userId, problemIdForDiagnosis, currentStudentId, isDemo]);
 
   // 해당 학생·문제의 손글씨 이미지 서버에서 조회 (다른 브라우저 동기화)
   useEffect(() => {
-    if (!problemIdForDiagnosis || !currentStudentId) return;
+    if (isDemo || !problemIdForDiagnosis || !currentStudentId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -548,10 +745,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId, problemIdForDiagnosis, currentStudentId]);
+  }, [userId, problemIdForDiagnosis, currentStudentId, isDemo]);
 
   // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장 (다른 탭/같은 브라우저 복원용)
   useEffect(() => {
+    if (isDemo) return;
     try {
       const stateToSave = {
         studentAnswers,
@@ -566,7 +764,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     } catch (err) {
       console.error("학생 진단 상태를 저장하는 중 오류:", err);
     }
-  }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, students]);
+  }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, students, isDemo]);
 
   const startEditStudentName = (studentId: string) => {
     const s = students.find((x) => x.id === studentId);
@@ -726,6 +924,39 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       },
     }));
     setSaveMessage(null);
+    if (problemIdForDiagnosis) {
+      answerSeedProblemIdRef.current = problemIdForDiagnosis;
+    }
+    setCanDiagnose((prev) => {
+      if (!prev[currentStudentId]?.[currentProblemKey]) return prev;
+      return {
+        ...prev,
+        [currentStudentId]: {
+          ...(prev[currentStudentId] ?? {}),
+          [currentProblemKey]: false,
+        },
+      };
+    });
+    setDiagnosisResults((prev) => {
+      const perStudent = prev[currentStudentId];
+      if (!perStudent?.[currentProblemKey]) return prev;
+      const { [currentProblemKey]: _removed, ...rest } = perStudent;
+      if (Object.keys(rest).length === 0) {
+        const { [currentStudentId]: _studentRemoved, ...others } = prev;
+        return others;
+      }
+      return { ...prev, [currentStudentId]: rest };
+    });
+    setStudentProblemSummaries((prev) => {
+      const perStudent = prev[currentStudentId];
+      if (!perStudent?.[currentProblemKey]) return prev;
+      const { [currentProblemKey]: _removed, ...rest } = perStudent;
+      if (Object.keys(rest).length === 0) {
+        const { [currentStudentId]: _studentRemoved, ...others } = prev;
+        return others;
+      }
+      return { ...prev, [currentStudentId]: rest };
+    });
   };
 
   // 개별 하위문항 진단 결과(등급/피드백) 수정 → 요약·서버 저장 반영
@@ -808,6 +1039,15 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
       for (const item of targetItems) {
         const answerText = answersForStudent[item.id] ?? "";
+
+        if (isDemo) {
+          const result = diagnoseDemoStudentAnswer(item.rubric, answerText);
+          newResultsForStudent[item.id] = {
+            level: result.level,
+            reason: result.reason,
+          };
+          continue;
+        }
 
         // 루브릭을 백엔드 진단 스키마에 맞게 변환
         const rubricLevels: Record<string, any> = {};
@@ -894,7 +1134,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         }
       }
       try {
-        await api.saveDiagnosisResults({ user_id: userId, results: toSaveResults });
+        if (!isDemo) {
+          await api.saveDiagnosisResults({ user_id: userId, results: toSaveResults });
+        }
       } catch (err: any) {
         console.error("진단 결과 자동 저장 오류:", err);
         alert(err?.message ?? t("diagnosis.saveResultsFail"));
@@ -985,6 +1227,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             [problemId]: true,
           },
         }));
+        if (answerSeedProblemIdRef.current === problemId) {
+          answerSeedProblemIdRef.current = null;
+        }
       }
       if (savedAnswers > 0) parts.push(t("diagnosis.savedAnswers", { n: savedAnswers }));
 
@@ -1080,6 +1325,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
   };
 
+  const applyReportData = useCallback((data: NonNullable<typeof reportData>) => {
+    setReportData(data);
+    const initialEdits: Record<string, string> = {};
+    (data.step_rows || []).forEach((row) => {
+      if (row.feedback_summary && typeof row.feedback_summary === "string") {
+        initialEdits[row.display_code] = row.feedback_summary;
+      }
+    });
+    setReportFeedbackEdits(initialEdits);
+  }, []);
+
   /** 해당 학생의 진단 리포트 모달 열기 (학생 목록에서 학생별 버튼으로 호출). 최초 제외하고는 이전 결과를 바로 표시 */
   const openReport = async (studentId: string) => {
     // 해당 학생에 대해 진단 결과/요약이 있는 모든 문제 ID 사용
@@ -1091,38 +1347,40 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       return;
     }
     let fullPerStudent: Record<string, ProblemStepSummary> = { ...(studentProblemSummaries[studentId] ?? {}) };
-    const saved = getSavedResults();
-    for (const problemId of diagnosisProblemIds) {
-      const perProblem = diagnosisResults[studentId]?.[problemId];
-      if (!perProblem || typeof perProblem !== "object") continue;
-      let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
-      try {
-        const result = await api.getResult(problemId);
-        const local = saved[problemId] || null;
-        const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData;
-        if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
-          guideSubQuestions = gd.guide_sub_questions;
+    if (!isDemo) {
+      const saved = getSavedResults();
+      for (const problemId of diagnosisProblemIds) {
+        const perProblem = diagnosisResults[studentId]?.[problemId];
+        if (!perProblem || typeof perProblem !== "object") continue;
+        let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
+        try {
+          const result = await api.getResult(problemId);
+          const local = saved[problemId] || null;
+          const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData;
+          if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
+            guideSubQuestions = gd.guide_sub_questions;
+          }
+        } catch {
+          // 스킵
         }
-      } catch {
-        // 스킵
-      }
-      const subIdToDisplayCode = guideSubQuestions.length > 0 ? buildSubQuestionIdToDisplayCode(guideSubQuestions) : {};
-      const levelsByDisplayCode: Record<string, LevelType> = {};
-      const feedbackByDisplayCode: Record<string, string> = {};
-      for (const subId of Object.keys(perProblem)) {
-        const dc = subIdToDisplayCode[subId] ?? (isDisplayCode(subId) ? subId : undefined);
-        if (!dc) continue;
-        const res = perProblem[subId];
-        const normalizedLevel = normalizeDiagnosisLevel(res?.level);
-        if (normalizedLevel) levelsByDisplayCode[dc] = normalizedLevel;
-        if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
-      }
-      if (Object.keys(levelsByDisplayCode).length > 0) {
-        fullPerStudent[problemId] = {
-          problemId,
-          levelsByDisplayCode,
-          feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
-        };
+        const subIdToDisplayCode = guideSubQuestions.length > 0 ? buildSubQuestionIdToDisplayCode(guideSubQuestions) : {};
+        const levelsByDisplayCode: Record<string, LevelType> = {};
+        const feedbackByDisplayCode: Record<string, string> = {};
+        for (const subId of Object.keys(perProblem)) {
+          const dc = subIdToDisplayCode[subId] ?? (isDisplayCode(subId) ? subId : undefined);
+          if (!dc) continue;
+          const res = perProblem[subId];
+          const normalizedLevel = normalizeDiagnosisLevel(res?.level);
+          if (normalizedLevel) levelsByDisplayCode[dc] = normalizedLevel;
+          if (res?.reason?.trim()) feedbackByDisplayCode[dc] = res.reason.trim();
+        }
+        if (Object.keys(levelsByDisplayCode).length > 0) {
+          fullPerStudent[problemId] = {
+            problemId,
+            levelsByDisplayCode,
+            feedbackByDisplayCode: Object.keys(feedbackByDisplayCode).length > 0 ? feedbackByDisplayCode : undefined,
+          };
+        }
       }
     }
     const problemIds = Object.keys(fullPerStudent);
@@ -1147,20 +1405,25 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
     setReportStudentId(studentId);
     setReportOpen(true);
-    setReportLoading(true);
     setReportError(null);
+
+    if (isDemo) {
+      setReportLoading(true);
+      await demoDelay(DEMO_REPORT_LOAD_MS);
+      const report =
+        demoReportsByStudentRef.current[studentId] ?? buildDemoDiagnosisReportFromSummaries(fullPerStudent);
+      demoReportsByStudentRef.current[studentId] = report;
+      applyReportData(report);
+      setReportLoading(false);
+      return;
+    }
+
+    setReportLoading(true);
     try {
       // 저장된 리포트가 있으면 우선 사용 (버튼 클릭마다 자동 재계산하지 않음)
       const savedReport = await api.getDiagnosisReport(studentId, userId);
       if (savedReport && savedReport.problem_rows?.length > 0) {
-        setReportData(savedReport);
-        const initialEdits: Record<string, string> = {};
-        (savedReport.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
-          if (row.feedback_summary && typeof row.feedback_summary === "string") {
-            initialEdits[row.display_code] = row.feedback_summary;
-          }
-        });
-        setReportFeedbackEdits(initialEdits);
+        applyReportData(savedReport);
         setReportLoading(false);
         return;
       }
@@ -1175,14 +1438,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
-      setReportData(data);
-      const initialEdits: Record<string, string> = {};
-      (data.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
-        if (row.feedback_summary && typeof row.feedback_summary === "string") {
-          initialEdits[row.display_code] = row.feedback_summary;
-        }
-      });
-      setReportFeedbackEdits(initialEdits);
+      applyReportData(data);
       // 리포트 서버 저장 (다른 브라우저에서 복원되도록)
       api.saveDiagnosisReport({ user_id: userId, student_id: studentId, report: data }).catch((err) => console.error("리포트 저장 오류:", err));
     } catch (err: any) {
@@ -1207,6 +1463,14 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     setReportLoading(true);
     setReportError(null);
     try {
+      if (isDemo) {
+        await demoDelay(DEMO_REPORT_LOAD_MS);
+        const data = buildDemoDiagnosisReportFromSummaries(perStudent);
+        demoReportsByStudentRef.current[sid] = data;
+        applyReportData(data);
+        return;
+      }
+
       const payload = {
         student_id: sid,
         problem_summaries: problemIds.map((pid) => ({
@@ -1217,14 +1481,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
-      setReportData(data);
-      const initialEdits: Record<string, string> = {};
-      (data.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
-        if (row.feedback_summary && typeof row.feedback_summary === "string") {
-          initialEdits[row.display_code] = row.feedback_summary;
-        }
-      });
-      setReportFeedbackEdits(initialEdits);
+      applyReportData(data);
       // 리포트 서버 저장 (다른 브라우저에서 복원되도록)
       api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: data }).catch((err) => console.error("리포트 저장 오류:", err));
     } catch (err: any) {
@@ -1245,6 +1502,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }));
     const reportToSave = { ...reportData, step_rows };
     try {
+      if (isDemo) {
+        demoReportsByStudentRef.current[sid] = reportToSave;
+        applyReportData(reportToSave);
+        setSaveMessage(t("diagnosis.reportSaved"));
+        setTimeout(() => setSaveMessage(null), 2000);
+        return;
+      }
       await api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: reportToSave });
       setSaveMessage(t("diagnosis.reportSaved"));
       setTimeout(() => setSaveMessage(null), 2000);
@@ -1277,6 +1541,14 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     setReportLoading(true);
     setReportError(null);
     try {
+      if (isDemo) {
+        await demoDelay(DEMO_REPORT_LOAD_MS);
+        const data = buildDemoDiagnosisReportFromSummaries(nextPerStudent);
+        demoReportsByStudentRef.current[sid] = data;
+        applyReportData(data);
+        return;
+      }
+
       const payload = {
         student_id: sid,
         problem_summaries: remainingProblemIds.map((pid) => ({
@@ -1287,14 +1559,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         language: getAppLanguage(locale),
       };
       const data = await api.generateStudentDiagnosisReport(payload);
-      setReportData(data);
-      const initialEdits: Record<string, string> = {};
-      (data.step_rows || []).forEach((row: { display_code: string; feedback_summary?: string | null }) => {
-        if (row.feedback_summary && typeof row.feedback_summary === "string") {
-          initialEdits[row.display_code] = row.feedback_summary;
-        }
-      });
-      setReportFeedbackEdits(initialEdits);
+      applyReportData(data);
       await api.saveDiagnosisReport({ user_id: userId, student_id: sid, report: data });
     } catch (err: any) {
       console.error("리포트 문제 제외 후 재생성 오류:", err);
@@ -1334,6 +1599,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           )}
 
           <div className={styles.diagnosisWorkspace}>
+            {demoDataLoading ? (
+              <p className={styles.mainProblemEmpty}>{t("app.promptLoading")}</p>
+            ) : (
+              <>
             <aside className={styles.studentListRail}>
               {historyItems.length > 0 && (
                 <div className={styles.railProblemSelect}>
@@ -1347,7 +1616,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                       <option value="">{t("diagnosis.selectProblem")}</option>
                       {historyItems.map((item: any) => (
                         <option key={item.problem_id} value={item.problem_id}>
-                          {item.problem_id}
+                          {getProblemDisplayLabel(item.problem_id)}
                         </option>
                       ))}
                     </select>
@@ -1509,14 +1778,22 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                         <>
                           <div className={styles.studentAnswerColumn}>
                               <div className={styles.studentAllList}>
-                                {diagnosisItems.map((item) => {
+                                {diagnosisItems.map((item, itemIndex) => {
+                                  const frameworkStepId = resolveFrameworkStepId(
+                                    item.displayCode.split("-")[0],
+                                    itemIndex + 1,
+                                  );
                                   const value = studentAnswers[currentStudentId]?.[currentProblemKey]?.[item.id] ?? "";
                                   const result = diagnosisResults[currentStudentId]?.[currentProblemKey]?.[item.id];
                                   const showAnswer = !!showAnswerById[item.id];
                                   const showRubric = !!showRubricById[item.id];
                                   const isEditingDiagnosis = !!editingDiagnosisById[item.id];
                                   return (
-                                    <div key={item.id} className={styles.studentAnswerBlock}>
+                                    <div
+                                      key={item.id}
+                                      className={styles.studentAnswerBlock}
+                                      style={frameworkStepSectionStyle(frameworkStepId)}
+                                    >
                                       <div className={styles.studentAnswerHeader}>
                                         <div className={styles.studentAnswerHeaderLeft}>
                                           <span className={styles.studentAnswerCode}>{item.displayCode}</span>
@@ -1651,24 +1928,21 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   );
                                 })}
                               </div>
-
-                              <div className={styles.studentActions}>
-                                <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
-                                  {saving ? t("diagnosis.saving") : t("diagnosis.saveAllAnswers")}
-                                </button>
-                                {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
-                                  <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                    {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
-                                  </button>
-                                )}
-                                {canDiagnose[currentStudentId]?.[currentProblemKey] && diagnosisItems.length > 0 && false && (
-                                  <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                    {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
-                                  </button>
-                                )}
-                                {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
-                              </div>
                           </div>
+
+                          <footer className={styles.studentPanelFooter}>
+                            {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
+                            <div className={styles.studentPanelFooterActions}>
+                              {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
+                                <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
+                                  {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
+                                </button>
+                              )}
+                              <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
+                                {saving ? t("diagnosis.saving") : t("diagnosis.saveAllAnswers")}
+                              </button>
+                            </div>
+                          </footer>
 
                           {/* 개별 문항 진단 결과 요약 배지는 요약 섹션과 카드 상단에서 충분히 표현되므로,
                           별도의 상세 피드백 박스는 표시하지 않습니다. */}
@@ -1683,6 +1957,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             </div>
 
             </section>
+              </>
+            )}
           </div>
         </div>
       </main>
@@ -1747,7 +2023,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           const gradeKo = total > 0 ? scoreToGradeFrom100Korean(score_100) : "-";
                           return (
                             <tr key={row.problem_id}>
-                              <td>{row.problem_id}</td>
+                              <td>{getProblemDisplayLabel(row.problem_id)}</td>
                               <td>{row.step_count}</td>
                               <td>{row.high_count}</td>
                               <td>{row.mid_count}</td>
@@ -1772,7 +2048,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                         return (
                           <div key={`graph-${row.problem_id}`} className={styles.reportGraphItem}>
                             <div className={styles.reportGraphHeader}>
-                              <span className={styles.reportGraphTitle}>{row.problem_id}</span>
+                              <span className={styles.reportGraphTitle}>{getProblemDisplayLabel(row.problem_id)}</span>
                               <div className={styles.reportGraphHeaderRight}>
                                 <span className={styles.reportGraphLevelBadge}>{formatGrade(gradeKo)}</span>
                                 <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
