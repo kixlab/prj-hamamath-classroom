@@ -272,7 +272,7 @@ export function getDemoDiagnosisSeed(
   for (const student of students) {
     const answers = buildDemoStudentAnswers(rubrics, student);
     studentAnswers[student.id] = { [problemId]: answers };
-    canDiagnose[student.id] = { [problemId]: false };
+    canDiagnose[student.id] = { [problemId]: true };
 
     const perProblemResults: Record<string, { level: string; reason: string }> = {};
     const levelsByDisplayCode: Record<string, DemoLevel> = {};

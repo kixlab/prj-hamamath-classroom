@@ -97,7 +97,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const { currentProblemId, currentCotData, currentSubQuestionData, finalizedSubQuestionForRubric, currentRubrics, isDemoMode, studentAnswerSeed, setStudentAnswerSeed } = useApp();
   const { t, formatLevel, formatGrade, formatCategory, locale } = useLocale();
   const isDemo = isDemoMode || isDemoUserId(userId);
-  const demoDiagnosisSeededRef = useRef(false);
   const answerSeedProblemIdRef = useRef<string | null>(null);
   const demoReportsByStudentRef = useRef<Record<string, DemoDiagnosisReport>>({});
   const [demoDataLoading, setDemoDataLoading] = useState(false);
@@ -155,13 +154,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   // 데모 계정: test 저장 이력과 동기화된 목록·시드 데이터 적용
   useEffect(() => {
-    if (!isDemo || demoDiagnosisSeededRef.current) return;
-    demoDiagnosisSeededRef.current = true;
+    if (!isDemo) return;
     let cancelled = false;
     (async () => {
       setDemoDataLoading(true);
-      await demoDelay(DEMO_DIAGNOSIS_LOAD_MS);
-      if (cancelled) return;
+      try {
+        await demoDelay(DEMO_DIAGNOSIS_LOAD_MS);
+        if (cancelled) return;
 
       const sourceUserId = getDemoSourceUserId();
       const snapshot = getDemoWorkspaceSnapshot();
@@ -172,52 +171,43 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
         setHistoryItems(list.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp })));
 
-        if (list.length === 0) {
-          setSelectedProblemId(null);
-          setStudents([]);
-          setStudentAnswers({});
-          setDiagnosisResults({});
-          setCanDiagnose({});
-          setStudentProblemSummaries({});
-          demoReportsByStudentRef.current = {};
-          setCurrentStudentId("");
-          setDiagnosisCotData(null);
-          setApiRubrics(null);
-          setApiGuideSubQuestions(null);
-          setDemoDataLoading(false);
+        if (list.length > 0) {
+          const primaryProblemId =
+            currentProblemId && list.some((item) => item.problemId === currentProblemId)
+              ? currentProblemId
+              : list[0].problemId;
+          const saved = await loadResultForUser(primaryProblemId, sourceUserId);
+          if (cancelled) return;
+
+          const subQuestionData: DemoSubQuestionData | null =
+            (saved?.subQuestionData as DemoSubQuestionData | null) ??
+            (finalizedSubQuestionForRubric as DemoSubQuestionData | null) ??
+            (currentSubQuestionData as DemoSubQuestionData | null);
+          const rubrics =
+            currentProblemId === primaryProblemId && currentRubrics?.length
+              ? (currentRubrics as ReturnType<typeof resolveDemoRubrics>)
+              : saved?.rubrics?.length
+                ? (saved.rubrics as ReturnType<typeof resolveDemoRubrics>)
+                : resolveDemoRubrics(saved, subQuestionData ?? undefined);
+          const cotData = saved?.cotData ?? currentCotData ?? snapshot.cotData;
+          const guideSubQuestions =
+            (subQuestionData as { guide_sub_questions?: unknown[] } | null)?.guide_sub_questions ??
+            snapshot.subQuestionData.guide_sub_questions;
+
+          const seed = getDemoDiagnosisSeed(primaryProblemId, rubrics);
+          setSelectedProblemId(seed.problemId);
+          setStudents(seed.students);
+          setStudentAnswers(seed.studentAnswers);
+          setDiagnosisResults(seed.diagnosisResults);
+          setCanDiagnose(seed.canDiagnose);
+          setStudentProblemSummaries(seed.studentProblemSummaries);
+          demoReportsByStudentRef.current = seed.reportsByStudentId;
+          setCurrentStudentId(seed.currentStudentId);
+          setDiagnosisCotData(cotData);
+          setApiRubrics(rubrics);
+          setApiGuideSubQuestions(guideSubQuestions);
           return;
         }
-
-        const primaryProblemId = list[0].problemId;
-        const saved = await loadResultForUser(primaryProblemId, sourceUserId);
-        if (cancelled) return;
-
-        const subQuestionData: DemoSubQuestionData | null =
-          (saved?.subQuestionData as DemoSubQuestionData | null) ??
-          (finalizedSubQuestionForRubric as DemoSubQuestionData | null) ??
-          (currentSubQuestionData as DemoSubQuestionData | null);
-        const rubrics = saved?.rubrics?.length
-          ? (saved.rubrics as ReturnType<typeof resolveDemoRubrics>)
-          : resolveDemoRubrics(saved, subQuestionData ?? undefined);
-        const cotData = saved?.cotData ?? currentCotData ?? snapshot.cotData;
-        const guideSubQuestions =
-          (subQuestionData as { guide_sub_questions?: unknown[] } | null)?.guide_sub_questions ??
-          snapshot.subQuestionData.guide_sub_questions;
-
-        const seed = getDemoDiagnosisSeed(primaryProblemId, rubrics);
-        setSelectedProblemId(seed.problemId);
-        setStudents(seed.students);
-        setStudentAnswers(seed.studentAnswers);
-        setDiagnosisResults(seed.diagnosisResults);
-        setCanDiagnose(seed.canDiagnose);
-        setStudentProblemSummaries(seed.studentProblemSummaries);
-        demoReportsByStudentRef.current = seed.reportsByStudentId;
-        setCurrentStudentId(seed.currentStudentId);
-        setDiagnosisCotData(cotData);
-        setApiRubrics(rubrics);
-        setApiGuideSubQuestions(guideSubQuestions);
-        setDemoDataLoading(false);
-        return;
       }
 
       const workflowPack = buildDemoWorkflowPack(currentProblemId, currentCotData);
@@ -227,12 +217,21 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         (currentSubQuestionData as DemoSubQuestionData | null) ??
         workflowPack.subQuestionData;
       const mirrored = await loadMirroredTestResult(problemId);
+      if (cancelled) return;
       const rubrics =
         (currentRubrics as ReturnType<typeof resolveDemoRubrics> | null) ??
         resolveDemoRubrics(mirrored, subQuestionData);
       const cotData = mirrored?.cotData ?? currentCotData ?? snapshot.cotData;
       const seed = getDemoDiagnosisSeed(problemId, rubrics);
-      setHistoryItems(problemId ? [{ problem_id: problemId }] : []);
+      const localHistory = sourceUserId ? await fetchHistoryListForUser(sourceUserId) : [];
+      if (cancelled) return;
+      setHistoryItems(
+        localHistory.length > 0
+          ? localHistory.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp }))
+          : problemId
+            ? [{ problem_id: problemId }]
+            : [],
+      );
       setSelectedProblemId(seed.problemId);
       setStudents(seed.students);
       setStudentAnswers(seed.studentAnswers);
@@ -247,12 +246,35 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         (subQuestionData as { guide_sub_questions?: unknown[] }).guide_sub_questions ??
           workflowPack.subQuestionData.guide_sub_questions,
       );
-      setDemoDataLoading(false);
+      } catch (err) {
+        console.error("데모 진단 시드 오류:", err);
+        if (!cancelled) {
+          const workflowPack = buildDemoWorkflowPack(currentProblemId, currentCotData);
+          const problemId = currentProblemId ?? workflowPack.subQuestionData.problem_id;
+          const rubrics = resolveDemoRubrics(null, workflowPack.subQuestionData);
+          const seed = getDemoDiagnosisSeed(problemId, rubrics);
+          setHistoryItems(problemId ? [{ problem_id: problemId }] : []);
+          setSelectedProblemId(seed.problemId);
+          setStudents(seed.students);
+          setStudentAnswers(seed.studentAnswers);
+          setDiagnosisResults(seed.diagnosisResults);
+          setCanDiagnose(seed.canDiagnose);
+          setStudentProblemSummaries(seed.studentProblemSummaries);
+          demoReportsByStudentRef.current = seed.reportsByStudentId;
+          setCurrentStudentId(seed.currentStudentId);
+          setDiagnosisCotData(currentCotData ?? getDemoWorkspaceSnapshot().cotData);
+          setApiRubrics(rubrics);
+          setApiGuideSubQuestions(workflowPack.subQuestionData.guide_sub_questions);
+        }
+      } finally {
+        if (!cancelled) setDemoDataLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [isDemo]);
+    // 워크플로우 상태가 바뀔 때마다 재실행하면 로딩이 끝나지 않을 수 있음
+  }, [isDemo, historyRefreshToken]);
 
   // test 등 일반 계정: 4단계 루브릭 확정 시 주입된 랜덤 답안 반영 (저장 전까지 진단 불가)
   useEffect(() => {
@@ -823,6 +845,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     const nextList = students.map((s) => (s.id === editingStudentId ? { ...s, name: newName } : s));
     setStudents(nextList);
     cancelEditStudent();
+    if (isDemo) return;
     try {
       await api.saveStudentList(
         nextList.map((s) => ({ id: s.id, name: s.name })),
@@ -847,6 +870,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     const nextList = [...students, newStudent];
     setStudents(nextList);
     setCurrentStudentId(id);
+    if (isDemo) return;
     api
       .saveStudentList(
         nextList.map((s) => ({ id: s.id, name: s.name })),
@@ -887,6 +911,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     if (currentStudentId === studentId) {
       setCurrentStudentId(nextList[0]?.id ?? "");
     }
+    if (isDemo) return;
     try {
       await api.saveStudentList(
         nextList.map((s) => ({ id: s.id, name: s.name })),
@@ -915,6 +940,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         const next: [string | null, string | null] = slot === 1 ? [null, current[1]] : [current[0], null];
         return { ...prev, [currentStudentId]: { ...byStudent, [currentProblemKey]: next } };
       });
+      if (isDemo) return;
       try {
         await api.deleteHandwritten(currentStudentId, currentProblemKey, slot, userId);
       } catch (err: any) {
@@ -938,6 +964,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         const next: [string | null, string | null] = slot === 1 ? [dataUrl, current[1]] : [current[0], dataUrl];
         return { ...prev, [currentStudentId]: { ...byStudent, [currentProblemKey]: next } };
       });
+      if (isDemo) return;
       try {
         await api.uploadHandwritten(currentStudentId, currentProblemKey, slot, dataUrl, userId);
       } catch (err: any) {
@@ -1238,6 +1265,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
     if (toSave.length === 0) {
       alert(t("diagnosis.noAnswersToSave"));
+      return;
+    }
+
+    if (isDemo) {
+      for (const { studentId, problemId } of toSave) {
+        setCanDiagnose((prev) => ({
+          ...prev,
+          [studentId]: {
+            ...(prev[studentId] ?? {}),
+            [problemId]: true,
+          },
+        }));
+      }
+      setSaveMessage(t("diagnosis.saveComplete"));
       return;
     }
 

@@ -181,6 +181,7 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
         />
         <div className={styles.container}>
           <StudentDiagnosis
+            key={`${userId}-${currentProblemId ?? "none"}-${historyRefreshToken}`}
             userId={userId}
             historyRefreshToken={historyRefreshToken}
             onClose={() => setShowStudentDiagnosis(false)}
