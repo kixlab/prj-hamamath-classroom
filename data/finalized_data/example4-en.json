@@ -1,0 +1,8 @@
+{
+  "main_problem": "There is 1 L of milk. Jack drank 250 mL from the 1 L of milk, and Harry drank 300 mL. How many milliliters of milk are left?",
+  "main_answer": "450 mL",
+  "main_solution": "$1000 - 250 - 300 = 750 - 300 = 450\\,(\\mathrm{mL})$",
+  "grade": "3",
+  "semester": "2",
+  "image_file": "example4-en.png"
+}

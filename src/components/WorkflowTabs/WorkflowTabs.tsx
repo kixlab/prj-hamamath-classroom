@@ -3,7 +3,7 @@ import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
 
 export const WorkflowTabs = () => {
-  const { currentStep, setCurrentStep, currentCotData, currentGuidelineData, finalizedGuidelineForRubric, currentRubrics } = useApp();
+  const { currentStep, setCurrentStep, currentCotData, currentSubQuestionData, finalizedSubQuestionForRubric, currentRubrics } = useApp();
   const { t } = useLocale();
 
   const tabs = [
@@ -19,9 +19,9 @@ export const WorkflowTabs = () => {
     if (step === 2) return currentCotData !== null;
     if (step === 3) return currentCotData !== null;
     if (step === 4) {
-      if (!currentGuidelineData) return false;
+      if (!currentSubQuestionData) return false;
       const hasRubrics = currentRubrics != null && currentRubrics.length > 0;
-      const hasFinalizedFromStep3 = finalizedGuidelineForRubric != null;
+      const hasFinalizedFromStep3 = finalizedSubQuestionForRubric != null;
       return hasFinalizedFromStep3 || hasRubrics;
     }
     return false;

@@ -1,0 +1,8 @@
+{
+  "main_problem": "우유가 1L 있습니다. 1L 우유 중에서 지호는 250mL를 마시고 혜원이는 300mL를 마셨습니다. 남은 우유의 양은 몇 mL 일까요?",
+  "main_answer": "450mL",
+  "main_solution": "$1000-250-300=750-300=450(\\mathrm{~mL})$",
+  "grade": "3",
+  "semester": "2",
+  "image_file": "example4.png"
+}

@@ -57,6 +57,60 @@
   color: var(--color-text);
 }
 
+.answerValue {
+  display: inline;
+}
+
+.answerValue p,
+.answerValue ul,
+.answerValue ol,
+.solutionContent p,
+.solutionContent ul,
+.solutionContent ol {
+  margin: 0.35em 0;
+}
+
+.answerValue ul,
+.answerValue ol,
+.solutionContent ul,
+.solutionContent ol {
+  padding-left: 1.4em;
+}
+
+.answerValue p:first-child,
+.answerValue ul:first-child,
+.answerValue ol:first-child,
+.solutionContent p:first-child,
+.solutionContent ul:first-child,
+.solutionContent ol:first-child {
+  margin-top: 0;
+}
+
+.answerValue p:last-child,
+.answerValue ul:last-child,
+.answerValue ol:last-child,
+.solutionContent p:last-child,
+.solutionContent ul:last-child,
+.solutionContent ol:last-child {
+  margin-bottom: 0;
+}
+
+.answerValue table,
+.solutionContent table {
+  border-collapse: collapse;
+  margin: 0.35em 0;
+  font-size: 0.9em;
+}
+
+.answerValue th,
+.answerValue td,
+.solutionContent th,
+.solutionContent td {
+  border: 1px solid var(--color-border, #dee2e6);
+  padding: 4px 8px;
+  text-align: left;
+}
+
 .solution {
   margin-top: 16px;
   padding-top: 12px;
@@ -72,7 +126,6 @@
 }
 
 .solutionContent {
-  white-space: pre-wrap;
   line-height: 1.6;
   color: var(--color-text-secondary);
   font-size: 0.875rem;
@@ -98,4 +151,211 @@
 .metaLabel {
   font-weight: 600;
   color: var(--color-text);
+}
+
+.ragActions {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ragBtn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ragBtn:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+}
+
+.ragBtn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.ragOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+}
+
+.ragModal {
+  background: var(--color-bg);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-width: 720px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ragHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ragTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ragCloseBtn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.ragCloseBtn:hover {
+  color: var(--color-text);
+}
+
+.ragBody {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+}
+
+.ragSection + .ragSection {
+  margin-top: 16px;
+}
+
+.ragSectionLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.ragQuery,
+.ragTextbook {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.ragBadge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ragHint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.ragConceptList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ragConceptItem {
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+}
+
+.ragConceptTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+
+.ragScore {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.ragConceptDef {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.ragConceptKeywords {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.ragContextPre {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: #f8fafc;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--color-text);
+}
+
+.ragStatus {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.ragError {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #dc2626;
+}
+
+.promptSelectLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.promptSelect {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.875rem;
 }

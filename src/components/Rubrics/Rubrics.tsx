@@ -1,12 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { api } from "../../services/api";
 import { saveResult } from "../../hooks/useStorage";
 import { useMathJax } from "../../hooks/useMathJax";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatCotStepGroup, formatCotSubSkill, getAppLanguage } from "../../i18n/translations";
+import { formatCotStepGroup, formatCotSubSkill, resolveProblemLanguage } from "../../i18n/translations";
 import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
+import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
+import { demoDelay, DEMO_RUBRIC_LOADING_MS, DEMO_REGENERATE_MS } from "../../demo/demoDelay";
+import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
+import { buildRandomAnswersFromRubrics } from "../../utils/randomStudentAnswers";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -55,6 +59,28 @@ function getSubqDisplayQA(
   return splitQuestionAndAnswer(reQ || originalQ, reQ ? reA || originalA : originalA);
 }
 
+/** 연속된 step_id 기준으로 대단계(문제 이해 등) 섹션 묶음 */
+function groupRubricsByStep(
+  items: RubricItem[],
+  resolveStepId: (rubric: RubricItem) => string | number | undefined,
+): RubricItem[][] {
+  const groups: RubricItem[][] = [];
+  let current: RubricItem[] = [];
+  let lastStepId: string | number | null = null;
+
+  for (const rubric of items) {
+    const stepId = resolveStepId(rubric);
+    if (lastStepId !== null && stepId !== lastStepId) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(rubric);
+    lastStepId = stepId ?? null;
+  }
+  if (current.length) groups.push(current);
+  return groups;
+}
+
 /**
  * Wrap Korean characters inside $...$ or $$...$$ math delimiters with \text{}
  * so MathJax can render them without errors.
@@ -96,9 +122,9 @@ function preprocessLatex(text: string): string {
   return result.join("");
 }
 
-function mapApiResponseToRubrics(apiResponse: any, guidelineData: any): RubricItem[] {
+function mapApiResponseToRubrics(apiResponse: any, subQuestionData: any): RubricItem[] {
   const simulationRubrics = apiResponse?.simulation_rubrics || [];
-  const subQuestions = guidelineData?.guide_sub_questions || [];
+  const subQuestions = subQuestionData?.guide_sub_questions || [];
 
   return simulationRubrics.map((sr: any, idx: number) => {
     const sq = subQuestions[idx] || {};
@@ -138,20 +164,25 @@ export const Rubrics = () => {
   const {
     userId,
     currentCotData,
-    currentGuidelineData,
+    currentSubQuestionData,
     currentRubrics,
     setCurrentRubrics,
     currentProblemId,
-    finalizedGuidelineForRubric,
+    finalizedSubQuestionForRubric,
     preferredVersion = {},
+    isDemoMode,
+    setStudentAnswerSeed,
   } = useApp();
-  /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 guideline */
-  const guidelineForStep4 = finalizedGuidelineForRubric ?? currentGuidelineData;
-  const guidelineGd = guidelineForStep4 as { main_problem?: string; main_answer?: string } | null;
-  const mainProblem = (guidelineGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
-  const mainAnswer = (guidelineGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
+  /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 subQuestion */
+  const subQuestionForStep4 = finalizedSubQuestionForRubric ?? currentSubQuestionData;
+  const subQuestionGd = subQuestionForStep4 as { main_problem?: string; main_answer?: string } | null;
+  const mainProblem = (subQuestionGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
+  const mainAnswer = (subQuestionGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
   const rubrics = (currentRubrics ?? []) as RubricItem[];
-  const [generating, setGenerating] = useState(false);
+  const hasSubQuestionSubs = !!(subQuestionForStep4 as any)?.guide_sub_questions?.length;
+  const shouldAutoGenerate = rubrics.length === 0 && hasSubQuestionSubs;
+  const [generating, setGenerating] = useState(shouldAutoGenerate);
+  const autoGenerateStartedRef = useRef(false);
 
   useEffect(() => {
     if (!currentProblemId || !currentRubrics?.length) return;
@@ -167,7 +198,7 @@ export const Rubrics = () => {
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
-  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen, mainProblem, mainAnswer, guidelineForStep4, preferredVersion]);
+  const containerRef = useMathJax([rubrics, editingLevels, examplesOpen, mainProblem, mainAnswer, subQuestionForStep4, preferredVersion]);
 
   const renderMainProblemSection = () => {
     if (!mainProblem && !mainAnswer) return null;
@@ -200,6 +231,14 @@ export const Rubrics = () => {
       // 확정 시 서버·사이드바에 저장 (다른 기기/새로고침 시에도 목록에 표시)
       if (currentProblemId && currentRubrics?.length) {
         saveResult(currentProblemId, undefined, undefined, undefined, undefined, currentRubrics, userId);
+        if (!isDemoMode) {
+          setStudentAnswerSeed({
+            problemId: currentProblemId,
+            byStudentId: {
+              "student-1": buildRandomAnswersFromRubrics(currentRubrics as RubricItem[]),
+            },
+          });
+        }
       }
       logUserEvent("rubric_finalized", {
         count: rubrics.length,
@@ -210,13 +249,29 @@ export const Rubrics = () => {
     window.alert(t('rubric.finalized'));
   };
 
-  const runGenerateRubrics = async () => {
-    const gd = guidelineForStep4 as any;
+  const runGenerateRubrics = useCallback(async () => {
+    const gd = subQuestionForStep4 as any;
     if (!gd?.guide_sub_questions?.length) return;
     setGenerating(true);
     setGeneratingMessage(t('rubric.generatingLong'));
     setError(null);
     try {
+      if (isDemoMode) {
+        await demoDelay(DEMO_RUBRIC_LOADING_MS);
+        const mirrored = await loadMirroredTestResult(currentProblemId);
+        setCurrentRubrics(resolveDemoRubrics(mirrored, gd));
+        return;
+      }
+      const rubricLanguage = resolveProblemLanguage(
+        gd.main_problem,
+        gd.main_answer,
+        ...gd.guide_sub_questions.flatMap((sq: any) => [
+          sq.re_sub_question,
+          sq.guide_sub_question,
+          sq.re_sub_answer,
+          sq.guide_sub_answer,
+        ]),
+      );
       const response = await api.generateRubricPipeline({
         main_problem: gd.main_problem,
         main_answer: gd.main_answer,
@@ -224,7 +279,7 @@ export const Rubrics = () => {
         subject_area: gd.subject_area,
         sub_questions: gd.guide_sub_questions,
         variant: "with_error_types",
-        language: getAppLanguage(locale),
+        language: rubricLanguage,
       });
       const mapped = mapApiResponseToRubrics(response, gd);
       setCurrentRubrics(mapped);
@@ -253,7 +308,17 @@ export const Rubrics = () => {
       setGenerating(false);
       setGeneratingMessage("");
     }
-  };
+  }, [subQuestionForStep4, locale, setCurrentRubrics, t, isDemoMode, currentProblemId]);
+
+  useEffect(() => {
+    autoGenerateStartedRef.current = false;
+  }, [currentProblemId]);
+
+  useEffect(() => {
+    if (!shouldAutoGenerate || autoGenerateStartedRef.current) return;
+    autoGenerateStartedRef.current = true;
+    void runGenerateRubrics();
+  }, [shouldAutoGenerate, runGenerateRubrics, currentProblemId]);
 
   const toggleFeedback = (id: string) => {
     setFeedbackStates((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -349,12 +414,15 @@ export const Rubrics = () => {
   };
 
   const findSubQuestion = (id: string) => {
-    const gd = guidelineForStep4 as any;
+    const gd = subQuestionForStep4 as any;
     return (gd?.guide_sub_questions || []).find((sq: any) => sq.sub_question_id === id);
   };
 
+  const resolveRubricStepId = (rubric: RubricItem) =>
+    findSubQuestion(rubric.sub_question_id)?.step_id ?? rubric.sub_question_id.split("-")[0];
+
   const handleRegenerateSingle = async (id: string, feedback?: string | null) => {
-    const gd = guidelineForStep4 as any;
+    const gd = subQuestionForStep4 as any;
     const rubricItem = rubrics.find((r) => r.sub_question_id === id);
     const subQuestion = findSubQuestion(id);
     if (!rubricItem || !subQuestion || !gd) return;
@@ -363,6 +431,11 @@ export const Rubrics = () => {
     setFeedbackStates((prev) => ({ ...prev, [id]: false }));
 
     try {
+      if (isDemoMode) {
+        await demoDelay(DEMO_REGENERATE_MS);
+        return;
+      }
+
       const response = await api.regenerateRubricSingle({
         main_problem: gd.main_problem,
         main_answer: gd.main_answer,
@@ -372,7 +445,14 @@ export const Rubrics = () => {
         current_rubric: buildCurrentRubric(rubricItem),
         feedback: feedback || null,
         variant: "with_error_types",
-        language: getAppLanguage(locale),
+        language: resolveProblemLanguage(
+          gd.main_problem,
+          gd.main_answer,
+          subQuestion.re_sub_question,
+          subQuestion.guide_sub_question,
+          subQuestion.re_sub_answer,
+          subQuestion.guide_sub_answer,
+        ),
       });
 
       const rubricData = response.rubric || {};
@@ -466,32 +546,17 @@ export const Rubrics = () => {
     );
   }
 
-  if (!rubrics.length) {
+  if (!rubrics.length && !generating && !error && !hasSubQuestionSubs) {
     return (
       <div className={styles.rubricContainer} ref={containerRef}>
         <div className={styles.emptyState}>
-          {!guidelineForStep4 || !(guidelineForStep4 as any).guide_sub_questions?.length ? (
-            <p>{t("rubric.noGuideline")}</p>
-          ) : (
-            <>
-              {renderMainProblemSection()}
-              <p>{t("rubric.clickGenerate")}</p>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnPrimary} ${styles.btnLg}`}
-                disabled={generating}
-                onClick={runGenerateRubrics}
-              >
-                {generating ? generatingMessage || t("common.generating") : t("rubric.generate")}
-              </button>
-            </>
-          )}
+          <p>{t("rubric.noSubQuestion")}</p>
         </div>
       </div>
     );
   }
 
-  const showRegenerateAllBanner = !!(guidelineForStep4 as any)?.guide_sub_questions?.length;
+  const showRegenerateAllBanner = hasSubQuestionSubs;
 
   return (
     <div className={styles.rubricContainer} ref={containerRef}>
@@ -511,7 +576,29 @@ export const Rubrics = () => {
       )}
 
       <div className={styles.rubricList}>
-        {rubrics.map((rubric) => {
+        {groupRubricsByStep(rubrics, resolveRubricStepId).map((sectionRubrics, sectionIndex) => {
+          const sectionAnchor = findSubQuestion(sectionRubrics[0].sub_question_id) ?? sectionRubrics[0];
+          const sectionLabel = formatCotStepGroup(sectionAnchor, locale);
+          const frameworkStepId = resolveFrameworkStepId(
+            (sectionAnchor as { step_id?: string | number }).step_id ?? sectionRubrics[0].sub_question_id,
+            sectionIndex + 1,
+          );
+
+          return (
+            <section
+              key={`rubric-section-${frameworkStepId}-${sectionRubrics[0].sub_question_id}`}
+              className={styles.stepSection}
+              style={frameworkStepSectionStyle(frameworkStepId)}
+              aria-label={sectionLabel}
+            >
+              <div className={styles.stepSectionHead}>
+                <span className={styles.stepSectionIndex} aria-hidden>
+                  {frameworkStepId}
+                </span>
+                <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
+              </div>
+              <div className={styles.stepSectionItems}>
+                {sectionRubrics.map((rubric) => {
           const isFeedbackOpen = feedbackStates[rubric.sub_question_id];
           const isRegenerating = regeneratingIds.has(rubric.sub_question_id);
           const subQ = findSubQuestion(rubric.sub_question_id);
@@ -524,28 +611,25 @@ export const Rubrics = () => {
               <header className={styles.cardTop}>
                 <div className={styles.cardMeta}>
                   <span className={styles.cardIdBadge}>{rubric.sub_question_id}</span>
-                  <div className={styles.cardTitles}>
-                    <span className={styles.cardSkillTitle}>{formatCotSubSkill(rubric, locale)}</span>
-                    <span className={styles.cardGroupTitle}>{formatCotStepGroup(rubric, locale)}</span>
-                  </div>
+                  <span className={styles.cardSkillTitle}>{formatCotSubSkill(rubric, locale)}</span>
                 </div>
               </header>
 
-              <div className={styles.questionPanel}>
+              <div className={styles.displayMode}>
                 {subqQuestion ? (
-                  <div className={styles.subqQuestionBlock}>
-                    <div className={styles.subqFieldLabel}>{t("common.questionColon")}</div>
+                  <div className={styles.questionBlock}>
+                    <div className={styles.fieldLabel}>{t("common.questionColon")}</div>
                     <div
-                      className={styles.subqQuestion}
+                      className={styles.questionContent}
                       dangerouslySetInnerHTML={{ __html: formatQuestion(subqQuestion) }}
                     />
                   </div>
                 ) : null}
                 {subqAnswer ? (
-                  <div className={styles.subqAnswerBlock}>
-                    <div className={styles.subqFieldLabel}>{t("common.answerColon")}</div>
+                  <div className={styles.answerBlock}>
+                    <div className={styles.fieldLabel}>{t("common.answerColon")}</div>
                     <div
-                      className={styles.subqAnswer}
+                      className={styles.answerContent}
                       dangerouslySetInnerHTML={{ __html: formatAnswer(subqAnswer) }}
                     />
                   </div>
@@ -562,13 +646,11 @@ export const Rubrics = () => {
                 {rubric.levels.map((lv) => {
                   const isLevelEditing = editingLevels[rubric.sub_question_id]?.[lv.level];
                   const draft = editDrafts[rubric.sub_question_id]?.[lv.level];
-                  const levelStyle = lv.level === "상" ? styles.levelHigh : lv.level === "중" ? styles.levelMid : styles.levelLow;
-                  const badgeStyle = lv.level === "상" ? styles.badgeHigh : lv.level === "중" ? styles.badgeMid : styles.badgeLow;
 
                   return (
-                    <div key={lv.level} className={`${styles.levelCard} ${levelStyle}`}>
+                    <div key={lv.level} className={styles.levelCard}>
                       <div className={styles.levelHeader}>
-                        <span className={`${styles.levelBadge} ${badgeStyle}`}>{formatLevel(lv.level)}</span>
+                        <span className={styles.levelBadge}>{formatLevel(lv.level)}</span>
                         {!isLevelEditing && lv.description ? (
                           <span className={styles.levelLabel}>{preprocessLatex(lv.description)}</span>
                         ) : null}
@@ -731,6 +813,10 @@ export const Rubrics = () => {
                 )}
               </div>
             </article>
+          );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>

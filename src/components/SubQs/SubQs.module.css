@@ -1,4 +1,4 @@
-.guidelineContainer {
+.subQuestionContainer {
   padding: 0;
   width: 100%;
   height: 100%;
@@ -254,7 +254,49 @@
   min-width: 220px;
 }
 
-.guidelineSubQuestions {
+.subQuestionList {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--section-gap) + 8px);
+}
+
+.stepSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stepSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepSectionIndex {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--step-badge-bg, #f8fafc);
+  border: 1px solid var(--step-badge-border, #e2e8f0);
+  color: var(--step-badge-text, #64748b);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.stepSectionTitle {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.stepSectionItems {
   display: flex;
   flex-direction: column;
   gap: var(--section-gap);
@@ -293,38 +335,48 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
-.cardTop {
+.cardTopBar {
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
-.cardMeta {
+.cardTopBarMain {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
 
-.subQuestionId {
-  background: var(--color-primary);
-  color: white;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
+.cardMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.cardTopActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
   flex-shrink: 0;
 }
 
-.cardTitles {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+.subQuestionId {
+  background: var(--step-badge-bg, #f8fafc);
+  border: 1px solid var(--step-badge-border, #e2e8f0);
+  color: var(--step-badge-text, #64748b);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .subQuestionSkill {
@@ -332,41 +384,16 @@
   font-weight: 600;
   font-size: 0.9375rem;
   line-height: 1.35;
+  flex-shrink: 0;
 }
 
-.subQuestionGroup {
-  color: var(--color-text-secondary);
+.subQuestionSkillDefinition {
+  margin: 0;
   font-size: 0.8125rem;
-}
-
-.contentPanel {
-  background: var(--color-bg-secondary, #f8fafc);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 14px 16px;
-}
-
-.itemPanelHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.itemPanelHeaderMain {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  font-weight: 400;
   min-width: 0;
-}
-
-.itemPanelTitle {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
 }
 
 .versionNote {
@@ -377,34 +404,44 @@
   letter-spacing: 0;
 }
 
-.itemPanelActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
 .itemPanelBody {
   min-height: 80px;
 }
 
-.originalReveal {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--color-border);
+.versionPanel {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
-.originalRevealHeader {
+.versionPanel + .versionPanel {
+  margin-top: 12px;
+}
+
+.versionPanelSelected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35);
+}
+
+.versionPanelHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
-.originalRevealTitle {
+.versionPanelActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  flex-shrink: 0;
+}
+
+.versionPanelTitle {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -412,13 +449,40 @@
   color: var(--color-text-secondary);
 }
 
-.originalRevealActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+.versionSelectCheck {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: transparent;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.versionSelectCheck:hover {
+  border-color: var(--color-primary);
+}
+
+.versionSelectCheckActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.versionSelectCheck svg {
+  width: 16px;
+  height: 16px;
 }
 
 .compareGrid {
@@ -476,26 +540,12 @@
   flex-shrink: 0;
 }
 
-.selectVersionHint {
-  margin: 0 0 10px;
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-}
-
 .compareLabel {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
-}
-
-.selectedMark {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .comparePanelBody {
@@ -548,22 +598,6 @@
   background: var(--color-bg);
 }
 
-.singlePanelHeader {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.cardToolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--color-border);
-}
-
 .toolLink {
   border: none;
   background: none;
@@ -587,9 +621,10 @@
 
 .displayMode {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 3fr 2fr;
   gap: 12px;
+  align-items: start;
 }
 
 .fieldLabel {
@@ -606,6 +641,11 @@
   padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.questionBlock:only-child {
+  grid-column: 1 / -1;
 }
 
 .questionBlock {
@@ -613,7 +653,7 @@
 }
 
 .answerBlock {
-  background: var(--color-bg);
+  background: #fff;
   border-style: dashed;
 }
 
@@ -630,10 +670,69 @@
   line-height: 1.65;
 }
 
+.answerContent p,
+.answerContent ul,
+.answerContent ol {
+  margin: 0.35em 0;
+}
+
+.answerContent ul,
+.answerContent ol {
+  padding-left: 1.4em;
+}
+
+.answerContent p:first-child,
+.answerContent ul:first-child,
+.answerContent ol:first-child {
+  margin-top: 0;
+}
+
+.answerContent p:last-child,
+.answerContent ul:last-child,
+.answerContent ol:last-child {
+  margin-bottom: 0;
+}
+
+.answerContent table {
+  border-collapse: collapse;
+  margin: 0.35em 0;
+  font-size: 0.9em;
+}
+
+.answerContent th,
+.answerContent td {
+  border: 1px solid var(--color-border, #dee2e6);
+  padding: 4px 8px;
+  text-align: left;
+}
+
 .editMode {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.editDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.editDivider::before,
+.editDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.editDividerLabel {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .editField {
@@ -739,6 +838,14 @@
 
 /* 반응형 디자인 */
 @media (max-width: 768px) {
+  .displayMode {
+    grid-template-columns: 1fr;
+  }
+
+  .questionBlock:only-child {
+    grid-column: auto;
+  }
+
   .compareGrid,
   .verificationCompareGrid {
     grid-template-columns: 1fr;
@@ -767,7 +874,8 @@
   }
 
   .pageFooterActions {
-    flex: 1 1 100%;
+    flex-basis: 100%;
+    width: 100%;
     margin-left: 0;
     justify-content: flex-end;
   }

@@ -8,7 +8,7 @@ import styles from "./AdminModeModal.module.css";
 const PLACEHOLDER_FULL = `{
   "problemId": "admin-1",
   "cotData": { "problem": "...", "answer": "...", "grade": "6학년", "steps": [{ "step_content": "..." }], "main_solution": "..." },
-  "guidelineData": { "problem_id": "admin-1", "grade": "6학년", "subject_area": "수와 연산", "guide_sub_questions": [] },
+  "subQuestionData": { "problem_id": "admin-1", "grade": "6학년", "subject_area": "수와 연산", "guide_sub_questions": [] },
   "rubrics": []
 }`;
 
@@ -23,7 +23,7 @@ const PLACEHOLDER_COT = `{
   ]
 }`;
 
-const PLACEHOLDER_GUIDELINE = `{
+const PLACEHOLDER_SUB_QUESTION = `{
   "main_problem": "본문 문제",
   "main_answer": "정답",
   "main_solution": "모범답안...",
@@ -58,8 +58,8 @@ function normalizeCotData(cot: any): any {
   };
 }
 
-/** ex_subQ 형식(finalized_sub_questions, final_question/final_answer) → 앱 guidelineData 형식 */
-function normalizeGuidelineInput(data: any): any {
+/** ex_subQ 형식(finalized_sub_questions, final_question/final_answer) → 앱 subQuestionData 형식 */
+function normalizeSubQuestionInput(data: any): any {
   const fq = data?.finalized_sub_questions;
   if (Array.isArray(fq) && fq.length > 0) {
     const guide_sub_questions = fq.map((q: any) => ({
@@ -73,10 +73,10 @@ function normalizeGuidelineInput(data: any): any {
     }));
     return {
       problemId: data.problemId ?? undefined,
-      guidelineData: {
-        problem_id: data.guidelineData?.problem_id ?? data.problemId ?? "admin",
-        grade: data.grade ?? data.guidelineData?.grade ?? "",
-        subject_area: data.guidelineData?.subject_area ?? data.subject_area ?? "",
+      subQuestionData: {
+        problem_id: data.subQuestionData?.problem_id ?? data.guidelineData?.problem_id ?? data.problemId ?? "admin",
+        grade: data.grade ?? data.subQuestionData?.grade ?? data.guidelineData?.grade ?? "",
+        subject_area: data.subQuestionData?.subject_area ?? data.guidelineData?.subject_area ?? data.subject_area ?? "",
         guide_sub_questions,
       },
     };
@@ -105,7 +105,7 @@ function normalizeCotInput(data: any): any {
 }
 
 type MainTab = "json" | "form";
-type JsonSubTab = "full" | "cot" | "guideline" | "rubric";
+type JsonSubTab = "full" | "cot" | "subQuestion" | "rubric";
 type FormSubTab = "cot" | "subq" | "rubric";
 
 interface StepRow {
@@ -145,9 +145,9 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
     setCurrentProblemId,
     setCurrentCotData,
     setCurrentSubQData,
-    setCurrentGuidelineData,
+    setCurrentSubQuestionData,
     setCurrentRubrics,
-    setFinalizedGuidelineForRubric,
+    setFinalizedSubQuestionForRubric,
     setPreferredVersion,
     setCurrentStep,
     setError,
@@ -158,7 +158,7 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
   const [formSubTab, setFormSubTab] = useState<FormSubTab>("cot");
   const [jsonInput, setJsonInput] = useState("");
   const [jsonCot, setJsonCot] = useState("");
-  const [jsonGuideline, setJsonGuideline] = useState("");
+  const [jsonSubQuestion, setJsonSubQuestion] = useState("");
   const [jsonRubrics, setJsonRubrics] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -170,8 +170,8 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
   const [grade, setGrade] = useState("");
   const [mainSolution, setMainSolution] = useState("");
   const [steps, setSteps] = useState<StepRow[]>([defaultStep(1)]);
-  const [guidelineProblemId, setGuidelineProblemId] = useState("");
-  const [guidelineGrade, setGuidelineGrade] = useState("");
+  const [subQuestionProblemId, setSubQuestionProblemId] = useState("");
+  const [subQuestionGrade, setSubQuestionGrade] = useState("");
   const [subjectArea, setSubjectArea] = useState("");
   const [subQs, setSubQs] = useState<SubQRow[]>([defaultSubQ(1)]);
   const [rubricsJson, setRubricsJson] = useState("");
@@ -181,15 +181,16 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
       if (data.problemId != null) setCurrentProblemId(String(data.problemId));
       if (data.cotData != null) setCurrentCotData(data.cotData);
       if (data.subQData != null) setCurrentSubQData(data.subQData);
-      if (data.guidelineData != null) setCurrentGuidelineData(data.guidelineData);
-      if (data.currentGuidelineData != null) setCurrentGuidelineData(data.currentGuidelineData);
+      if (data.subQuestionData != null) setCurrentSubQuestionData(data.subQuestionData);
+      else if (data.guidelineData != null) setCurrentSubQuestionData(data.guidelineData);
+      if (data.currentSubQuestionData != null) setCurrentSubQuestionData(data.currentSubQuestionData);
       if (data.rubrics != null) setCurrentRubrics(Array.isArray(data.rubrics) ? data.rubrics : null);
-      if (data.finalizedGuidelineForRubric != null) setFinalizedGuidelineForRubric(data.finalizedGuidelineForRubric);
+      if (data.finalizedSubQuestionForRubric != null) setFinalizedSubQuestionForRubric(data.finalizedSubQuestionForRubric);
       if (data.preferredVersion != null && typeof setPreferredVersion === "function") setPreferredVersion(data.preferredVersion);
 
       if (data.rubrics != null && Array.isArray(data.rubrics) && data.rubrics.length > 0) {
         setCurrentStep(4);
-      } else if (data.guidelineData != null || data.finalizedGuidelineForRubric != null) {
+      } else if (data.subQuestionData != null || data.guidelineData != null || data.finalizedSubQuestionForRubric != null) {
         setCurrentStep(3);
       } else if (data.cotData != null) {
         setCurrentStep(2);
@@ -202,9 +203,9 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
       setCurrentProblemId,
       setCurrentCotData,
       setCurrentSubQData,
-      setCurrentGuidelineData,
+      setCurrentSubQuestionData,
       setCurrentRubrics,
-      setFinalizedGuidelineForRubric,
+      setFinalizedSubQuestionForRubric,
       setPreferredVersion,
       setCurrentStep,
       setError,
@@ -220,15 +221,15 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
         data = JSON.parse(raw);
         if (data.cotData) data.cotData = normalizeCotData(data.cotData);
         if (data.finalized_sub_questions) {
-          const norm = normalizeGuidelineInput(data);
-          if (norm.guidelineData) data.guidelineData = norm.guidelineData;
+          const norm = normalizeSubQuestionInput(data);
+          if (norm.subQuestionData) data.subQuestionData = norm.subQuestionData;
         }
       } else if (jsonSubTab === "cot") {
         const raw = jsonCot.trim() || "{}";
         data = normalizeCotInput(JSON.parse(raw));
-      } else if (jsonSubTab === "guideline") {
-        const raw = jsonGuideline.trim() || "{}";
-        data = normalizeGuidelineInput(JSON.parse(raw));
+      } else if (jsonSubTab === "subQuestion") {
+        const raw = jsonSubQuestion.trim() || "{}";
+        data = normalizeSubQuestionInput(JSON.parse(raw));
       } else {
         const raw = jsonRubrics.trim();
         if (!raw) {
@@ -247,15 +248,15 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
     } catch (e: unknown) {
       setParseError(e instanceof Error ? e.message : "적용 중 오류가 발생했습니다.");
     }
-  }, [jsonSubTab, jsonInput, jsonCot, jsonGuideline, jsonRubrics, applyData]);
+  }, [jsonSubTab, jsonInput, jsonCot, jsonSubQuestion, jsonRubrics, applyData]);
 
   const handleApplyForm = useCallback(() => {
     setFormError(null);
     const pid = problemId.trim() || "admin-form";
     const hasCot = problem.trim() !== "" || answer.trim() !== "" || steps.some((s) => s.step_title.trim() !== "" || s.step_content.trim() !== "");
-    const hasGuideline =
-      guidelineProblemId.trim() !== "" ||
-      guidelineGrade.trim() !== "" ||
+    const hasSubQuestion =
+      subQuestionProblemId.trim() !== "" ||
+      subQuestionGrade.trim() !== "" ||
       subjectArea.trim() !== "" ||
       subQs.some((q) => q.question.trim() !== "" || q.answer.trim() !== "");
 
@@ -287,11 +288,11 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
         sub_skill_name: "",
       }));
 
-    const guidelineData =
-      hasGuideline || guideSubQuestions.length > 0
+    const subQuestionData =
+      hasSubQuestion || guideSubQuestions.length > 0
         ? {
-            problem_id: guidelineProblemId.trim() || pid,
-            grade: guidelineGrade.trim() || grade.trim() || "",
+            problem_id: subQuestionProblemId.trim() || pid,
+            grade: subQuestionGrade.trim() || grade.trim() || "",
             subject_area: subjectArea.trim() || "",
             guide_sub_questions: guideSubQuestions,
           }
@@ -314,16 +315,16 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
       if (cotData) setCurrentCotData(cotData);
       else setCurrentCotData(null);
       setCurrentSubQData(null);
-      if (guidelineData) {
-        setCurrentGuidelineData(guidelineData as any);
-        setFinalizedGuidelineForRubric(guidelineData);
+      if (subQuestionData) {
+        setCurrentSubQuestionData(subQuestionData as any);
+        setFinalizedSubQuestionForRubric(subQuestionData);
       } else {
-        setCurrentGuidelineData(null);
-        setFinalizedGuidelineForRubric(null);
+        setCurrentSubQuestionData(null);
+        setFinalizedSubQuestionForRubric(null);
       }
       setCurrentRubrics(rubrics);
       if (rubrics != null && rubrics.length > 0) setCurrentStep(4);
-      else if (guidelineData) setCurrentStep(3);
+      else if (subQuestionData) setCurrentStep(3);
       else if (cotData) setCurrentStep(2);
       else setCurrentStep(1);
       setError(null);
@@ -338,8 +339,8 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
     grade,
     mainSolution,
     steps,
-    guidelineProblemId,
-    guidelineGrade,
+    subQuestionProblemId,
+    subQuestionGrade,
     subjectArea,
     subQs,
     rubricsJson,
@@ -347,9 +348,9 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
     setCurrentProblemId,
     setCurrentCotData,
     setCurrentSubQData,
-    setCurrentGuidelineData,
+    setCurrentSubQuestionData,
     setCurrentRubrics,
-    setFinalizedGuidelineForRubric,
+    setFinalizedSubQuestionForRubric,
     setCurrentStep,
     setError,
   ]);
@@ -410,10 +411,10 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
               </button>
               <button
                 type="button"
-                className={jsonSubTab === "guideline" ? styles.formSubTabActive : styles.formSubTab}
-                onClick={() => { setJsonSubTab("guideline"); setParseError(null); }}
+                className={jsonSubTab === "subQuestion" ? styles.formSubTabActive : styles.formSubTab}
+                onClick={() => { setJsonSubTab("subQuestion"); setParseError(null); }}
               >
-                가이드라인
+                하위문항
               </button>
               <button
                 type="button"
@@ -424,9 +425,9 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
               </button>
             </div>
             <p className={styles.hint}>
-              {jsonSubTab === "full" && "형식: problemId, cotData, guidelineData, rubrics. cotData.steps는 ex_cot처럼 step_content만 있어도 됨. guidelineData는 ex_subQ의 finalized_sub_questions 형식도 지원."}
+              {jsonSubTab === "full" && "형식: problemId, cotData, subQuestionData, rubrics. cotData.steps는 ex_cot처럼 step_content만 있어도 됨. subQuestionData는 ex_subQ의 finalized_sub_questions 형식도 지원."}
               {jsonSubTab === "cot" && "형식: ex_cot.json — problem, grade, answer, main_solution, steps: [{ step_content }]. problemId·cotData 래핑도 가능."}
-              {jsonSubTab === "guideline" && "형식: ex_subQ.json — main_problem, main_answer, grade, finalized_sub_questions: [{ sub_question_id, step_id, final_question, final_answer, ... }]."}
+              {jsonSubTab === "subQuestion" && "형식: ex_subQ.json — main_problem, main_answer, grade, finalized_sub_questions: [{ sub_question_id, step_id, final_question, final_answer, ... }]."}
               {jsonSubTab === "rubric" && "루브릭 JSON 배열 또는 { rubrics: [] }"}
             </p>
             <div className={styles.body}>
@@ -450,12 +451,12 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
                   rows={14}
                 />
               )}
-              {jsonSubTab === "guideline" && (
+              {jsonSubTab === "subQuestion" && (
                 <textarea
                   className={styles.textarea}
-                  value={jsonGuideline}
-                  onChange={(e) => setJsonGuideline(e.target.value)}
-                  placeholder={PLACEHOLDER_GUIDELINE}
+                  value={jsonSubQuestion}
+                  onChange={(e) => setJsonSubQuestion(e.target.value)}
+                  placeholder={PLACEHOLDER_SUB_QUESTION}
                   spellCheck={false}
                   rows={14}
                 />
@@ -556,12 +557,12 @@ export function AdminModeModal({ onClose }: AdminModeModalProps) {
               {formSubTab === "subq" && (
                 <div className={styles.formPanel}>
                   <div className={styles.field}>
-                    <label>가이드라인 문제 ID</label>
-                    <input type="text" value={guidelineProblemId} onChange={(e) => setGuidelineProblemId(e.target.value)} placeholder="문제 ID와 맞추면 됨" className={styles.input} />
+                    <label>하위문항 문제 ID</label>
+                    <input type="text" value={subQuestionProblemId} onChange={(e) => setSubQuestionProblemId(e.target.value)} placeholder="문제 ID와 맞추면 됨" className={styles.input} />
                   </div>
                   <div className={styles.field}>
                     <label>학년</label>
-                    <input type="text" value={guidelineGrade} onChange={(e) => setGuidelineGrade(e.target.value)} placeholder="예: 3학년" className={styles.input} />
+                    <input type="text" value={subQuestionGrade} onChange={(e) => setSubQuestionGrade(e.target.value)} placeholder="예: 3학년" className={styles.input} />
                   </div>
                   <div className={styles.field}>
                     <label>수학 영역</label>

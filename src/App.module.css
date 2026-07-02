@@ -27,6 +27,10 @@
   animation: fadeIn 0.3s ease;
 }
 
+.workflowPanelHidden {
+  display: none;
+}
+
 /* 2·3단계: 왼쪽 입력한 문제, 오른쪽 작업 영역 */
 .workflowSplitLayout {
   display: flex;

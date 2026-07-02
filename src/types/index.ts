@@ -6,6 +6,7 @@ export interface CoTStep {
   sub_skill_id?: string;
   step_name?: string;
   sub_skill_name?: string;
+  prompt_used?: string | null;
 }
 
 export interface CoTData {
@@ -15,6 +16,7 @@ export interface CoTData {
   answer?: string;
   final_answer?: string;
   grade?: string;
+  semester?: string;
   main_solution?: string | null;
   image_data?: string | null;
   steps: CoTStep[];
@@ -27,7 +29,7 @@ export interface SubQuestion {
   sub_question_number: number;
 }
 
-export interface GuidelineData {
+export interface SubQuestionData {
   problem_id: string;
   grade: string;
   subject_area: string;
@@ -43,16 +45,17 @@ export interface VerifyResult {
 
 export interface AppContextType {
   userId?: string | null;
+  isDemoMode: boolean;
   currentProblemId: string | null;
   setCurrentProblemId: (id: string | null) => void;
   currentCotData: CoTData | null;
   setCurrentCotData: (data: CoTData | null) => void;
   currentSubQData: any | null;
   setCurrentSubQData: (data: any | null) => void;
-  currentGuidelineData: GuidelineData | null;
-  setCurrentGuidelineData: (data: GuidelineData | null) => void;
-  lastGuidelineDataBeforeVerifyFix: GuidelineData | null;
-  setLastGuidelineDataBeforeVerifyFix: (data: GuidelineData | null) => void;
+  currentSubQuestionData: SubQuestionData | null;
+  setCurrentSubQuestionData: (data: SubQuestionData | null) => void;
+  lastSubQuestionDataBeforeVerifyFix: SubQuestionData | null;
+  setLastSubQuestionDataBeforeVerifyFix: (data: SubQuestionData | null) => void;
   currentStep: number;
   setCurrentStep: (step: number) => void;
   loading: boolean;
@@ -67,8 +70,20 @@ export interface AppContextType {
   currentRubrics: any[] | null;
   setCurrentRubrics: (rubrics: any[] | null) => void;
   /** 3단계에서 확정 시 4단계로 넘기는 JSON (원본/재생성 선택 반영된 guide_sub_questions) */
-  finalizedGuidelineForRubric: any | null;
-  setFinalizedGuidelineForRubric: (data: any | null) => void;
+  finalizedSubQuestionForRubric: any | null;
+  setFinalizedSubQuestionForRubric: (data: any | null) => void;
+  /** 2단계「하위문항 생성하기」→ 3단계 진입 시 자동 생성 */
+  pendingSubqAutoStart: boolean;
+  setPendingSubqAutoStart: (pending: boolean) => void;
+  /** 4단계 루브릭 확정 시 학생 진단에 채울 랜덤 답안 시드 */
+  studentAnswerSeed: StudentAnswerSeed | null;
+  setStudentAnswerSeed: (seed: StudentAnswerSeed | null) => void;
+}
+
+/** 루브릭 확정 후 학생 진단 화면에 주입할 답안 시드 */
+export interface StudentAnswerSeed {
+  problemId: string;
+  byStudentId: Record<string, Record<string, string>>;
 }
 
 // MathJax 타입 확장

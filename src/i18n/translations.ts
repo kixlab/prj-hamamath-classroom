@@ -12,6 +12,28 @@ export function getAppLanguage(locale: Locale): VerifierLanguage {
   return toVerifierLanguage(locale);
 }
 
+/** 문제·하위문항 본문에서 출력 언어 추정 (UI locale과 무관). */
+export function resolveProblemLanguage(
+  ...texts: Array<string | null | undefined>
+): VerifierLanguage {
+  let hasContent = false;
+  for (const text of texts) {
+    const value = String(text ?? "").trim();
+    if (!value) continue;
+    hasContent = true;
+    const hangul = (value.match(/[\uAC00-\uD7A3]/g) || []).length;
+    const latin = (value.match(/[a-zA-Z]/g) || []).length;
+    if (latin >= 10 && latin > hangul) return "en";
+  }
+  for (const text of texts) {
+    const value = String(text ?? "").trim();
+    if (!value) continue;
+    if (/[\uAC00-\uD7A3]/.test(value)) return "ko";
+  }
+  if (hasContent) return "ko";
+  return "ko";
+}
+
 export type TranslationKey = keyof typeof ko;
 
 const ko = {
@@ -27,6 +49,8 @@ const ko = {
   "header.newProblem": "문제 입력하기",
   "header.logout": "로그아웃",
   "header.logoutConfirm": "로그아웃 하시겠습니까?",
+  "header.switchAccount": "계정 전환",
+  "header.demoAccount": "데모",
   "header.switchToEnglish": "영어로 보기",
   "header.switchToKorean": "한국어로 보기",
 
@@ -99,6 +123,8 @@ const ko = {
   "problemInput.solutionPlaceholder": "모범답안을 입력하세요",
   "problemInput.grade": "학년",
   "problemInput.gradePlaceholder": "예: 3학년",
+  "problemInput.semester": "학기",
+  "problemInput.semesterPlaceholder": "예: 1 또는 2",
   "problemInput.imageUpload": "문제 이미지 업로드",
   "problemInput.imagePreview": "이미지 미리보기",
   "problemInput.removeImage": "이미지 제거",
@@ -117,15 +143,37 @@ const ko = {
   "app.modelAnswer": "모범답안",
   "app.noProblemData": "문제 데이터가 없습니다.",
   "app.gradeLabel": "학년:",
+  "app.semesterLabel": "학기:",
   "app.subjectArea": "수학 영역:",
+  "app.ragPreview": "교과서 RAG 확인",
+  "app.ragPreviewTitle": "교과서 RAG 검색 결과",
+  "app.ragPreviewQuery": "검색 쿼리",
+  "app.ragPreviewTextbook": "선택 교과서",
+  "app.ragPreviewAutoSelected": "1·2학기 비교 후 자동 선택",
+  "app.ragPreviewNoResults": "검색된 교과서 개념이 없습니다.",
+  "app.ragPreviewNoGrade": "학년을 입력하면 RAG 결과를 확인할 수 있습니다.",
+  "app.ragPreviewContext": "프롬프트에 주입되는 내용",
+  "app.ragPreviewScore": "유사도",
+  "app.ragPreviewLoading": "조회 중…",
+  "app.promptPreview": "생성 프롬프트 확인",
+  "app.promptPreviewTitle": "문항 생성 프롬프트",
+  "app.promptCotSection": "CoT 풀이 생성 프롬프트",
+  "app.promptSubqSection": "하위 문항 생성 프롬프트",
+  "app.promptSelectStep": "단계 선택",
+  "app.promptSystem": "System Prompt",
+  "app.promptUser": "User Prompt",
+  "app.promptFromGenerated": "생성 시 사용된 프롬프트",
+  "app.promptFromPreview": "미리보기 (아직 생성 전)",
+  "app.promptNoCot": "CoT 프롬프트 정보가 없습니다.",
+  "app.promptLoading": "불러오는 중…",
+  "app.promptNeedCot": "CoT 단계가 있어야 프롬프트를 확인할 수 있습니다.",
 
   "cot.generateSubq": "하위문항 생성하기",
 
   "subq.notGenerated": "하위문항이 생성되지 않았습니다.",
   "subq.originalQuestion": "원본 문항",
   "subq.regeneratedQuestion": "재생성 문항",
-  "subq.currentQuestion": "문항",
-  "subq.viewOriginal": "원본 문항 보기",
+  "subq.viewOriginal": "원본 문항",
   "subq.hideOriginal": "원본 문항 숨기기",
   "subq.useOriginalVersion": "원본 문항 사용",
   "subq.usingOriginalNote": "확정 시 원본 문항이 적용됩니다.",
@@ -133,16 +181,18 @@ const ko = {
   "subq.regenerating": "재생성 중…",
   "subq.selected": "선택됨",
   "subq.selectThis": "선택",
-  "subq.selectVersionHint": "확정에 사용할 문항을 선택하세요.",
+  "subq.confirmVersionSelection": "선택 완료",
+  "subq.editRequiresSelection": "비교에서 문항을 선택한 뒤 편집할 수 있습니다.",
   "subq.preparing": "준비중",
   "subq.noRegenerated": "재생성한 문항이 없습니다",
-  "subq.viewVerification": "검증 결과 보기",
+  "subq.viewVerification": "검증 결과",
   "subq.regenerateQuestion": "문항 재생성",
   "subq.hideQuestion": "문항 숨기기",
   "subq.compareQuestion": "비교",
   "subq.exitCompare": "비교 종료",
   "subq.hideVerification": "검증 닫기",
   "subq.feedbackPlaceholder": "수정 요청사항을 입력하세요.",
+  "subq.editFeedbackDivider": "또는 피드백으로 재생성",
   "subq.originalVerification": "원본 문항 검증 결과",
   "subq.regeneratedVerification": "재생성 문항 검증 결과",
   "subq.noVerification": "검증 결과가 없습니다.",
@@ -164,7 +214,7 @@ const ko = {
   "subq.cotStepNotFound": "CoT 단계를 찾을 수 없습니다: {id}",
 
   "rubric.mainProblem": "본문 문제",
-  "rubric.noGuideline": "하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.",
+  "rubric.noSubQuestion": "하위문항 데이터가 없습니다. 먼저 하위문항을 생성해주세요.",
   "rubric.clickGenerate": "루브릭을 생성하려면 아래 버튼을 눌러주세요.",
   "rubric.generate": "루브릭 생성",
   "rubric.generatingLong": "루브릭 생성 중... (시간이 다소 소요될 수 있습니다)",
@@ -329,6 +379,14 @@ const ko = {
   "category.3-2": "식, 모델 세우기",
   "category.4-1": "계산 실행하기",
   "category.4-2": "결과 정리하기",
+  "categoryDesc.1-1": "문제에서 중요한 정보를 구분하는 역량",
+  "categoryDesc.1-2": "질문이 요구하는 최종 결과를 파악하는 역량",
+  "categoryDesc.2-1": "문제에 주어진 조건과 제약을 표·목록·그림 등으로 정리‧재구성하여 문제 해결을 위한 기초적인 수학적 구조를 마련하는 역량",
+  "categoryDesc.2-2": "정리된 조건들이 어떻게 서로 이어지는지 이해하고, 이를 바탕으로 계산에 필요한 표현을 구성하는 역량",
+  "categoryDesc.3-1": "문제에 직접 주어진 조건 외에, 학습자가 기존에 배운 지식을 전이하여 적용하는 능력",
+  "categoryDesc.3-2": "계획에 따라 상황을 하나의 수학적 식·방정식·부등식 등 모델로 표현하는 역량",
+  "categoryDesc.4-1": "여러 단계의 계산을 순서에 따라 이어 가며 계산을 진행하는 역량",
+  "categoryDesc.4-2": "계산으로 얻은 값을 문제 맥락에 맞게 해석하고 단위·조건을 확인하여 최종 답을 도출하는 역량",
 } as const;
 
 const en: Record<TranslationKey, string> = {
@@ -344,6 +402,8 @@ const en: Record<TranslationKey, string> = {
   "header.newProblem": "Enter problem",
   "header.logout": "Log out",
   "header.logoutConfirm": "Do you want to log out?",
+  "header.switchAccount": "Switch account",
+  "header.demoAccount": "Demo",
   "header.switchToEnglish": "View in English",
   "header.switchToKorean": "View in Korean",
 
@@ -416,6 +476,8 @@ const en: Record<TranslationKey, string> = {
   "problemInput.solutionPlaceholder": "Enter the model answer",
   "problemInput.grade": "Grade",
   "problemInput.gradePlaceholder": "e.g. Grade 3",
+  "problemInput.semester": "Semester",
+  "problemInput.semesterPlaceholder": "e.g. 1 or 2",
   "problemInput.imageUpload": "Upload problem image",
   "problemInput.imagePreview": "Image preview",
   "problemInput.removeImage": "Remove image",
@@ -434,14 +496,36 @@ const en: Record<TranslationKey, string> = {
   "app.modelAnswer": "Model answer",
   "app.noProblemData": "No problem data.",
   "app.gradeLabel": "Grade:",
+  "app.semesterLabel": "Semester:",
   "app.subjectArea": "Math domain:",
+  "app.ragPreview": "Preview textbook RAG",
+  "app.ragPreviewTitle": "Textbook RAG search results",
+  "app.ragPreviewQuery": "Search query",
+  "app.ragPreviewTextbook": "Selected textbook",
+  "app.ragPreviewAutoSelected": "Auto-selected after comparing semesters 1 and 2",
+  "app.ragPreviewNoResults": "No textbook concepts found.",
+  "app.ragPreviewNoGrade": "Enter a grade to preview RAG results.",
+  "app.ragPreviewContext": "Content injected into the prompt",
+  "app.ragPreviewScore": "Similarity",
+  "app.ragPreviewLoading": "Loading…",
+  "app.promptPreview": "View generation prompts",
+  "app.promptPreviewTitle": "Sub-question generation prompts",
+  "app.promptCotSection": "CoT solution prompts",
+  "app.promptSubqSection": "Sub-question generation prompts",
+  "app.promptSelectStep": "Select step",
+  "app.promptSystem": "System Prompt",
+  "app.promptUser": "User Prompt",
+  "app.promptFromGenerated": "Prompt used at generation",
+  "app.promptFromPreview": "Preview (not generated yet)",
+  "app.promptNoCot": "No CoT prompt information available.",
+  "app.promptLoading": "Loading…",
+  "app.promptNeedCot": "CoT steps are required to preview prompts.",
 
   "cot.generateSubq": "Generate sub-questions",
 
   "subq.notGenerated": "Sub-questions have not been generated.",
   "subq.originalQuestion": "Original item",
   "subq.regeneratedQuestion": "Regenerated item",
-  "subq.currentQuestion": "Item",
   "subq.viewOriginal": "View original item",
   "subq.hideOriginal": "Hide original item",
   "subq.useOriginalVersion": "Use original item",
@@ -450,7 +534,8 @@ const en: Record<TranslationKey, string> = {
   "subq.regenerating": "Regenerating…",
   "subq.selected": "Selected",
   "subq.selectThis": "Select",
-  "subq.selectVersionHint": "Select which item to use when finalizing.",
+  "subq.confirmVersionSelection": "Confirm selection",
+  "subq.editRequiresSelection": "Select an item in compare mode before editing.",
   "subq.preparing": "Preparing",
   "subq.noRegenerated": "No regenerated item",
   "subq.viewVerification": "View verification",
@@ -460,6 +545,7 @@ const en: Record<TranslationKey, string> = {
   "subq.exitCompare": "Exit compare",
   "subq.hideVerification": "Hide verification",
   "subq.feedbackPlaceholder": "Enter revision requests.",
+  "subq.editFeedbackDivider": "Or regenerate with feedback",
   "subq.originalVerification": "Original item verification",
   "subq.regeneratedVerification": "Regenerated item verification",
   "subq.noVerification": "No verification results.",
@@ -481,7 +567,7 @@ const en: Record<TranslationKey, string> = {
   "subq.cotStepNotFound": "CoT step not found: {id}",
 
   "rubric.mainProblem": "Main problem",
-  "rubric.noGuideline": "No sub-question data. Please generate sub-questions first.",
+  "rubric.noSubQuestion": "No sub-question data. Please generate sub-questions first.",
   "rubric.clickGenerate": "Click the button below to generate rubrics.",
   "rubric.generate": "Generate rubric",
   "rubric.generatingLong": "Generating rubric... (this may take a while)",
@@ -626,7 +712,7 @@ const en: Record<TranslationKey, string> = {
   "diagnosis.nothingToSave": "No answers to save.",
   "diagnosis.saveError": "An error occurred while saving.",
   "diagnosis.completeOneProblem": "Complete diagnosis for at least one problem for this student.",
-  "diagnosis.reportBuildFail": "Cannot build a report from this student’s results. (Guideline per problem required)",
+  "diagnosis.reportBuildFail": "Cannot build a report from this student’s results. (Sub-questions per problem required)",
   "diagnosis.reportLoadError": "An error occurred while loading the student diagnosis report.",
   "diagnosis.noDiagnosedProblems": "No diagnosed problems. Select a problem and run diagnosis first.",
   "diagnosis.reportRefreshError": "An error occurred while refreshing the report.",
@@ -646,6 +732,14 @@ const en: Record<TranslationKey, string> = {
   "category.3-2": "Constructing mathematical expressions or models",
   "category.4-1": "Executing calculations",
   "category.4-2": "Interpreting and organizing results",
+  "categoryDesc.1-1": "The ability to distinguish important information in the problem",
+  "categoryDesc.1-2": "The ability to identify the final result required by the question",
+  "categoryDesc.2-1": "The ability to organize given conditions and constraints into tables, lists, or diagrams to build a basic mathematical structure for solving the problem",
+  "categoryDesc.2-2": "The ability to understand how organized conditions connect and form expressions needed for calculation",
+  "categoryDesc.3-1": "The ability to apply prior mathematical knowledge beyond the conditions given directly in the problem",
+  "categoryDesc.3-2": "The ability to represent a situation as a mathematical expression, equation, inequality, or other model according to a plan",
+  "categoryDesc.4-1": "The ability to carry out multi-step calculations in the correct order",
+  "categoryDesc.4-2": "The ability to interpret computed values in context, check units and conditions, and arrive at the final answer",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = { ko, en };
@@ -683,6 +777,13 @@ export function formatGrade(level: string, locale: Locale): string {
 export function formatCategory(code: string, locale: Locale): string {
   const key = `category.${code}` as TranslationKey;
   return translations[locale][key] ?? code;
+}
+
+/** 하위 역량(sub_skill) 정의 — framework.json 기준 */
+export function formatSubSkillDescription(code: string | undefined, locale: Locale): string {
+  if (!code) return "";
+  const key = `categoryDesc.${code}` as TranslationKey;
+  return translations[locale][key] ?? "";
 }
 
 function stepGroupCode(subSkillId?: string): string | undefined {

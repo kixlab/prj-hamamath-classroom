@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { CoTData, GuidelineData } from '../types';
+import type { CoTData, SubQuestionData } from '../types';
 import { USER_ID_STORAGE_KEY } from '../components/UserIdPage/UserIdPage';
-import { getApiUrl } from '../services/api';
+import { getApiUrl, api } from '../services/api';
+import { isDemoUserId } from '../demo/demoAccount';
 
 const STORAGE_KEY_PREFIX = 'hamamath_saved_results';
 const LAST_PROBLEM_KEY_PREFIX = 'hamamath_last_problem_id';
@@ -12,10 +13,16 @@ function getStoredUserId(): string | null {
   return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(USER_ID_STORAGE_KEY) : null;
 }
 
+/** 특정 사용자 ID 기준 localStorage 저장 키 */
+export function getStorageKeyForUser(userId: string): string {
+  const uid = userId?.trim();
+  return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
+}
+
 /** 현재 로그인한 사용자 ID 기준 저장 키 (아이디별로 저장 결과 분리) */
 function getStorageKey(): string {
   const uid = getStoredUserId();
-  return uid ? `${STORAGE_KEY_PREFIX}_${uid}` : STORAGE_KEY_PREFIX;
+  return getStorageKeyForUser(uid ?? '');
 }
 
 /** HTTP 헤더 값은 ISO-8859-1만 허용. 한글 등이 있으면 Base64로 인코딩해 반환 (다른 커스텀 헤더용 export) */
@@ -63,7 +70,7 @@ export interface SavedResult {
   timestamp: string;
   cotData: CoTData | null;
   subQData: any | null;
-  guidelineData: GuidelineData | null;
+  subQuestionData: SubQuestionData | null;
   preferredVersion?: Record<string, 'original' | 'regenerated'>;
   rubrics?: any[] | null;
 }
@@ -72,15 +79,72 @@ interface SavedResults {
   [problemId: string]: SavedResult;
 }
 
-// 전역 함수로 export (현재 로그인한 사용자 ID 기준)
-export function getSavedResults(): SavedResults {
+function normalizeSavedResults(parsed: SavedResults): SavedResults {
+  for (const key of Object.keys(parsed)) {
+    const item = parsed[key];
+    if (item && !item.subQuestionData && item.guidelineData) {
+      item.subQuestionData = item.guidelineData;
+    }
+  }
+  return parsed;
+}
+
+/** 지정한 사용자 ID의 localStorage 저장 결과 */
+export function getSavedResultsForUser(userId: string): SavedResults {
   try {
-    const stored = localStorage.getItem(getStorageKey());
-    return stored ? JSON.parse(stored) : {};
+    const stored = localStorage.getItem(getStorageKeyForUser(userId));
+    const parsed = stored ? JSON.parse(stored) : {};
+    return normalizeSavedResults(parsed);
   } catch (e) {
     console.error('저장된 결과 불러오기 실패:', e);
     return {};
   }
+}
+
+// 전역 함수로 export (현재 로그인한 사용자 ID 기준)
+export function getSavedResults(): SavedResults {
+  try {
+    const stored = localStorage.getItem(getStorageKey());
+    const parsed = stored ? JSON.parse(stored) : {};
+    return normalizeSavedResults(parsed);
+  } catch (e) {
+    console.error('저장된 결과 불러오기 실패:', e);
+    return {};
+  }
+}
+
+export interface HistoryListItem {
+  problemId: string;
+  timestamp: string;
+}
+
+/** 서버 목록 + 로컬 캐시를 병합한 저장 이력 (데모가 test 계정과 동기화할 때 사용) */
+export async function fetchHistoryListForUser(userId: string): Promise<HistoryListItem[]> {
+  const uid = userId?.trim();
+  if (!uid) return [];
+
+  let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string }> = [];
+  try {
+    const data = await api.getMyHistoryList(uid);
+    serverResults = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('저장 목록 조회 실패:', err);
+  }
+
+  const local = getSavedResultsForUser(uid);
+  const merged = new Map<string, string>();
+
+  for (const item of serverResults) {
+    const pid = (item.problem_id ?? item.problemId ?? '').trim();
+    if (pid) merged.set(pid, item.timestamp ?? '');
+  }
+  for (const [pid, result] of Object.entries(local)) {
+    if (!merged.has(pid)) merged.set(pid, result.timestamp ?? '');
+  }
+
+  return Array.from(merged.entries())
+    .map(([problemId, timestamp]) => ({ problemId, timestamp }))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 /** 서버 응답을 SavedResult 형태로 정규화 (snake_case → camelCase 등) */
@@ -90,15 +154,39 @@ function normalizeServerResult(serverItem: Record<string, unknown>): SavedResult
     timestamp: (serverItem.timestamp as string) ?? '',
     cotData: (serverItem.cot_data ?? serverItem.cotData) as SavedResult['cotData'],
     subQData: (serverItem.subq_data ?? serverItem.subQData) as SavedResult['subQData'],
-    guidelineData: (serverItem.guideline_data ?? serverItem.guidelineData) as SavedResult['guidelineData'],
+    subQuestionData: (
+      serverItem.sub_question_data ??
+      serverItem.subQuestionData ??
+      serverItem.guideline_data ??
+      serverItem.guidelineData
+    ) as SavedResult['subQuestionData'],
     preferredVersion: (serverItem.preferred_version ?? serverItem.preferredVersion) as SavedResult['preferredVersion'],
     rubrics: (serverItem.rubrics as SavedResult['rubrics']) ?? null,
   };
 }
 
+export function fetchLocalHistoryList(): HistoryListItem[] {
+  const saved = getSavedResults();
+  return Object.entries(saved)
+    .map(([problemId, result]) => ({
+      problemId,
+      timestamp: result.timestamp ?? '',
+    }))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
 export async function loadResult(problemId: string): Promise<SavedResult | null> {
   const uid = getStoredUserId();
   const savedResults = getSavedResults();
+
+  // 데모 계정: 서버 없이 localStorage만 사용
+  if (isDemoUserId(uid)) {
+    const local = savedResults[problemId];
+    if (local) {
+      localStorage.setItem(getLastProblemKey(), problemId);
+    }
+    return local ?? null;
+  }
 
   // 동일 ID로 다른 기기/브라우저에서도 같은 내용이 보이도록 서버를 먼저 조회
   if (uid) {
@@ -137,6 +225,39 @@ export async function loadResult(problemId: string): Promise<SavedResult | null>
   return null;
 }
 
+/** 지정한 소유자 계정의 저장 결과 로드 (데모가 test 데이터를 읽을 때 사용) */
+export async function loadResultForUser(problemId: string, ownerUserId: string): Promise<SavedResult | null> {
+  const uid = ownerUserId?.trim();
+  if (!uid) return null;
+
+  const storageKey = getStorageKeyForUser(uid);
+  const savedResults = getSavedResultsForUser(uid);
+
+  try {
+    const response = await fetch(getApiUrl(`/api/v1/history/${encodeURIComponent(problemId)}`), {
+      headers: encodeUserIdForHeader(uid),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const result = normalizeServerResult(data);
+      savedResults[problemId] = result;
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(savedResults));
+      } catch {
+        // 로컬 캐시 실패해도 서버 결과는 반환
+      }
+      return result;
+    }
+    if (response.status !== 404) {
+      console.error(`서버에서 결과를 불러오는 중 오류 발생: ${response.status}`);
+    }
+  } catch (err) {
+    console.warn('서버에서 결과를 불러오는 중 오류:', err);
+  }
+
+  return savedResults[problemId] ?? null;
+}
+
 export async function deleteResult(problemId: string, userId?: string | null): Promise<void> {
   const id = (problemId ?? '').trim();
   if (!id) return;
@@ -145,6 +266,9 @@ export async function deleteResult(problemId: string, userId?: string | null): P
   const savedResults = getSavedResults();
   delete savedResults[id];
   localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
+
+  const effectiveUserId = userId ?? getStoredUserId();
+  if (isDemoUserId(effectiveUserId)) return;
 
   // 서버에서도 삭제 (Firestore/파일). userId 있으면 헤더 폴백 사용
   try {
@@ -174,11 +298,14 @@ export function saveResult(
   problemId: string,
   cotData?: CoTData | null,
   subQData?: any | null,
-  guidelineData?: GuidelineData | null,
+  subQuestionData?: SubQuestionData | null,
   preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
   rubrics?: any[] | null,
   userId?: string | null
 ): void {
+  const effectiveUserId = userId ?? getStoredUserId();
+  const isDemo = isDemoUserId(effectiveUserId);
+
   const savedResults = getSavedResults();
   const existing = savedResults[problemId];
   const resultData: SavedResult = {
@@ -186,7 +313,7 @@ export function saveResult(
     timestamp: new Date().toISOString(),
     cotData: cotData !== undefined ? cotData : (existing?.cotData ?? null),
     subQData: subQData !== undefined ? subQData : (existing?.subQData ?? null),
-    guidelineData: guidelineData !== undefined ? guidelineData : (existing?.guidelineData ?? null),
+    subQuestionData: subQuestionData !== undefined ? subQuestionData : (existing?.subQuestionData ?? (existing as { guidelineData?: SubQuestionData | null } | undefined)?.guidelineData ?? null),
     preferredVersion: preferredVersion !== undefined ? (preferredVersion ?? undefined) : (existing?.preferredVersion),
     rubrics: rubrics !== undefined ? (rubrics ?? null) : (existing?.rubrics ?? null),
   };
@@ -212,7 +339,9 @@ export function saveResult(
   try {
     localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
     localStorage.setItem(getLastProblemKey(), problemId);
-    
+
+    if (isDemo) return;
+
     // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리). userId 있으면 헤더 폴백으로 사용
     fetch(getApiUrl('/api/v1/history/save'), {
       method: 'POST',
@@ -259,12 +388,14 @@ export async function saveResultAsync(
   problemId: string,
   cotData?: CoTData | null,
   subQData?: any | null,
-  guidelineData?: GuidelineData | null,
+  subQuestionData?: SubQuestionData | null,
   preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
   rubrics?: any[] | null,
   userId?: string | null
 ): Promise<void> {
-  saveResult(problemId, cotData, subQData, guidelineData, preferredVersion, rubrics, userId);
+  const effectiveUserId = userId ?? getStoredUserId();
+  saveResult(problemId, cotData, subQData, subQuestionData, preferredVersion, rubrics, userId);
+  if (isDemoUserId(effectiveUserId)) return;
   const savedResults = getSavedResults();
   const resultData = savedResults[problemId];
   if (!resultData) return;
@@ -296,9 +427,9 @@ export const useStorage = () => {
     problemId: string,
     cotData: CoTData | null,
     subQData: any | null,
-    guidelineData: GuidelineData | null
+    subQuestionData: SubQuestionData | null
   ) => {
-    saveResult(problemId, cotData, subQData, guidelineData);
+    saveResult(problemId, cotData, subQData, subQuestionData);
     setSavedResults(getSavedResults());
   }, []);
 

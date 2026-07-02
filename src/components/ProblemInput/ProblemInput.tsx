@@ -1,15 +1,19 @@
-import { useState, useRef, ChangeEvent, FormEvent, ReactNode } from "react";
+import { useState, useRef, ChangeEvent, FormEvent, ReactNode, useEffect } from "react";
 import { useApp } from "../../contexts/AppContext";
+import type { CoTData } from "../../types";
 import { saveResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
+import { formatAnswer, formatSolution, looksLikeMathContent } from "../../utils/formatting";
+import { resolveSemester } from "../../utils/textbook";
+import { MathHtml } from "../MathHtml";
+import { demoDelay, DEMO_COT_LOADING_MS } from "../../demo/demoDelay";
+import { buildDemoCotFromProblemInput } from "../../demo/demoWorkspace";
+import { loadMirroredTestResult } from "../../demo/demoMirror";
+import { PROBLEM_DROPDOWN_OPTIONS } from "../../utils/problemIdAlias";
 import styles from "./ProblemInput.module.css";
-import example1Data from "../../../data/finalized_data/example1.json";
-import example1Image from "../../../data/finalized_data/example1.png";
-import example2Data from "../../../data/finalized_data/example2.json";
-import example2Image from "../../../data/finalized_data/example2.png";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
 const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/finalized_data/*.json");
@@ -28,8 +32,8 @@ function resolveLocalImageUrl(imageFile?: string | null): string | null {
   return entry ? entry[1] : null;
 }
 
-/** 드롭다운에 기본으로 표시할 로컬 문제들 */
-const DROPDOWN_OPTIONS = ["example3.json", "num1.json", "num2.json", "num3.json", "num4.json", "num5.json"] as const;
+/** 드롭다운 로컬 예시 문제 (file: data/finalized_data/ JSON, label: 표시 이름) */
+const DROPDOWN_OPTIONS = PROBLEM_DROPDOWN_OPTIONS;
 
 const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
@@ -58,6 +62,7 @@ interface FormData {
   answer: string;
   solution: string;
   grade: string;
+  semester: string;
   image: File | null;
   imagePreview: string | null;
   imageData: string | null;
@@ -71,18 +76,55 @@ function answerFromMainAnswer(mainAnswer: string): string {
   return match ? match[1].trim() : trimmed;
 }
 
-function patchFromMainAnswer(fields: {
-  main_problem?: string;
-  main_answer?: string;
-  main_solution?: string;
-  grade?: string;
-}): Partial<FormData> {
+function patchFromMainAnswer(fields: { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string; semester?: string }): Partial<FormData> {
   return {
     problem: fields.main_problem ?? "",
     answer: answerFromMainAnswer(fields.main_answer ?? ""),
     solution: fields.main_solution ?? "",
     grade: fields.grade ?? "",
+    semester: fields.semester ?? "",
   };
+}
+
+const INITIAL_FORM_DATA: FormData = {
+  problem: "",
+  answer: "",
+  solution: "",
+  grade: "",
+  semester: "",
+  image: null,
+  imagePreview: null,
+  imageData: null,
+  imgDescription: "",
+};
+
+function formDataFromCot(cot: CoTData): Partial<FormData> {
+  const c = cot as CoTData & {
+    main_problem?: string;
+    main_answer?: string;
+    img_description?: string;
+  };
+  return {
+    problem: c.problem ?? c.problem_text ?? c.main_problem ?? "",
+    answer: c.answer ?? c.final_answer ?? answerFromMainAnswer(c.main_answer ?? ""),
+    solution: c.main_solution ?? "",
+    grade: c.grade ?? "",
+    semester: c.semester ?? "",
+    imagePreview: c.image_data ?? null,
+    imageData: c.image_data ?? null,
+    imgDescription: c.img_description ?? "",
+  };
+}
+
+function resolveProblemIdSelection(problemId: string): { selectedProblem: string; customProblemId: string } {
+  const dropdownMatch = DROPDOWN_OPTIONS.find(({ file }) => file === problemId);
+  if (dropdownMatch) {
+    return { selectedProblem: dropdownMatch.file, customProblemId: "" };
+  }
+  if (problemId.endsWith(".json")) {
+    return { selectedProblem: problemId, customProblemId: "" };
+  }
+  return { selectedProblem: "", customProblemId: problemId };
 }
 
 interface InputPanelProps {
@@ -101,6 +143,76 @@ function InputPanel({ icon, title, children, className }: InputPanelProps) {
       </header>
       <div className={styles.panelBody}>{children}</div>
     </section>
+  );
+}
+
+interface LatexAwareFieldProps {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+  required?: boolean;
+  fieldClassName?: string;
+  formatHtml?: (text: string) => string;
+}
+
+function LatexAwareField({
+  id,
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
+  required = false,
+  fieldClassName,
+  formatHtml = formatAnswer,
+}: LatexAwareFieldProps) {
+  if (looksLikeMathContent(value)) {
+    return (
+      <>
+        <MathHtml
+          className={`${styles.mathPreview} ${styles.mathPreviewOnly}`}
+          html={formatHtml(value)}
+        />
+        {required ? (
+          <input
+            type="text"
+            id={id}
+            value={value}
+            readOnly
+            required
+            tabIndex={-1}
+            aria-hidden
+            className={styles.mathSourceHidden}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  if (multiline) {
+    return (
+      <textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        placeholder={placeholder}
+        className={`${fieldClassName ?? ""} tex2jax_ignore`.trim()}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      required={required}
+      placeholder={placeholder}
+      className={`${fieldClassName ?? ""} tex2jax_ignore`.trim()}
+    />
   );
 }
 
@@ -132,23 +244,52 @@ const IconImage = () => (
 );
 
 export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
-  const { userId, setCurrentCotData, setCurrentGuidelineData, setCurrentStep, setLoading, setError, setCurrentProblemId } = useApp();
+  const {
+    userId,
+    currentCotData,
+    currentProblemId,
+    isDemoMode,
+    setCurrentCotData,
+    setCurrentSubQuestionData,
+    setCurrentStep,
+    setLoading,
+    setError,
+    setCurrentProblemId,
+    setFinalizedSubQuestionForRubric,
+    setCurrentRubrics,
+    setPreferredVersion,
+  } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<string>("");
   /** 직접 입력하기 선택 시 사용자가 입력하는 문제 ID (예: filename.json) */
   const [customProblemId, setCustomProblemId] = useState<string>("");
-  const [formData, setFormData] = useState<FormData>({
-    problem: "",
-    answer: "",
-    solution: "",
-    grade: "",
-    image: null,
-    imagePreview: null,
-    imageData: null,
-    imgDescription: "",
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const hydratedProblemIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!currentProblemId && !currentCotData) {
+      hydratedProblemIdRef.current = null;
+      setFormData(INITIAL_FORM_DATA);
+      setSelectedProblem("");
+      setCustomProblemId("");
+      return;
+    }
+    if (!currentCotData || !currentProblemId) return;
+    if (hydratedProblemIdRef.current === currentProblemId) return;
+    hydratedProblemIdRef.current = currentProblemId;
+
+    setFormData((prev) => ({
+      ...prev,
+      ...formDataFromCot(currentCotData),
+      image: null,
+    }));
+
+    const { selectedProblem: nextSelected, customProblemId: nextCustom } = resolveProblemIdSelection(currentProblemId);
+    setSelectedProblem(nextSelected);
+    setCustomProblemId(nextCustom);
+  }, [currentCotData, currentProblemId]);
 
   /** 이미지 URL을 base64 data URL로 변환 (API는 base64만 허용) */
   const urlToBase64 = (url: string): Promise<string> =>
@@ -165,46 +306,15 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       );
 
   const handleProblemSelect = async (filename: string) => {
-    if (!filename || filename === "__example1_json__" || filename === "__example2_json__") {
-      if (filename === "__example1_json__") {
-        const data = example1Data as { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string };
-        setFormData((prev) => ({
-          ...prev,
-          ...patchFromMainAnswer(data),
-          imagePreview: example1Image,
-          imageData: example1Image,
-        }));
-        urlToBase64(example1Image)
-          .then((dataUrl) => {
-            setFormData((prev) => (prev.imagePreview === example1Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
-          })
-          .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
-      } else if (filename === "__example2_json__") {
-        const data = example2Data as { main_problem?: string; main_answer?: string; main_solution?: string; grade?: string };
-        setFormData((prev) => ({
-          ...prev,
-          ...patchFromMainAnswer(data),
-          imagePreview: example2Image,
-          imageData: example2Image,
-        }));
-        urlToBase64(example2Image)
-          .then((dataUrl) => {
-            setFormData((prev) => (prev.imagePreview === example2Image ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
-          })
-          .catch((err) => console.warn("예시 이미지 base64 변환 실패:", err));
-      }
-      return;
-    }
+    if (!filename) return;
 
-    // data/finalized_data/ 폴더의 로컬 JSON (num1, num2 등)
+    // data/finalized_data/ 폴더의 로컬 JSON
     const dataKey = Object.keys(dataJsonGlob).find((k) => k.endsWith(filename));
     if (dataKey) {
       try {
         const mod = await dataJsonGlob[dataKey]();
         const data = mod.default as Record<string, unknown>;
-        const imageUrl = resolveLocalImageUrl(
-          typeof data.image_file === "string" ? data.image_file : null,
-        );
+        const imageUrl = resolveLocalImageUrl(typeof data.image_file === "string" ? data.image_file : null);
         setFormData((prev) => ({
           ...prev,
           ...patchFromMainAnswer({
@@ -212,6 +322,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             main_answer: String(data.main_answer ?? ""),
             main_solution: String(data.main_solution ?? ""),
             grade: String(data.grade ?? ""),
+            semester: typeof data.semester === "string" ? data.semester : "",
           }),
           imagePreview: imageUrl,
           imageData: imageUrl,
@@ -219,9 +330,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         if (imageUrl) {
           urlToBase64(imageUrl)
             .then((dataUrl) => {
-              setFormData((prev) =>
-                prev.imagePreview === imageUrl ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev,
-              );
+              setFormData((prev) => (prev.imagePreview === imageUrl ? { ...prev, imagePreview: dataUrl, imageData: dataUrl } : prev));
             })
             .catch((err) => console.warn("로컬 이미지 base64 변환 실패:", err));
         }
@@ -240,6 +349,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           main_answer: data.answer || "",
           main_solution: data.main_solution || "",
           grade: data.grade || "",
+          semester: typeof data.semester === "string" ? data.semester : "",
         }),
         imageData: data.image_data || null,
         imagePreview: data.image_data || null,
@@ -277,6 +387,37 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isDemoMode) {
+      setLoading(true);
+      setError(null);
+      setCurrentStep(2);
+      try {
+        await demoDelay(DEMO_COT_LOADING_MS);
+        const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
+        const mirrored = await loadMirroredTestResult(problemId);
+        const cotData =
+          mirrored?.cotData ??
+          buildDemoCotFromProblemInput({
+            problem: formData.problem,
+            answer: formData.answer,
+            solution: formData.solution,
+            grade: formData.grade,
+            semester: formData.semester.trim() || undefined,
+            imageData: formData.imageData,
+            problemId,
+          });
+        setCurrentProblemId(problemId);
+        setPreferredVersion?.(mirrored?.preferredVersion ?? {});
+        setCurrentSubQuestionData(null as any);
+        setFinalizedSubQuestionForRubric(null);
+        setCurrentRubrics(null);
+        setCurrentCotData(cotData);
+        onSubmit?.(cotData);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     setLoading(true);
     setError(null);
     setCurrentStep(2);
@@ -292,25 +433,28 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         }
       }
 
+      const semester = resolveSemester(formData.grade, formData.semester.trim() || undefined);
       const requestData = {
         main_problem: formData.problem,
         main_answer: formData.answer.trim(),
         main_solution: formData.solution || null,
         grade: formData.grade,
+        ...(semester ? { semester } : {}),
+        use_textbook_rag: true,
         image_data: imageData,
         language: getAppLanguage(locale),
       };
 
-      const result = await api.createCoT(requestData);
-      const cotDataWithExtras = {
+      const result = (await api.createCoT(requestData)) as CoTData;
+      const cotDataWithExtras: CoTData & { img_description: string } = {
         ...result,
         img_description: formData.imgDescription,
         image_data: imageData ?? formData.imageData,
         main_solution: formData.solution,
+        ...(semester ? { semester } : {}),
       };
 
-      const problemId =
-        selectedProblem === "__example1_json__" ? "example1.json" : selectedProblem === "__example2_json__" ? "example2.json" : selectedProblem || customProblemId.trim() || getNextProblemSeq();
+      const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
 
       logUserEvent("problem_input", {
         problem_id: problemId,
@@ -318,6 +462,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         answer: formData.answer.trim(),
         solution: formData.solution || null,
         grade: formData.grade,
+        semester: semester || null,
         hasImage: !!formData.imageData,
         imgDescription: formData.imgDescription || null,
       });
@@ -335,12 +480,12 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         })),
       });
       setCurrentProblemId(problemId);
-      setCurrentGuidelineData(null as any);
+      setCurrentSubQuestionData(null as any);
       setCurrentCotData(cotDataWithExtras);
       saveResult(problemId, cotDataWithExtras, null, null, null, null, userId);
       onSubmit?.(cotDataWithExtras);
     } catch (err: any) {
-      setError(err.message || t('common.errorGeneric'));
+      setError(err.message || t("common.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -372,11 +517,9 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                     {file.replace(".json", "")}
                   </option>
                 ))}
-                <option value="__example1_json__">example1.json</option>
-                <option value="__example2_json__">example2.json</option>
-                {DROPDOWN_OPTIONS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
+                {DROPDOWN_OPTIONS.map(({ file, label }) => (
+                  <option key={file} value={file}>
+                    {label}
                   </option>
                 ))}
               </select>
@@ -408,6 +551,20 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             />
           </div>
 
+          <div className={`${styles.topField} ${styles.topFieldSemester}`}>
+            <label htmlFor="semester" className={styles.topLabel}>
+              {t("problemInput.semester")}
+            </label>
+            <input
+              type="text"
+              id="semester"
+              value={formData.semester}
+              onChange={(e) => setFormData((prev) => ({ ...prev, semester: e.target.value }))}
+              placeholder={t("problemInput.semesterPlaceholder")}
+              className={styles.input}
+            />
+          </div>
+
           <div className={styles.topActions}>
             <button type="submit" className={styles.generateBtn} disabled={!canSubmit}>
               {t("problemInput.generate")}
@@ -418,14 +575,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         <div className={styles.contentGrid}>
           <div className={styles.imageCol}>
             <InputPanel icon={<IconImage />} title={t("problemInput.imageUpload")} className={styles.panelImage}>
-              <input
-                ref={imageInputRef}
-                type="file"
-                id="imageUpload"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className={styles.fileInputHidden}
-              />
+              <input ref={imageInputRef} type="file" id="imageUpload" accept="image/*" onChange={handleImageUpload} className={styles.fileInputHidden} />
               <div className={styles.imagePreviewBox}>
                 {formData.imagePreview ? (
                   <img src={formData.imagePreview} alt={t("problemInput.imagePreview")} className={styles.imagePreviewImg} />
@@ -441,12 +591,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                   </svg>
                   {t("problemInput.upload")}
                 </button>
-                <button
-                  type="button"
-                  className={styles.removeImageBtn}
-                  onClick={handleRemoveImage}
-                  disabled={!formData.imagePreview}
-                >
+                <button type="button" className={styles.removeImageBtn} onClick={handleRemoveImage} disabled={!formData.imagePreview}>
                   {t("problemInput.removeImage")}
                 </button>
               </div>
@@ -455,34 +600,36 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
           <div className={styles.fieldsCol}>
             <InputPanel icon={<IconProblem />} title={t("problemInput.problem")} className={styles.panelProblem}>
-              <textarea
+              <LatexAwareField
                 id="problem"
                 value={formData.problem}
-                onChange={(e) => setFormData((prev) => ({ ...prev, problem: e.target.value }))}
-                required
+                onChange={(problem) => setFormData((prev) => ({ ...prev, problem }))}
                 placeholder={t("problemInput.problemPlaceholder")}
-                className={`${styles.textarea} ${styles.textareaFill}`}
+                multiline
+                required
+                fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
               />
             </InputPanel>
 
             <InputPanel icon={<IconSolution />} title={t("problemInput.solution")} className={styles.panelSolution}>
-              <textarea
+              <LatexAwareField
                 id="solution"
                 value={formData.solution}
-                onChange={(e) => setFormData((prev) => ({ ...prev, solution: e.target.value }))}
+                onChange={(solution) => setFormData((prev) => ({ ...prev, solution }))}
                 placeholder={t("problemInput.solutionPlaceholder")}
-                className={`${styles.textarea} ${styles.textareaFill}`}
+                multiline
+                fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
+                formatHtml={formatSolution}
               />
             </InputPanel>
 
             <InputPanel icon={<IconAnswer />} title={t("problemInput.answer")} className={styles.panelAnswer}>
-              <input
-                type="text"
+              <LatexAwareField
                 id="answer"
                 value={formData.answer}
-                onChange={(e) => setFormData((prev) => ({ ...prev, answer: e.target.value }))}
+                onChange={(answer) => setFormData((prev) => ({ ...prev, answer }))}
                 placeholder={t("problemInput.answerPlaceholder")}
-                className={styles.input}
+                fieldClassName={styles.input}
               />
             </InputPanel>
           </div>

@@ -36,7 +36,7 @@ interface SubQ {
   guide_sub_answer?: string;
 }
 
-interface GuidelineData {
+interface SubQuestionExportData {
   subject_area?: string;
   guide_sub_questions?: SubQ[];
 }
@@ -44,14 +44,14 @@ interface GuidelineData {
 /**
  * 확정된 문제(원본/재생성 선택 반영)를 PDF로 다운로드
  */
-export async function exportPdfFromGuideline(
+export async function exportPdfFromSubQuestion(
   cotData: CotData,
-  guidelineData: GuidelineData,
+  subQuestionData: SubQuestionExportData,
   preferredVersion: Record<string, "original" | "regenerated">,
   problemId: string | null,
   locale: Locale = "ko",
 ): Promise<void> {
-  const subQs = guidelineData.guide_sub_questions || [];
+  const subQs = subQuestionData.guide_sub_questions || [];
   const finalSubQuestions = subQs.map((subQ) => {
     const originalQ = (subQ.guide_sub_question || "").trim();
     const originalA = (subQ.guide_sub_answer || "").trim();

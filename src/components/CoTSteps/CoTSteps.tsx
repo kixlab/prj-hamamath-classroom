@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useLocale } from '../../i18n/LocaleContext';
-import { formatCotStepGroup, formatCotSubSkill } from '../../i18n/translations';
+import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription } from '../../i18n/translations';
+import { formatQuestion } from '../../utils/formatting';
+import { frameworkStepSectionStyle, resolveFrameworkStepId } from '../../utils/frameworkStepColors';
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
@@ -17,7 +19,7 @@ function chunkSteps<T>(items: T[], size: number): T[][] {
 }
 
 export const CoTSteps = () => {
-  const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId } = useApp();
+  const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId, currentSubQuestionData, setPendingSubqAutoStart, setFinalizedSubQuestionForRubric } = useApp();
   const { t, locale } = useLocale();
   const containerRef = useMathJax([currentCotData?.steps]);
 
@@ -33,7 +35,7 @@ export const CoTSteps = () => {
     return null;
   }
 
-  const handleGenerateGuideline = () => {
+  const handleGoToSubQuestion = () => {
     const cot = currentCotData as CoTData | null;
     if (cot) {
       logUserEvent("cot_finalized", {
@@ -48,6 +50,13 @@ export const CoTSteps = () => {
           step_content: s.step_content,
         })),
       });
+    }
+    const existingCount =
+      ((currentSubQuestionData as { guide_sub_questions?: unknown[] } | null)?.guide_sub_questions ?? [])
+        .length;
+    if (existingCount === 0) {
+      setFinalizedSubQuestionForRubric(null);
+      setPendingSubqAutoStart(true);
     }
     setCurrentStep(3);
   };
@@ -87,6 +96,7 @@ export const CoTSteps = () => {
     const stepKey = step.sub_skill_id ?? `step-${stepIndex}`;
     const isEditing = editingStepId === step.sub_skill_id;
     const skillLabel = formatCotSubSkill(step, locale);
+    const skillDefinition = formatSubSkillDescription(step.sub_skill_id, locale);
 
     return (
       <article
@@ -98,9 +108,14 @@ export const CoTSteps = () => {
         <header className={styles.stepHeader}>
           <div className={styles.stepMeta}>
             <span className={styles.stepIdBadge}>{step.sub_skill_id ?? stepIndex + 1}</span>
-            <h3 className={styles.stepSkillTitle} id={`cot-step-title-${stepKey}`}>
-              {skillLabel}
-            </h3>
+            <div className={styles.stepTitleBlock}>
+              <h3 className={styles.stepSkillTitle} id={`cot-step-title-${stepKey}`}>
+                {skillLabel}
+              </h3>
+              {skillDefinition && (
+                <p className={styles.stepSkillDefinition}>{skillDefinition}</p>
+              )}
+            </div>
           </div>
           {!isEditing && (
             <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>
@@ -127,7 +142,10 @@ export const CoTSteps = () => {
             </div>
           </div>
         ) : (
-          <div className={styles.stepContent}>{step.step_content}</div>
+          <div
+            className={styles.stepContent}
+            dangerouslySetInnerHTML={{ __html: formatQuestion(step.step_content ?? '') }}
+          />
         )}
       </article>
     );
@@ -138,15 +156,17 @@ export const CoTSteps = () => {
       <div className={styles.cotSteps} ref={containerRef}>
         {stepRows.map((rowSteps, rowIndex) => {
           const sectionLabel = formatCotStepGroup(rowSteps[0], locale);
+          const frameworkStepId = resolveFrameworkStepId(rowSteps[0]?.sub_skill_id, rowIndex + 1);
           return (
             <section
               key={`cot-row-${rowIndex}`}
               className={styles.stepSection}
+              style={frameworkStepSectionStyle(frameworkStepId)}
               aria-label={sectionLabel}
             >
               <div className={styles.stepSectionHead}>
                 <span className={styles.stepSectionIndex} aria-hidden>
-                  {rowIndex + 1}
+                  {frameworkStepId}
                 </span>
                 <h2 className={styles.stepSectionTitle}>{sectionLabel}</h2>
               </div>
@@ -170,7 +190,7 @@ export const CoTSteps = () => {
         })}
       </div>
       <footer className={styles.cotFooter}>
-        <button type="button" className={styles.generateButton} onClick={handleGenerateGuideline}>
+        <button type="button" className={styles.generateButton} onClick={handleGoToSubQuestion}>
           {t('cot.generateSubq')}
         </button>
       </footer>

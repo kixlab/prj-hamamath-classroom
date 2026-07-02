@@ -38,8 +38,50 @@
 .rubricList {
   display: flex;
   flex-direction: column;
-  gap: var(--section-gap);
+  gap: calc(var(--section-gap) + 8px);
   padding: 0;
+}
+
+.stepSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stepSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepSectionIndex {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--step-badge-bg, #f8fafc);
+  border: 1px solid var(--step-badge-border, #e2e8f0);
+  color: var(--step-badge-text, #64748b);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.stepSectionTitle {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.stepSectionItems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
 }
 
 /* ── 공통 버튼 (SubQs·CoT와 동일) ── */
@@ -156,27 +198,22 @@
 
 .cardMeta {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   min-width: 0;
 }
 
 .cardIdBadge {
   flex-shrink: 0;
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--step-badge-bg, #f8fafc);
+  border: 1px solid var(--step-badge-border, #e2e8f0);
+  color: var(--step-badge-text, #64748b);
   padding: 5px 10px;
   border-radius: 6px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
-}
-
-.cardTitles {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 
 .cardSkillTitle {
@@ -184,21 +221,18 @@
   font-weight: 600;
   font-size: 0.9375rem;
   line-height: 1.35;
+  min-width: 0;
 }
 
-.cardGroupTitle {
-  color: var(--color-text-secondary);
-  font-size: 0.8125rem;
-}
-
-.questionPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.displayMode {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 12px;
+  align-items: start;
   margin-bottom: 14px;
 }
 
-.subqFieldLabel {
+.fieldLabel {
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -207,33 +241,38 @@
   margin-bottom: 6px;
 }
 
-.subqQuestionBlock,
-.subqAnswerBlock {
+.questionBlock,
+.answerBlock {
   padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid var(--color-border);
+  min-width: 0;
 }
 
-.subqQuestionBlock {
+.questionBlock:only-child {
+  grid-column: 1 / -1;
+}
+
+.questionBlock {
   background: #fff;
 }
 
-.subqAnswerBlock {
-  background: var(--color-bg-secondary, #f8fafc);
+.answerBlock {
+  background: #fff;
   border-style: dashed;
 }
 
-.subqQuestion {
-  font-size: 0.9rem;
-  line-height: 1.65;
+.questionContent {
   color: var(--color-text);
+  line-height: 1.7;
+  font-size: 0.95em;
   white-space: pre-wrap;
 }
 
-.subqAnswer {
-  font-size: 0.9rem;
-  line-height: 1.6;
+.answerContent {
   color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.65;
 }
 
 .cardBodyLoading {
@@ -283,18 +322,7 @@
   font-size: 0.75rem;
   font-weight: 700;
   color: #fff;
-}
-
-.levelBadge.badgeHigh {
-  background: #2563eb;
-}
-
-.levelBadge.badgeMid {
-  background: #f59e0b;
-}
-
-.levelBadge.badgeLow {
-  background: #ef4444;
+  background: var(--color-primary);
 }
 
 .levelLabel {
@@ -564,6 +592,14 @@
 }
 
 @media (max-width: 900px) {
+  .displayMode {
+    grid-template-columns: 1fr;
+  }
+
+  .questionBlock:only-child {
+    grid-column: auto;
+  }
+
   .levelCards {
     grid-template-columns: 1fr;
   }
