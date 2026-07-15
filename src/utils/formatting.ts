@@ -45,6 +45,32 @@ function normalizeMathDelimiters(text: string): string {
   return s;
 }
 
+/**
+ * 수식($$..$$, $..$, \(..\), \[..\]) 구간 '바깥'의 텍스트에서 LaTeX 이스케이프를 일반 텍스트로 복원.
+ * (예: 수식 밖에 남은 `\_\_\_` → `___`, `\,` → 공백) 수식 구간은 MathJax가 처리하도록 그대로 둔다.
+ */
+function unescapeTextOutsideMath(text: string): string {
+  if (!text) return text;
+  const mathRe = /(\$\$[\s\S]*?\$\$|\$[^$\n]*?\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/g;
+  return text
+    .split(mathRe)
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // 캡처된 수식 구간 → 유지
+      return part
+        .replace(/\\_/g, "_")
+        .replace(/\\,/g, " ")
+        .replace(/\\;/g, " ")
+        .replace(/\\:/g, " ")
+        .replace(/\\%/g, "%")
+        .replace(/\\#/g, "#")
+        .replace(/\\&/g, "&")
+        .replace(/\\\$/g, "$")
+        .replace(/\\\{/g, "{")
+        .replace(/\\\}/g, "}");
+    })
+    .join("");
+}
+
 function prepareMathText(text: string): string {
   let formatted = normalizeMathDelimiters(text.trim());
   if (/^\\+$/.test(formatted)) return "";
@@ -136,7 +162,7 @@ export const formatAnswer = (answer: string | null | undefined): string => {
 
 export const formatQuestion = (question: string | null | undefined): string => {
   if (!question) return "";
-  const formatted = prepareMathText(stripQuestionTemplateTags(question));
+  const formatted = unescapeTextOutsideMath(prepareMathText(stripQuestionTemplateTags(question)));
   return formatted || "";
 };
 

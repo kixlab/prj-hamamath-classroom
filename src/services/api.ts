@@ -1,5 +1,6 @@
 import { getHistoryHeaders, getHistoryHeadersWithFallback, encodeUserIdForHeader, encodeForHeader } from "../hooks/useStorage";
 import { splitQuestionAndAnswer } from "../utils/formatting";
+import { loadWorksheetLogosBase64 } from "../utils/exportPdf";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -758,7 +759,7 @@ export const api = {
    * 확정된 문제(사용자가 원본/재생성 중 선택한 버전)를 Word로 다운로드
    */
   async exportWordFromSubQuestion(
-    cotData: { problem?: string; answer?: string; main_solution?: string; grade?: string },
+    cotData: { problem?: string; answer?: string; main_solution?: string; grade?: string; image_data?: string | null },
     subQuestionData: {
       subject_area?: string;
       guide_sub_questions?: Array<{
@@ -800,12 +801,18 @@ export const api = {
         re_sub_answer: subQ.re_sub_answer ?? null,
       };
     });
+    // 프론트 번들의 로고(단일 소스)를 함께 전송 → 서버가 그대로 삽입 (없으면 서버 assets 폴백)
+    const logos = await loadWorksheetLogosBase64();
     const requestData = {
       main_problem: cotData.problem || "",
       main_answer: cotData.answer || "",
       main_solution: cotData.main_solution || null,
       grade: cotData.grade || "",
       subject_area: subQuestionData.subject_area || null,
+      problem_id: problemId || null,
+      image_data: cotData.image_data || null,
+      kaist_logo_base64: logos.kaist,
+      kixlab_logo_base64: logos.kixlab,
       guide_sub_questions: finalSubQuestions,
     };
     const response = await fetch(getApiUrl("/api/v1/word-export/"), {

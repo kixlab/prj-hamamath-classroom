@@ -6,7 +6,7 @@ import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
-import { formatAnswer, formatSolution, looksLikeMathContent } from "../../utils/formatting";
+import { formatAnswer, formatSolution } from "../../utils/formatting";
 import { resolveSemester } from "../../utils/textbook";
 import { MathHtml } from "../MathHtml";
 import { demoDelay, DEMO_COT_LOADING_MS } from "../../demo/demoDelay";
@@ -132,21 +132,26 @@ interface InputPanelProps {
   title: string;
   children: ReactNode;
   className?: string;
+  headerAction?: ReactNode;
 }
 
-function InputPanel({ icon, title, children, className }: InputPanelProps) {
+function InputPanel({ icon, title, children, className, headerAction }: InputPanelProps) {
   return (
     <section className={`${styles.panel} ${className ?? ""}`}>
       <header className={styles.panelHeader}>
         <span className={styles.panelIcon}>{icon}</span>
         <h3 className={styles.panelTitle}>{title}</h3>
+        {headerAction ? <div className={styles.panelHeaderAction}>{headerAction}</div> : null}
       </header>
       <div className={styles.panelBody}>{children}</div>
     </section>
   );
 }
 
-interface LatexAwareFieldProps {
+interface LatexPanelProps {
+  icon: ReactNode;
+  title: string;
+  className?: string;
   id: string;
   value: string;
   onChange: (value: string) => void;
@@ -157,7 +162,11 @@ interface LatexAwareFieldProps {
   formatHtml?: (text: string) => string;
 }
 
-function LatexAwareField({
+// 문제·모범답안·정답 패널: 헤더 우측에 [편집/저장] 버튼, 본문은 (미리보기 ↔ 편집) 전환
+function LatexPanel({
+  icon,
+  title,
+  className,
   id,
   value,
   onChange,
@@ -166,53 +175,78 @@ function LatexAwareField({
   required = false,
   fieldClassName,
   formatHtml = formatAnswer,
-}: LatexAwareFieldProps) {
-  if (looksLikeMathContent(value)) {
-    return (
-      <>
-        <MathHtml
-          className={`${styles.mathPreview} ${styles.mathPreviewOnly}`}
-          html={formatHtml(value)}
-        />
-        {required ? (
-          <input
-            type="text"
-            id={id}
-            value={value}
-            readOnly
-            required
-            tabIndex={-1}
-            aria-hidden
-            className={styles.mathSourceHidden}
-          />
-        ) : null}
-      </>
-    );
-  }
+}: LatexPanelProps) {
+  const { t } = useLocale();
+  // 내용이 있으면 미리보기로 시작(편집은 버튼으로), 비어 있으면 바로 입력 가능하게 편집으로 시작
+  const [editing, setEditing] = useState(() => !(value && value.trim()));
+  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
 
-  if (multiline) {
-    return (
-      <textarea
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        placeholder={placeholder}
-        className={`${fieldClassName ?? ""} tex2jax_ignore`.trim()}
-      />
-    );
-  }
+  // 편집 모드 진입 시 자동 포커스 + 커서를 끝으로
+  useEffect(() => {
+    if (!editing) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    const len = el.value.length;
+    try {
+      el.setSelectionRange(len, len);
+    } catch {
+      /* input[type=text]가 아니면 무시 */
+    }
+  }, [editing]);
+
+  const commonProps = {
+    id,
+    value,
+    required,
+    placeholder,
+    onChange: (e: ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => onChange(e.target.value),
+    // 내용이 있을 때만 미리보기로 전환 (빈 필드는 계속 입력 가능하게)
+    onBlur: () => {
+      if (value && value.trim()) setEditing(false);
+    },
+    className: `${fieldClassName ?? ""} tex2jax_ignore`.trim(),
+  };
+
+  const field = multiline ? (
+    <textarea ref={inputRef as React.RefObject<HTMLTextAreaElement>} {...commonProps} />
+  ) : (
+    <input ref={inputRef as React.RefObject<HTMLInputElement>} type="text" {...commonProps} />
+  );
+
+  const editButton = (
+    <button
+      type="button"
+      className={`${styles.editBtn} ${styles.editBtnPrimary}`}
+      onMouseDown={(e) => e.preventDefault()} // 버튼 클릭 시 필드 blur 방지
+      onClick={() => setEditing(!editing)}
+    >
+      {editing ? t("common.save") : t("common.edit")}
+    </button>
+  );
 
   return (
-    <input
-      type="text"
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      required={required}
-      placeholder={placeholder}
-      className={`${fieldClassName ?? ""} tex2jax_ignore`.trim()}
-    />
+    <InputPanel icon={icon} title={title} className={className} headerAction={editButton}>
+      {editing ? (
+        field
+      ) : (
+        <>
+          <MathHtml className={`${styles.mathPreview} ${styles.mathPreviewOnly}`} html={formatHtml(value)} />
+          {required ? (
+            <input
+              type="text"
+              id={id}
+              value={value}
+              readOnly
+              required
+              tabIndex={-1}
+              aria-hidden
+              className={styles.mathSourceHidden}
+            />
+          ) : null}
+        </>
+      )}
+    </InputPanel>
   );
 }
 
@@ -599,39 +633,42 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           </div>
 
           <div className={styles.fieldsCol}>
-            <InputPanel icon={<IconProblem />} title={t("problemInput.problem")} className={styles.panelProblem}>
-              <LatexAwareField
-                id="problem"
-                value={formData.problem}
-                onChange={(problem) => setFormData((prev) => ({ ...prev, problem }))}
-                placeholder={t("problemInput.problemPlaceholder")}
-                multiline
-                required
-                fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
-              />
-            </InputPanel>
+            <LatexPanel
+              icon={<IconProblem />}
+              title={t("problemInput.problem")}
+              className={styles.panelProblem}
+              id="problem"
+              value={formData.problem}
+              onChange={(problem) => setFormData((prev) => ({ ...prev, problem }))}
+              placeholder={t("problemInput.problemPlaceholder")}
+              multiline
+              required
+              fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
+            />
 
-            <InputPanel icon={<IconSolution />} title={t("problemInput.solution")} className={styles.panelSolution}>
-              <LatexAwareField
-                id="solution"
-                value={formData.solution}
-                onChange={(solution) => setFormData((prev) => ({ ...prev, solution }))}
-                placeholder={t("problemInput.solutionPlaceholder")}
-                multiline
-                fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
-                formatHtml={formatSolution}
-              />
-            </InputPanel>
+            <LatexPanel
+              icon={<IconSolution />}
+              title={t("problemInput.solution")}
+              className={styles.panelSolution}
+              id="solution"
+              value={formData.solution}
+              onChange={(solution) => setFormData((prev) => ({ ...prev, solution }))}
+              placeholder={t("problemInput.solutionPlaceholder")}
+              multiline
+              fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
+              formatHtml={formatSolution}
+            />
 
-            <InputPanel icon={<IconAnswer />} title={t("problemInput.answer")} className={styles.panelAnswer}>
-              <LatexAwareField
-                id="answer"
-                value={formData.answer}
-                onChange={(answer) => setFormData((prev) => ({ ...prev, answer }))}
-                placeholder={t("problemInput.answerPlaceholder")}
-                fieldClassName={styles.input}
-              />
-            </InputPanel>
+            <LatexPanel
+              icon={<IconAnswer />}
+              title={t("problemInput.answer")}
+              className={styles.panelAnswer}
+              id="answer"
+              value={formData.answer}
+              onChange={(answer) => setFormData((prev) => ({ ...prev, answer }))}
+              placeholder={t("problemInput.answerPlaceholder")}
+              fieldClassName={styles.input}
+            />
           </div>
         </div>
       </form>
