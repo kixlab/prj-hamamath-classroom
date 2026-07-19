@@ -1,6 +1,6 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { useApp } from "../../contexts/AppContext";
-import { loadResult, deleteResult, clearAllResults, saveResultAsync, fetchHistoryListForUser } from "../../hooks/useStorage";
+import { loadResult, deleteResult, clearAllResults, saveResultAsync, fetchHistoryListForUser, getPendingSyncCount, syncPendingResults } from "../../hooks/useStorage";
 import { getDemoSourceUserId } from "../../demo/demoAccount";
 import { getProblemDisplayLabel } from "../../utils/problemIdAlias";
 import { loadDemoSavedWorkflow } from "../../demo/demoWorkspace";
@@ -83,10 +83,28 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
   const [listLoadError, setListLoadError] = useState<string | null>(null);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     updateSavedResultsList();
   }, [userId]);
+
+  // 서버 미전송(동기화 대기) 건수 갱신 — 목록/계정 변경 시
+  useEffect(() => {
+    setPendingCount(getPendingSyncCount(userId));
+  }, [userId, savedResults]);
+
+  const handleRetrySync = async () => {
+    setSyncing(true);
+    try {
+      const { remaining } = await syncPendingResults(userId);
+      setPendingCount(remaining);
+      await updateSavedResultsList();
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (sidebarOpen) updateSavedResultsList();
@@ -126,6 +144,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
       }
       return;
     }
+    // 서버(Firestore)를 유일한 진실 소스로 사용 — 어느 브라우저·기기에서든 동일하게 보이도록.
     let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string }> = [];
     try {
       const data = await api.getMyHistoryList(userId);
@@ -291,6 +310,34 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
             </div>
 
             {listLoadError && <p className={styles.listError}>{listLoadError}</p>}
+
+            {pendingCount > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "#b45309",
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  margin: "4px 0 8px",
+                }}
+              >
+                <span>⚠ 서버 미저장 {pendingCount}건</span>
+                <button
+                  type="button"
+                  onClick={handleRetrySync}
+                  disabled={syncing}
+                  style={{ fontSize: 12, cursor: syncing ? "default" : "pointer", whiteSpace: "nowrap" }}
+                >
+                  {syncing ? "동기화 중…" : "다시 시도"}
+                </button>
+              </div>
+            )}
 
             <ul className={styles.historyList}>
               {savedResults.length === 0 && !listLoadError ? (

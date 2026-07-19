@@ -3,7 +3,7 @@ import { AppProvider, useApp } from './contexts/AppContext';
 import { LocaleProvider, useLocale } from './i18n/LocaleContext';
 import { UserIdPage, USER_ID_STORAGE_KEY } from './components/UserIdPage/UserIdPage';
 import { initEventLogger, stopEventLogger } from './services/eventLogger';
-import { loadResult } from './hooks/useStorage';
+import { loadResult, syncPendingResults } from './hooks/useStorage';
 import { api } from './services/api';
 import {
   clearPreviousUserId,
@@ -254,6 +254,17 @@ function App() {
   const [userId, setUserId] = useState<string | null>(() =>
     typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(USER_ID_STORAGE_KEY) : null
   );
+
+  // 서버 미전송 저장분을 로그인 시 / 온라인 복귀 시 자동 재동기화 (서버 진실 소스 보장)
+  useEffect(() => {
+    if (!userId) return;
+    void syncPendingResults(userId).then(({ synced }) => {
+      if (synced > 0) console.info(`[sync] 대기 저장 ${synced}건을 서버에 반영했습니다.`);
+    });
+    const onOnline = () => void syncPendingResults(userId);
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [userId]);
 
   if (!userId) {
     return (

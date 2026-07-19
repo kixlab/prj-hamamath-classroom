@@ -1,7 +1,7 @@
 import { useState, useRef, ChangeEvent, FormEvent, ReactNode, useEffect } from "react";
 import { useApp } from "../../contexts/AppContext";
 import type { CoTData } from "../../types";
-import { saveResult } from "../../hooks/useStorage";
+import { saveResult, fetchHistoryListForUser, loadResult } from "../../hooks/useStorage";
 import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -10,9 +10,10 @@ import { formatAnswer, formatSolution } from "../../utils/formatting";
 import { resolveSemester } from "../../utils/textbook";
 import { MathHtml } from "../MathHtml";
 import { demoDelay, DEMO_COT_LOADING_MS } from "../../demo/demoDelay";
-import { buildDemoCotFromProblemInput } from "../../demo/demoWorkspace";
+import { buildDemoCotFromProblemInput, loadDemoSavedWorkflow } from "../../demo/demoWorkspace";
 import { loadMirroredTestResult } from "../../demo/demoMirror";
-import { PROBLEM_DROPDOWN_OPTIONS } from "../../utils/problemIdAlias";
+import { getDemoSourceUserId } from "../../demo/demoAccount";
+import { PROBLEM_DROPDOWN_OPTIONS, getProblemDisplayLabel } from "../../utils/problemIdAlias";
 import styles from "./ProblemInput.module.css";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
@@ -284,6 +285,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     currentProblemId,
     isDemoMode,
     setCurrentCotData,
+    setCurrentSubQData,
     setCurrentSubQuestionData,
     setCurrentStep,
     setLoading,
@@ -320,10 +322,84 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       image: null,
     }));
 
-    const { selectedProblem: nextSelected, customProblemId: nextCustom } = resolveProblemIdSelection(currentProblemId);
-    setSelectedProblem(nextSelected);
-    setCustomProblemId(nextCustom);
-  }, [currentCotData, currentProblemId]);
+    // 계정 저장 문제면 드롭다운에서 그대로 선택 상태로 표시
+    if (problemList.includes(currentProblemId)) {
+      setSelectedProblem(currentProblemId);
+      setCustomProblemId("");
+    } else {
+      const { selectedProblem: nextSelected, customProblemId: nextCustom } = resolveProblemIdSelection(currentProblemId);
+      setSelectedProblem(nextSelected);
+      setCustomProblemId(nextCustom);
+    }
+  }, [currentCotData, currentProblemId, problemList]);
+
+  /** 로그인한 계정이 저장한 문제 목록을 드롭다운에 채운다. Sidebar와 동일하게 서버를 진실 소스로 사용. */
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        let ids: string[] = [];
+        if (isDemoMode) {
+          // 데모: 서버가 없으므로 미러 소스 계정의 병합 목록 사용
+          const sourceUserId = getDemoSourceUserId();
+          if (sourceUserId?.trim()) {
+            const list = await fetchHistoryListForUser(sourceUserId);
+            ids = list.map((item) => item.problemId);
+          }
+        } else if (userId?.trim()) {
+          // 실계정: 서버(Firestore)만 조회 — 어느 브라우저·기기에서든 Sidebar와 동일하게 표시
+          const data = await api.getMyHistoryList(userId);
+          ids = (Array.isArray(data) ? data : [])
+            .map((item: any) => (item.problem_id ?? item.problemId ?? "").trim())
+            .filter(Boolean);
+        }
+        if (!cancelled) setProblemList(ids);
+      } catch (err) {
+        console.warn("저장 문제 목록 조회 실패:", err);
+        if (!cancelled) setProblemList([]);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, isDemoMode]);
+
+  /** 드롭다운에서 계정 저장 문제를 고르면 해당 워크플로우를 불러온다(사이드바 클릭과 동일). */
+  const handleLoadSaved = async (problemId: string) => {
+    try {
+      if (isDemoMode) {
+        await loadDemoSavedWorkflow(problemId, {
+          setCurrentProblemId,
+          setCurrentCotData,
+          setCurrentSubQData,
+          setCurrentSubQuestionData,
+          setFinalizedSubQuestionForRubric,
+          setCurrentRubrics,
+          setPreferredVersion: setPreferredVersion ?? (() => {}),
+          setCurrentStep,
+          setLoading,
+          setError,
+        });
+        return;
+      }
+      const result = await loadResult(problemId);
+      if (!result) return;
+      setCurrentProblemId(result.problemId || problemId);
+      setCurrentCotData(result.cotData);
+      setCurrentSubQData(result.subQData ?? null);
+      setCurrentSubQuestionData(result.subQuestionData ?? (null as any));
+      if (setPreferredVersion) setPreferredVersion(result.preferredVersion || {});
+      if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
+      if (result.subQuestionData && result.cotData) {
+        setCurrentStep(3);
+      } else if (result.cotData) {
+        setCurrentStep(2);
+      }
+    } catch (err) {
+      console.error("저장 결과 불러오기 오류:", err);
+    }
+  };
 
   /** 이미지 URL을 base64 data URL로 변환 (API는 base64만 허용) */
   const urlToBase64 = (url: string): Promise<string> =>
@@ -540,22 +616,34 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 id="problemSelect"
                 value={selectedProblem}
                 onChange={(e) => {
-                  setSelectedProblem(e.target.value);
-                  handleProblemSelect(e.target.value);
+                  const value = e.target.value;
+                  setSelectedProblem(value);
+                  if (!value) return; // 직접 입력하기
+                  if (problemList.includes(value)) {
+                    handleLoadSaved(value); // 계정 저장 문제 → 워크플로우 로드
+                  } else {
+                    handleProblemSelect(value); // 예제 → 폼 채우기
+                  }
                 }}
                 className={styles.select}
               >
                 <option value="">{t("problemInput.customEntry")}</option>
-                {problemList.map((file) => (
-                  <option key={file} value={file}>
-                    {file.replace(".json", "")}
-                  </option>
-                ))}
-                {DROPDOWN_OPTIONS.map(({ file, label }) => (
-                  <option key={file} value={file}>
-                    {label}
-                  </option>
-                ))}
+                {problemList.length > 0 && (
+                  <optgroup label={locale === "en" ? "My saved problems" : "내 저장 문제"}>
+                    {problemList.map((pid) => (
+                      <option key={pid} value={pid}>
+                        {getProblemDisplayLabel(pid)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label={locale === "en" ? "Examples" : "예제"}>
+                  {DROPDOWN_OPTIONS.map(({ file, label }) => (
+                    <option key={file} value={file}>
+                      {label}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               {selectedProblem === "" && (
                 <input

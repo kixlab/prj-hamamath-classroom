@@ -118,6 +118,97 @@ export interface HistoryListItem {
   timestamp: string;
 }
 
+// ───────────────────────── 서버 동기화 대기 큐 ─────────────────────────
+// 서버(Firestore)를 진실 소스로 사용하므로, 서버 저장 실패분은 유실되지 않도록
+// 계정별 로컬 큐에 쌓아두고 재시도(로그인 시 / 온라인 복귀 시 / 다음 저장 시)한다.
+const PENDING_SYNC_KEY_PREFIX = 'hamamath_pending_sync';
+
+function getPendingKeyForUser(userId: string): string {
+  const uid = userId?.trim();
+  return uid ? `${PENDING_SYNC_KEY_PREFIX}_${uid}` : PENDING_SYNC_KEY_PREFIX;
+}
+
+function getPendingResults(userId: string): SavedResults {
+  try {
+    const raw = localStorage.getItem(getPendingKeyForUser(userId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setPendingResults(userId: string, pending: SavedResults): void {
+  try {
+    const key = getPendingKeyForUser(userId);
+    if (Object.keys(pending).length === 0) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(pending));
+  } catch (e) {
+    console.warn('동기화 대기 큐 저장 실패:', e);
+  }
+}
+
+function enqueuePending(userId: string, result: SavedResult): void {
+  if (!userId) return;
+  const pending = getPendingResults(userId);
+  pending[result.problemId] = result;
+  setPendingResults(userId, pending);
+}
+
+function dequeuePending(userId: string, problemId: string): void {
+  if (!userId) return;
+  const pending = getPendingResults(userId);
+  if (pending[problemId]) {
+    delete pending[problemId];
+    setPendingResults(userId, pending);
+  }
+}
+
+/** 저장 결과 1건을 서버에 POST. 성공 여부 반환(예외 없이 boolean). */
+async function pushResultToServer(result: SavedResult, userId?: string | null): Promise<boolean> {
+  try {
+    const res = await fetch(getApiUrl('/api/v1/history/save'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getHistoryHeadersWithFallback(userId) },
+      body: JSON.stringify(result),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 서버 저장을 시도하고, 결과에 따라 대기 큐를 갱신한다(성공 시 제거, 실패 시 추가). */
+async function pushAndTrack(result: SavedResult, effectiveUserId: string, userId?: string | null): Promise<boolean> {
+  const ok = await pushResultToServer(result, userId);
+  if (ok) dequeuePending(effectiveUserId, result.problemId);
+  else enqueuePending(effectiveUserId, result);
+  return ok;
+}
+
+/** 현재(또는 지정) 계정의 서버 미전송 저장 건수. */
+export function getPendingSyncCount(userId?: string | null): number {
+  const uid = (userId ?? getStoredUserId()) ?? '';
+  if (!uid || isDemoUserId(uid)) return 0;
+  return Object.keys(getPendingResults(uid)).length;
+}
+
+/** 대기 큐를 서버로 재전송. 성공한 건은 큐에서 제거. */
+export async function syncPendingResults(userId?: string | null): Promise<{ synced: number; remaining: number }> {
+  const uid = (userId ?? getStoredUserId()) ?? '';
+  if (!uid || isDemoUserId(uid)) return { synced: 0, remaining: 0 };
+  const pending = getPendingResults(uid);
+  const ids = Object.keys(pending);
+  let synced = 0;
+  for (const pid of ids) {
+    const ok = await pushResultToServer(pending[pid], uid);
+    if (ok) {
+      dequeuePending(uid, pid);
+      synced++;
+    }
+  }
+  return { synced, remaining: Object.keys(getPendingResults(uid)).length };
+}
+
 /** 서버 목록 + 로컬 캐시를 병합한 저장 이력 (데모가 test 계정과 동기화할 때 사용) */
 export async function fetchHistoryListForUser(userId: string): Promise<HistoryListItem[]> {
   const uid = userId?.trim();
@@ -301,7 +392,8 @@ export function saveResult(
   subQuestionData?: SubQuestionData | null,
   preferredVersion?: Record<string, 'original' | 'regenerated'> | null,
   rubrics?: any[] | null,
-  userId?: string | null
+  userId?: string | null,
+  deferServer = false
 ): void {
   const effectiveUserId = userId ?? getStoredUserId();
   const isDemo = isDemoUserId(effectiveUserId);
@@ -340,16 +432,10 @@ export function saveResult(
     localStorage.setItem(getStorageKey(), JSON.stringify(savedResults));
     localStorage.setItem(getLastProblemKey(), problemId);
 
-    if (isDemo) return;
+    if (isDemo || deferServer) return;
 
-    // 서버에도 비동기로 저장 (X-User-Id로 유저별 분리). userId 있으면 헤더 폴백으로 사용
-    fetch(getApiUrl('/api/v1/history/save'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getHistoryHeadersWithFallback(userId) },
-      body: JSON.stringify(resultData),
-    }).catch((err) => {
-      console.error('서버 저장 실패:', err);
-    });
+    // 서버(진실 소스)에 저장 시도 — 실패하면 대기 큐에 넣어 자동 재시도(유실 방지)
+    void pushAndTrack(resultData, effectiveUserId ?? '', userId);
   } catch (e: unknown) {
     const error = e as Error & { name?: string; code?: number };
     if (error.name === 'QuotaExceededError' || error.code === 22) {
@@ -394,18 +480,14 @@ export async function saveResultAsync(
   userId?: string | null
 ): Promise<void> {
   const effectiveUserId = userId ?? getStoredUserId();
-  saveResult(problemId, cotData, subQData, subQuestionData, preferredVersion, rubrics, userId);
+  // 로컬 저장만 먼저 수행(deferServer=true) — 서버 POST는 아래에서 한 번만 await
+  saveResult(problemId, cotData, subQData, subQuestionData, preferredVersion, rubrics, userId, true);
   if (isDemoUserId(effectiveUserId)) return;
   const savedResults = getSavedResults();
   const resultData = savedResults[problemId];
   if (!resultData) return;
-  const url = getApiUrl('/api/v1/history/save');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHistoryHeadersWithFallback(userId) },
-    body: JSON.stringify(resultData),
-  });
-  if (!res.ok) throw new Error(`저장 실패: ${res.status}`);
+  const ok = await pushAndTrack(resultData, effectiveUserId ?? '', userId);
+  if (!ok) throw new Error('서버 저장에 실패했습니다. 동기화 대기 목록에 저장되어 자동 재시도됩니다.');
 }
 
 // React Hook 버전 (기존 호환성 유지)
