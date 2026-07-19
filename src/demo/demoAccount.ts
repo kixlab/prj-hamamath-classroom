@@ -8,12 +8,14 @@ export function isDemoUserId(userId: string | null | undefined): boolean {
 /** 프로필 메뉴에 표시할 전환 가능 계정 목록 */
 export function getSwitchableAccountIds(currentUserId: string): string[] {
   const current = currentUserId.trim();
+  // 데모 상태에서는 이전(실)계정으로 되돌아갈 수 있도록 유지
   if (isDemoUserId(current)) {
     const previous =
       typeof sessionStorage !== "undefined" ? sessionStorage.getItem(PREVIOUS_USER_ID_KEY)?.trim() : "";
     return previous && previous !== DEMO_USER_ID ? [previous, DEMO_USER_ID] : [DEMO_USER_ID];
   }
-  return current === DEMO_USER_ID ? [DEMO_USER_ID] : [current, DEMO_USER_ID];
+  // 일반 사용자에게는 데모 계정을 전환 옵션으로 노출하지 않는다
+  return [current];
 }
 
 export function rememberPreviousUserId(userId: string): void {
