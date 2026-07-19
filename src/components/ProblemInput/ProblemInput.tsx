@@ -294,6 +294,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     setFinalizedSubQuestionForRubric,
     setCurrentRubrics,
     setPreferredVersion,
+    requestedExampleFile,
+    setRequestedExampleFile,
   } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
@@ -468,6 +470,16 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       console.error("문제 데이터 로드 중 오류:", err);
     }
   };
+
+  // 사이드바에서 예제를 클릭하면(공유 시그널) 해당 예제를 이 화면에 로드한다.
+  useEffect(() => {
+    if (!requestedExampleFile) return;
+    setSelectedProblem(requestedExampleFile);
+    setCustomProblemId("");
+    handleProblemSelect(requestedExampleFile);
+    setRequestedExampleFile?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedExampleFile]);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

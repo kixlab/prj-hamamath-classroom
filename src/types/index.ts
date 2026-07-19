@@ -78,6 +78,9 @@ export interface AppContextType {
   /** 4단계 루브릭 확정 시 학생 진단에 채울 랜덤 답안 시드 */
   studentAnswerSeed: StudentAnswerSeed | null;
   setStudentAnswerSeed: (seed: StudentAnswerSeed | null) => void;
+  /** 사이드바 예제 클릭 → 문제 입력 화면(ProblemInput)에서 로드할 예제 파일명 */
+  requestedExampleFile: string | null;
+  setRequestedExampleFile: (file: string | null) => void;
 }
 
 /** 루브릭 확정 후 학생 진단 화면에 주입할 답안 시드 */

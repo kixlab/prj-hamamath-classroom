@@ -33,6 +33,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const [finalizedSubQuestionForRubric, setFinalizedSubQuestionForRubric] = useState<any | null>(null);
   const [pendingSubqAutoStart, setPendingSubqAutoStart] = useState(false);
   const [studentAnswerSeed, setStudentAnswerSeed] = useState<StudentAnswerSeed | null>(null);
+  const [requestedExampleFile, setRequestedExampleFile] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -82,6 +83,8 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setPendingSubqAutoStart,
     studentAnswerSeed,
     setStudentAnswerSeed,
+    requestedExampleFile,
+    setRequestedExampleFile,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -2,7 +2,7 @@ import { useEffect, useState, MouseEvent } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { loadResult, deleteResult, clearAllResults, saveResultAsync, fetchHistoryListForUser, getPendingSyncCount, syncPendingResults } from "../../hooks/useStorage";
 import { getDemoSourceUserId } from "../../demo/demoAccount";
-import { getProblemDisplayLabel } from "../../utils/problemIdAlias";
+import { getProblemDisplayLabel, PROBLEM_DROPDOWN_OPTIONS } from "../../utils/problemIdAlias";
 import { loadDemoSavedWorkflow } from "../../demo/demoWorkspace";
 import { api } from "../../services/api";
 import { isAdmin } from "../../utils/admin";
@@ -62,7 +62,7 @@ const DeleteIcon = () => (
 );
 
 export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProps) => {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -79,6 +79,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
     setError,
     isDemoMode,
     reset,
+    setRequestedExampleFile,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
   const [listLoadError, setListLoadError] = useState<string | null>(null);
@@ -180,6 +181,13 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
   const handleNewProblem = () => {
     setSidebarOpen(false);
     reset();
+  };
+
+  // 예제 클릭 → 문제 입력 화면으로 이동해 해당 예제를 로드(공유 시그널로 ProblemInput이 처리)
+  const handleSelectExample = (file: string) => {
+    setRequestedExampleFile(file);
+    setCurrentStep(1);
+    setSidebarOpen(false);
   };
 
   const handleLoadResult = async (problemId: string) => {
@@ -393,6 +401,30 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
                 {t("sidebar.clearAll")}
               </button>
             )}
+          </section>
+
+          <section className={styles.historySection} aria-labelledby="sidebar-examples-heading">
+            <div className={styles.sectionHead}>
+              <h3 id="sidebar-examples-heading" className={styles.sectionTitle}>
+                {locale === "en" ? "Examples" : "예제"}
+              </h3>
+            </div>
+            <ul className={styles.historyList}>
+              {PROBLEM_DROPDOWN_OPTIONS.map(({ file, label }) => (
+                <li
+                  key={file}
+                  className={`${styles.historyItem} ${currentProblemId === file ? styles.historyItemActive : ""}`}
+                >
+                  <button
+                    type="button"
+                    className={styles.historyItemMain}
+                    onClick={() => handleSelectExample(file)}
+                  >
+                    <div className={styles.historyItemTitle}>{label}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </section>
 
           {isAdmin(userId) && (
