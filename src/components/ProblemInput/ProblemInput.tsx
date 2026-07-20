@@ -37,22 +37,34 @@ function resolveLocalImageUrl(imageFile?: string | null): string | null {
 /** 드롭다운 로컬 예시 문제 (file: data/finalized_data/ JSON, label: 표시 이름) */
 const DROPDOWN_OPTIONS = PROBLEM_DROPDOWN_OPTIONS;
 
-const PROBLEM_SEQ_KEY = "hamamath_problem_seq";
+const DEMO_PROBLEM_SEQ_KEY = "hamamath_problem_seq";
 
-/** 문제 ID를 입력하지 않았을 때 사용할 순차 번호 반환 (1, 2, 3, ...) */
-function getNextProblemSeq(): string {
+/** 데모 전용: 로컬 순번. 일반 계정은 서버(Firebase)에서 할당 */
+function getDemoNextProblemSeq(): string {
   try {
-    const raw = localStorage.getItem(PROBLEM_SEQ_KEY);
+    const raw = localStorage.getItem(DEMO_PROBLEM_SEQ_KEY);
     const next = (raw ? parseInt(raw, 10) : 0) + 1;
     if (!Number.isFinite(next)) {
-      localStorage.setItem(PROBLEM_SEQ_KEY, "1");
+      localStorage.setItem(DEMO_PROBLEM_SEQ_KEY, "1");
       return "1";
     }
-    localStorage.setItem(PROBLEM_SEQ_KEY, String(next));
+    localStorage.setItem(DEMO_PROBLEM_SEQ_KEY, String(next));
     return String(next);
   } catch {
     return String(Date.now());
   }
+}
+
+async function allocateProblemId(
+  selectedProblem: string,
+  customProblemId: string,
+  userId: string | null | undefined,
+  isDemo: boolean,
+): Promise<string> {
+  if (selectedProblem.trim()) return selectedProblem.trim();
+  if (customProblemId.trim()) return customProblemId.trim();
+  if (isDemo) return getDemoNextProblemSeq();
+  return String(await api.getNextProblemSeq(userId));
 }
 
 interface ProblemInputProps {
@@ -607,7 +619,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       setCurrentStep(2);
       try {
         await demoDelay(DEMO_COT_LOADING_MS);
-        const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
+        const problemId = await allocateProblemId(selectedProblem, customProblemId, userId, true);
         const mirrored = await loadMirroredTestResult(problemId);
         const cotData =
           mirrored?.cotData ??
@@ -677,7 +689,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           : {}),
       };
 
-      const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
+      const problemId = await allocateProblemId(selectedProblem, customProblemId, userId, false);
 
       logUserEvent("problem_input", {
         problem_id: problemId,

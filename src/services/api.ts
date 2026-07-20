@@ -316,9 +316,9 @@ export const api = {
   },
 
   /** 학생 목록 조회 (다른 브라우저에서 왼쪽 패널 복원용). 404면 빈 목록 반환 */
-  async getStudentList(): Promise<{ students: Array<{ id: string; name: string }> }> {
+  async getStudentList(userId?: string | null): Promise<{ students: Array<{ id: string; name: string }> }> {
     const response = await fetch(getApiUrl("/api/v1/student-list"), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (response.status === 404) return { students: [] };
     if (!response.ok) {
@@ -328,6 +328,85 @@ export const api = {
       );
     }
     return response.json();
+  },
+
+  /** 사용자별 문제 ID 순번 할당 (Firebase user_prefs) */
+  async getNextProblemSeq(userId?: string | null): Promise<number> {
+    const response = await fetch(getApiUrl("/api/v1/user-prefs/next-problem-seq"), {
+      method: "POST",
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "문제 번호를 할당하는 중 오류가 발생했습니다."
+      );
+    }
+    const data = (await response.json()) as { next_seq?: number };
+    return data.next_seq ?? 1;
+  },
+
+  /** 마지막 작업 문제 ID 저장 */
+  async updateUserPrefs(lastProblemId: string, userId?: string | null): Promise<void> {
+    const response = await fetch(getApiUrl("/api/v1/user-prefs"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(userId) },
+      body: JSON.stringify({ last_problem_id: lastProblemId }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "사용자 설정 저장 중 오류가 발생했습니다."
+      );
+    }
+  },
+
+  /** 학생 진단 UI 상태 조회 (Firestore workspace) */
+  async getDiagnosisWorkspace(userId?: string | null): Promise<{
+    can_diagnose: Record<string, Record<string, boolean>>;
+    current_student_id: string | null;
+    selected_problem_id: string | null;
+    student_problem_summaries: Record<string, Record<string, unknown>>;
+  }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/workspace"), {
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (response.status === 404) {
+      return {
+        can_diagnose: {},
+        current_student_id: null,
+        selected_problem_id: null,
+        student_problem_summaries: {},
+      };
+    }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 상태를 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 학생 진단 UI 상태 저장 */
+  async saveDiagnosisWorkspace(payload: {
+    user_id: string;
+    can_diagnose: Record<string, Record<string, boolean>>;
+    current_student_id?: string | null;
+    selected_problem_id?: string | null;
+    student_problem_summaries: Record<string, Record<string, unknown>>;
+  }): Promise<void> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/workspace"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(payload.user_id) },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 상태를 저장하는 중 오류가 발생했습니다."
+      );
+    }
   },
 
   /** 학생 목록 저장 (다른 브라우저에서 복원용). userIdForHeader 있으면 헤더 폴백으로 사용 */
