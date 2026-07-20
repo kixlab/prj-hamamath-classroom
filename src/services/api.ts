@@ -346,12 +346,12 @@ export const api = {
     }
   },
 
-  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 다른 브라우저 복원용. student_name 있으면 학생 목록 표시에 사용 */
-  async getStudentAnswersList(): Promise<{
+  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 로그인 아이디별 Firestore/서버 복원용 */
+  async getStudentAnswersList(userId?: string | null): Promise<{
     items: Array<{ problem_id: string; student_id: string; student_name?: string; answers: Record<string, string> }>;
   }> {
     const response = await fetch(getApiUrl("/api/v1/student-answers/list"), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -365,11 +365,12 @@ export const api = {
   /** 동일 로그인 id·문제·학생에 해당하는 저장 답안 1건 조회 (없으면 null) */
   async getStudentAnswers(
     problemId: string,
-    studentId: string
+    studentId: string,
+    userId?: string | null,
   ): Promise<{ problem_id: string; student_id: string; answers: Record<string, string> } | null> {
     const params = new URLSearchParams({ problem_id: problemId, student_id: studentId });
     const response = await fetch(getApiUrl(`/api/v1/student-answers/get?${params}`), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (response.status === 404) return null;
     if (!response.ok) {

@@ -620,7 +620,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const { items } = await api.getStudentAnswersList();
+        const { items } = await api.getStudentAnswersList(userId);
         if (cancelled || !items?.length) return;
         const mergedFromServer: Array<{ studentId: string; problemId: string }> = [];
         setStudentAnswers((prev) => {
@@ -747,7 +747,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId);
+        const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId, userId);
         if (cancelled || !item?.answers) return;
         const problemKey = problemIdForDiagnosis;
         setStudentAnswers((prev) => ({
@@ -1358,9 +1358,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   const containerRef = useMathJax([activeItem, finalizedSubQuestionForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
-  /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
-  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
-
   // 하: 0점 / 중: 1점 / 상: 2점
   const LEVEL_SCORE: Record<LevelType, number> = { 상: 2, 중: 1, 하: 0 };
 
@@ -1395,8 +1392,41 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         },
       ]),
     );
+    // 모달에 보이는 피드백 편집값을 PDF에도 동일하게 반영
+    const reportDataForPdf = {
+      ...reportData,
+      step_rows: reportData.step_rows.map((r) => ({
+        ...r,
+        feedback_summary: (reportFeedbackEdits[r.display_code] ?? r.feedback_summary ?? "") || null,
+      })),
+    };
+    const studentName = students.find((s) => s.id === sid)?.name ?? t("diagnosis.student");
     try {
-      await exportDiagnosisReportPdf(reportData, students.find((s) => s.id === sid)?.name ?? t("diagnosis.student"), sid, summariesForPdf);
+      await exportDiagnosisReportPdf(reportDataForPdf, studentName, sid, summariesForPdf, {
+        researchTitle: t("exportPdf.coverResearchTitle"),
+        reportTitle: t("diagnosis.reportTitle"),
+        studentName,
+        levelSummaryTitle: t("diagnosis.levelSummary"),
+        stageSummaryTitle: t("diagnosis.stageSummaryReport"),
+        colProblemId: t("diagnosis.problemId"),
+        colDiagnosedStepCount: t("diagnosis.diagnosedStepCount"),
+        colHigh: formatLevel("상"),
+        colMid: formatLevel("중"),
+        colLow: formatLevel("하"),
+        colAverageGrade: t("diagnosis.averageGrade"),
+        colStage: t("diagnosis.problemSolvingStage"),
+        colSubSkill: t("diagnosis.subSkill"),
+        colScore100: t("diagnosis.score100"),
+        colFinalGrade: t("diagnosis.finalGrade"),
+        stageFeedbackLabel: t("diagnosis.stageFeedback"),
+        formatProblemId: getProblemDisplayLabel,
+        formatGrade,
+        formatScorePoints: (n) => t("diagnosis.scorePoints", { n }),
+        formatCountHigh: (n) => t("diagnosis.countHigh", { n }),
+        formatCountMid: (n) => t("diagnosis.countMid", { n }),
+        formatCountLow: (n) => t("diagnosis.countLow", { n }),
+        getStepGroupInfo,
+      });
     } catch (err: any) {
       alert(err?.message || t("diagnosis.pdfError"));
     }
@@ -2044,14 +2074,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         <div className={styles.reportOverlay} role="dialog" aria-modal="true">
           <div className={styles.reportModal}>
             <header className={styles.reportHeader}>
-              <div>
-                <h2 className={styles.reportTitle}>{t("diagnosis.reportTitle")}</h2>
-                <p className={styles.reportSubtitle}>
-                  {t("diagnosis.reportMeta", {
-                    name: students.find((s) => s.id === reportStudentId)?.name ?? t("diagnosis.student"),
-                    count: reportSummaryProblemIds.length,
-                  })}
-                </p>
+              <div className={styles.reportHeaderIdentity}>
+                <p className={styles.reportEyebrow}>{t("diagnosis.reportTitle")}</p>
+                <h2 className={styles.reportStudentName}>
+                  {students.find((s) => s.id === reportStudentId)?.name ?? t("diagnosis.student")}
+                </h2>
               </div>
               <div className={styles.reportHeaderActions}>
                 <button type="button" className={styles.reportRefreshBtn} onClick={handleRefreshReport} disabled={reportLoading} title={t("diagnosis.refreshTitle")}>
@@ -2149,7 +2176,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
               <div className={styles.problemSummaryBlock}>
                 <h4 className={styles.problemSummarySubTitle}>
-                  {reportData ? t("diagnosis.stageSummaryReport", { count: reportData.problem_rows.length }) : t("diagnosis.stageSummary")}
+                  {reportData ? t("diagnosis.stageSummaryReport") : t("diagnosis.stageSummary")}
                 </h4>
                 {reportLoading && <p className={styles.problemSummaryEmpty}>{t("diagnosis.loadingReport")}</p>}
                 {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}

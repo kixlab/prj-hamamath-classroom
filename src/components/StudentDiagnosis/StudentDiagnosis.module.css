@@ -1297,19 +1297,19 @@
 }
 
 .reportGraphHigh {
-  background: #2563eb;
+  background: #004191;
 }
 
 .reportGraphMid {
-  background: #f59e0b;
+  background: #0369a1;
 }
 
 .reportGraphLow {
-  background: #ef4444;
+  background: #64748b;
 }
 
 .reportGraphStepFill {
-  background: #4b5563;
+  background: #004191;
 }
 
 .reportGraphFeedback {
@@ -1361,27 +1361,27 @@
 }
 
 .reportStepGroup1 {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #004191;
+  border-color: #004191;
   color: #eff6ff;
 }
 
 .reportStepGroup2 {
-  background: #f97316;
-  border-color: #f97316;
-  color: #fff7ed;
+  background: #0369a1;
+  border-color: #0369a1;
+  color: #f0f9ff;
 }
 
 .reportStepGroup3 {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: #ecfdf3;
+  background: #0e7490;
+  border-color: #0e7490;
+  color: #ecfeff;
 }
 
 .reportStepGroup4 {
-  background: #7c3aed;
-  border-color: #7c3aed;
-  color: #f5f3ff;
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #f8fafc;
 }
 
 .reportGraphLegend {
@@ -1476,7 +1476,7 @@
 .reportOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.52);
+  background: rgba(0, 48, 110, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1486,25 +1486,33 @@
 }
 
 .reportModal {
+  --report-navy: #004191;
+  --report-navy-deep: #00306e;
+  --report-ink: #1a2230;
+  --report-muted: #5b6472;
+  --report-line: #d5deec;
+  --report-soft: #eef3fb;
+  --report-accent: #eab308;
   width: min(980px, 100%);
   max-height: min(88vh, 920px);
-  background: var(--color-bg);
+  background: #fff;
   border-radius: 16px;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 22px 56px rgba(2, 6, 23, 0.34);
+  border: 1.5px solid var(--report-line);
+  box-shadow: 0 22px 56px rgba(0, 65, 145, 0.22);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: var(--report-ink);
 }
 
 .reportHeader {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 16px 20px;
+  border-bottom: 2.5px solid var(--report-navy);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  background: var(--color-bg);
+  background: linear-gradient(180deg, #fff 0%, var(--report-soft) 100%);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1512,15 +1520,41 @@
 
 .reportTitle {
   margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--color-text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--report-navy);
+  letter-spacing: 0.3px;
+}
+
+.reportHeaderIdentity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reportEyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--report-navy);
+  letter-spacing: 0.4px;
+}
+
+.reportStudentName {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--report-navy-deep);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .reportSubtitle {
   margin: 4px 0 0;
   font-size: 0.82rem;
-  color: var(--color-text-secondary);
+  color: var(--report-muted);
+  font-weight: 500;
 }
 
 .reportHeaderActions {
@@ -1532,19 +1566,26 @@
   max-width: 55%;
 }
 
-.reportRefreshBtn {
+.reportRefreshBtn,
+.reportSaveBtn,
+.reportCloseBtn {
   min-height: 32px;
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  border: 1px solid var(--report-line);
+  background: #fff;
   font-size: 0.8rem;
-  color: var(--color-text);
+  font-weight: 600;
+  color: var(--report-ink);
   cursor: pointer;
 }
 
-.reportRefreshBtn:hover:not(:disabled) {
-  border-color: var(--color-primary);
+.reportRefreshBtn:hover:not(:disabled),
+.reportSaveBtn:hover,
+.reportCloseBtn:hover {
+  border-color: var(--report-navy);
+  color: var(--report-navy);
+  background: var(--report-soft);
 }
 
 .reportRefreshBtn:disabled {
@@ -1552,33 +1593,20 @@
   cursor: not-allowed;
 }
 
-.reportSaveBtn {
-  min-height: 32px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  font-size: 0.8rem;
-  color: var(--color-text);
-  cursor: pointer;
-}
-.reportSaveBtn:hover {
-  border-color: var(--color-primary);
-}
-
 .reportPdfBtn {
   min-height: 32px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--color-primary);
-  background: var(--color-primary);
+  border: 1px solid var(--report-navy);
+  background: var(--report-navy);
   font-size: 0.8rem;
+  font-weight: 700;
   color: #fff;
   cursor: pointer;
 }
 
 .reportPdfBtn:hover:not(:disabled) {
-  filter: brightness(1.05);
+  background: var(--report-navy-deep);
 }
 
 .reportPdfBtn:disabled {
@@ -1586,54 +1614,133 @@
   cursor: not-allowed;
 }
 
-.reportCloseBtn {
-  min-height: 32px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  font-size: 0.8rem;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.reportCloseBtn:hover {
-  border-color: var(--color-primary);
-}
-
 .reportBody {
-  padding: 14px 16px 18px;
+  padding: 16px 18px 20px;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background: var(--color-bg-secondary);
+  gap: 14px;
+  background: #f7f9fc;
 }
 
 .reportBody .problemSummaryBlock {
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  padding: 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--report-line);
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 65, 145, 0.04);
 }
 
 .reportBody .problemSummarySubTitle {
-  margin-bottom: 10px;
-  font-size: 0.9rem;
-  color: var(--color-text);
+  margin: 0 0 12px;
+  padding-left: 10px;
+  border-left: 4px solid var(--report-navy);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--report-navy);
+  letter-spacing: 0.2px;
 }
 
 .reportBody .problemSummaryTable {
   font-size: 0.8rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--report-line);
 }
 
 .reportBody .problemSummaryTable th,
 .reportBody .problemSummaryTable td {
-  padding: 7px 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--report-line);
+}
+
+.reportBody .problemSummaryTable th {
+  background: var(--report-soft);
+  color: var(--report-navy);
+  font-weight: 700;
 }
 
 .reportBody .problemSummaryTable tbody tr:nth-child(even) td {
-  background: rgba(15, 23, 42, 0.015);
+  background: #fbfcfe;
+}
+
+.reportBody .reportGraphList {
+  margin-top: 14px;
+  gap: 12px;
+}
+
+.reportBody .reportGraphItem {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fbfcfe;
+  border: 1.5px solid var(--report-line);
+}
+
+.reportBody .reportGraphLevelBadge {
+  background: var(--report-navy);
+  border-color: var(--report-navy);
+  color: #fff;
+  font-weight: 700;
+}
+
+.reportBody .reportGraphBar {
+  background: var(--report-soft);
+  border-color: var(--report-line);
+}
+
+.reportBody .reportGraphHigh {
+  background: var(--report-navy);
+}
+
+.reportBody .reportGraphGroupTitle {
+  border-radius: 10px 10px 0 0;
+  border-left: none;
+  padding: 10px 14px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.reportBody .reportGraphGroup {
+  border: 1.5px solid var(--report-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  gap: 0;
+}
+
+.reportBody .reportGraphGroupItems {
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.reportBody .reportGraphFeedbackTextarea {
+  border-radius: 8px;
+  border: 1px solid var(--report-line);
+  background: #fff;
+}
+
+.reportBody .reportGraphFeedbackTextarea:focus {
+  border-color: var(--report-navy);
+  box-shadow: 0 0 0 3px rgba(0, 65, 145, 0.12);
+}
+
+.reportBody .reportStageTd {
+  background: var(--report-soft);
+  color: var(--report-navy);
+}
+
+.reportBody .reportRemoveProblemBtn {
+  border-radius: 999px;
+  border: 1px solid var(--report-line);
+  font-weight: 600;
+}
+
+.reportBody .reportRemoveProblemBtn:hover:not(:disabled) {
+  border-color: #b91c1c;
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 @media (max-width: 920px) {
