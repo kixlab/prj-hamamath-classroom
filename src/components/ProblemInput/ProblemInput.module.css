@@ -187,6 +187,11 @@
   min-width: 0;
 }
 
+.requiredMark {
+  color: #dc2626;
+  font-weight: 700;
+}
+
 .panelHeaderAction {
   display: flex;
   align-items: center;

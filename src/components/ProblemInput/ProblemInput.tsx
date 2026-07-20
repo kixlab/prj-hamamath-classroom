@@ -135,14 +135,18 @@ interface InputPanelProps {
   children: ReactNode;
   className?: string;
   headerAction?: ReactNode;
+  required?: boolean;
 }
 
-function InputPanel({ icon, title, children, className, headerAction }: InputPanelProps) {
+function InputPanel({ icon, title, children, className, headerAction, required = false }: InputPanelProps) {
   return (
     <section className={`${styles.panel} ${className ?? ""}`}>
       <header className={styles.panelHeader}>
         <span className={styles.panelIcon}>{icon}</span>
-        <h3 className={styles.panelTitle}>{title}</h3>
+        <h3 className={styles.panelTitle}>
+          {title}
+          {required ? <span className={styles.requiredMark} aria-hidden="true"> *</span> : null}
+        </h3>
         {headerAction ? <div className={styles.panelHeaderAction}>{headerAction}</div> : null}
       </header>
       <div className={styles.panelBody}>{children}</div>
@@ -228,7 +232,7 @@ function LatexPanel({
   );
 
   return (
-    <InputPanel icon={icon} title={title} className={className} headerAction={editButton}>
+    <InputPanel icon={icon} title={title} className={className} headerAction={editButton} required={required}>
       {editing ? (
         field
       ) : (
@@ -710,7 +714,12 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     }
   };
 
-  const canSubmit = !!(formData.problem.trim() && formData.answer.trim());
+  const canSubmit = !!(
+    formData.problem.trim()
+    && formData.answer.trim()
+    && formData.grade.trim()
+    && formData.semester.trim()
+  );
 
   return (
     <div className={styles.page}>
@@ -771,6 +780,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           <div className={`${styles.topField} ${styles.topFieldGrade}`}>
             <label htmlFor="grade" className={styles.topLabel}>
               {t("problemInput.grade")}
+              <span className={styles.requiredMark} aria-hidden="true"> *</span>
             </label>
             <input
               type="text"
@@ -779,12 +789,14 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               onChange={(e) => setFormData((prev) => ({ ...prev, grade: e.target.value }))}
               placeholder={t("problemInput.gradePlaceholder")}
               className={styles.input}
+              required
             />
           </div>
 
           <div className={`${styles.topField} ${styles.topFieldSemester}`}>
             <label htmlFor="semester" className={styles.topLabel}>
               {t("problemInput.semester")}
+              <span className={styles.requiredMark} aria-hidden="true"> *</span>
             </label>
             <input
               type="text"
@@ -793,6 +805,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               onChange={(e) => setFormData((prev) => ({ ...prev, semester: e.target.value }))}
               placeholder={t("problemInput.semesterPlaceholder")}
               className={styles.input}
+              required
             />
           </div>
 
@@ -941,6 +954,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               value={formData.answer}
               onChange={(answer) => setFormData((prev) => ({ ...prev, answer }))}
               placeholder={t("problemInput.answerPlaceholder")}
+              required
               fieldClassName={styles.input}
             />
           </div>
