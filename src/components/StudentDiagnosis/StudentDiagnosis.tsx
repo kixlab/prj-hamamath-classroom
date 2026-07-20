@@ -1358,6 +1358,23 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     if (score_100 >= 20) return "중하";
     return "하";
   };
+
+  const getReportGradeClass = (gradeKo: string): string => {
+    switch (gradeKo) {
+      case "상":
+        return styles.reportGradeHigh;
+      case "중상":
+        return styles.reportGradeMidHigh;
+      case "중":
+        return styles.reportGradeMid;
+      case "중하":
+        return styles.reportGradeMidLow;
+      case "하":
+        return styles.reportGradeLow;
+      default:
+        return styles.reportGradeEmpty;
+    }
+  };
   const handleDownloadReportPdf = async () => {
     const sid = reportStudentId ?? currentStudentId;
     if (!reportData || !sid) return;
@@ -2016,15 +2033,45 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           </div>
 
                           <footer className={styles.studentPanelFooter}>
+                            <p className={styles.studentActionFlowHint}>{t("diagnosis.actionFlowHint")}</p>
                             {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                             <div className={styles.studentPanelFooterActions}>
-                              {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
-                                <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                  {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
-                                </button>
-                              )}
-                              <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
+                              <button
+                                type="button"
+                                className={`${styles.studentActionBtn} ${
+                                  canDiagnose[currentStudentId]?.[currentProblemKey]
+                                    ? styles.studentActionBtnSecondary
+                                    : styles.studentActionBtnPrimary
+                                }`}
+                                onClick={handleSaveCurrentStudentAnswers}
+                                disabled={saving || bulkDiagnosing}
+                              >
                                 {saving ? t("diagnosis.saving") : t("diagnosis.saveAllAnswers")}
+                              </button>
+                              <span className={styles.studentActionFlowArrow} aria-hidden>
+                                →
+                              </span>
+                              <button
+                                type="button"
+                                className={`${styles.studentActionBtn} ${
+                                  canDiagnose[currentStudentId]?.[currentProblemKey]
+                                    ? styles.studentActionBtnPrimary
+                                    : styles.studentActionBtnSecondary
+                                }`}
+                                onClick={handleRunDiagnosisForAll}
+                                disabled={
+                                  !canDiagnose[currentStudentId]?.[currentProblemKey] ||
+                                  !activeItem ||
+                                  bulkDiagnosing ||
+                                  saving
+                                }
+                                title={
+                                  canDiagnose[currentStudentId]?.[currentProblemKey]
+                                    ? undefined
+                                    : t("diagnosis.saveFirstToDiagnose")
+                                }
+                              >
+                                {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
                               </button>
                             </div>
                           </footer>
@@ -2110,7 +2157,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <td>{row.high_count}</td>
                               <td>{row.mid_count}</td>
                               <td>{row.low_count}</td>
-                              <td>{formatGrade(gradeKo)}</td>
+                              <td>
+                                <span className={`${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                  {formatGrade(gradeKo)}
+                                </span>
+                              </td>
                               <td>
                                 <button type="button" className={styles.reportRemoveProblemBtn} onClick={() => handleRemoveProblemFromReport(row.problem_id)} disabled={reportLoading}>
                                   {t("diagnosis.excludeFromReport")}
@@ -2132,17 +2183,43 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             <div className={styles.reportGraphHeader}>
                               <span className={styles.reportGraphTitle}>{getProblemDisplayLabel(row.problem_id)}</span>
                               <div className={styles.reportGraphHeaderRight}>
-                                <span className={styles.reportGraphLevelBadge}>{formatGrade(gradeKo)}</span>
+                                <span className={`${styles.reportGraphLevelBadge} ${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                  {formatGrade(gradeKo)}
+                                </span>
                                 <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
                               </div>
                             </div>
                             <div className={styles.reportGraphBar}>
-                              <div className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`} style={{ width: `${score_100}%` }} />
+                              {total > 0 ? (
+                                <>
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`}
+                                    style={{ width: `${(row.high_count / total) * 100}%` }}
+                                  />
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphMid}`}
+                                    style={{ width: `${(row.mid_count / total) * 100}%` }}
+                                  />
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphLow}`}
+                                    style={{ width: `${(row.low_count / total) * 100}%` }}
+                                  />
+                                </>
+                              ) : null}
                             </div>
                             <div className={styles.reportGraphLegend}>
-                              <span>{t("diagnosis.countHigh", { n: row.high_count })}</span>
-                              <span>{t("diagnosis.countMid", { n: row.mid_count })}</span>
-                              <span>{t("diagnosis.countLow", { n: row.low_count })}</span>
+                              <span>
+                                <i className={`${styles.reportLegendDot} ${styles.reportLegendDotHigh}`} aria-hidden />
+                                {t("diagnosis.countHigh", { n: row.high_count })}
+                              </span>
+                              <span>
+                                <i className={`${styles.reportLegendDot} ${styles.reportLegendDotMid}`} aria-hidden />
+                                {t("diagnosis.countMid", { n: row.mid_count })}
+                              </span>
+                              <span>
+                                <i className={`${styles.reportLegendDot} ${styles.reportLegendDotLow}`} aria-hidden />
+                                {t("diagnosis.countLow", { n: row.low_count })}
+                              </span>
                             </div>
                           </div>
                         );
@@ -2213,7 +2290,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                         <span className={styles.stepAbilityText}>{info.detailLabel}</span>
                                       </td>
                                       <td>{stepCount > 0 ? Math.round(score_100) : "-"}</td>
-                                      <td>{formatGrade(gradeKo)}</td>
+                                      <td>
+                                        <span className={`${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                          {formatGrade(gradeKo)}
+                                        </span>
+                                      </td>
                                     </tr>
                                   );
                                 }),
@@ -2263,12 +2344,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                               {row.display_code} · {info.detailLabel}
                                             </span>
                                             <div className={styles.reportGraphHeaderRight}>
-                                              <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>{formatGrade(gradeKo)}</span>
+                                              <span className={`${styles.reportGraphLevelBadge} ${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                                {formatGrade(gradeKo)}
+                                              </span>
                                               <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
                                             </div>
                                           </div>
                                           <div className={styles.reportGraphBar}>
-                                            <div className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`} style={{ width: `${score_100}%` }} />
+                                            <div
+                                              className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${getReportGradeClass(gradeKo)}`}
+                                              style={{ width: `${score_100}%` }}
+                                            />
                                           </div>
                                           <div className={styles.reportGraphFeedbackEdit}>
                                             <label className={styles.reportGraphFeedbackLabel}>{t("diagnosis.stageFeedback")}</label>

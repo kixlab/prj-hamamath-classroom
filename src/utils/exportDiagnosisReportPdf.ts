@@ -15,11 +15,27 @@ const THEME = {
   white: "#ffffff",
 };
 
-const STAGE_COLORS: Record<string, string> = {
-  "1": "#004191",
-  "2": "#0369a1",
-  "3": "#0e7490",
-  "4": "#1e3a5f",
+/** 문항 생성(2·3·4단계)과 동일한 대단계(1~4) 색 — index.css --framework-step-* */
+const STAGE_COLORS: Record<string, { accent: string; bg: string; border: string; text: string }> = {
+  "1": { accent: "#f87171", bg: "#fef2f2", border: "#fecaca", text: "#f87171" },
+  "2": { accent: "#f9a8d4", bg: "#fdf2f8", border: "#fbcfe8", text: "#f9a8d4" },
+  "3": { accent: "#fdba74", bg: "#fff7ed", border: "#fed7aa", text: "#fdba74" },
+  "4": { accent: "#fcd34d", bg: "#fffbeb", border: "#fde68a", text: "#fcd34d" },
+};
+
+/** 상·중·하 및 5등급 — 자연스럽고 구분되는 색 */
+const LEVEL_COLORS = {
+  high: "#3d6b5a",
+  mid: "#a8894f",
+  low: "#9a6e7c",
+} as const;
+
+const GRADE_COLORS: Record<string, string> = {
+  상: "#3d6b5a",
+  중상: "#5a7a8c",
+  중: "#a8894f",
+  중하: "#b8846a",
+  하: "#9a6e7c",
 };
 
 const LEVEL_SCORE: Record<string, number> = { 상: 2, 중: 1, 하: 0 };
@@ -115,18 +131,33 @@ function sectionTitle(text: string): string {
     </div>`;
 }
 
-function gradeBadge(displayGrade: string, color = THEME.navy): string {
-  if (!displayGrade || displayGrade === "-") {
-    return `<span style="display: inline-block; padding: 3px 10px; border-radius: 999px; background: ${THEME.soft}; color: ${THEME.muted}; border: 1px solid ${THEME.line}; font-size: 12px; font-weight: 700;">-</span>`;
+function gradeBadge(displayGrade: string, gradeKo?: string): string {
+  if (!displayGrade || displayGrade === "-" || !gradeKo || gradeKo === "-") {
+    return `<span style="display: inline-block; padding: 3px 10px; border-radius: 999px; background: #eef1f4; color: ${THEME.muted}; border: 1px solid ${THEME.line}; font-size: 12px; font-weight: 700;">-</span>`;
   }
+  const color = GRADE_COLORS[gradeKo] || THEME.navy;
   return `<span style="display: inline-block; padding: 3px 10px; border-radius: 999px; background: ${color}; color: #fff; font-size: 12px; font-weight: 700;">${escapeHtml(displayGrade)}</span>`;
 }
 
 function progressBar(score: number, color = THEME.navy): string {
   const w = Math.max(0, Math.min(100, score));
   return `
-    <div style="width: 100%; height: 10px; background: ${THEME.soft}; border: 1px solid ${THEME.line}; border-radius: 999px; overflow: hidden;">
+    <div style="width: 100%; height: 10px; background: #eef1f4; border: 1px solid ${THEME.line}; border-radius: 999px; overflow: hidden;">
       <div style="width: ${w}%; height: 100%; background: ${color}; border-radius: 999px;"></div>
+    </div>`;
+}
+
+function stackedLevelBar(high: number, mid: number, low: number): string {
+  const total = high + mid + low;
+  if (total <= 0) {
+    return `<div style="width: 100%; height: 10px; background: #eef1f4; border: 1px solid ${THEME.line}; border-radius: 999px;"></div>`;
+  }
+  const pct = (n: number) => `${(n / total) * 100}%`;
+  return `
+    <div style="width: 100%; height: 10px; background: #eef1f4; border: 1px solid ${THEME.line}; border-radius: 999px; overflow: hidden; display: flex;">
+      <div style="width: ${pct(high)}; height: 100%; background: ${LEVEL_COLORS.high};"></div>
+      <div style="width: ${pct(mid)}; height: 100%; background: ${LEVEL_COLORS.mid};"></div>
+      <div style="width: ${pct(low)}; height: 100%; background: ${LEVEL_COLORS.low};"></div>
     </div>`;
 }
 
@@ -230,7 +261,7 @@ export async function exportDiagnosisReportPdf(
         <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${row.high_count}</td>
         <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${row.mid_count}</td>
         <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${row.low_count}</td>
-        <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${gradeBadge(gradeLabel)}</td>
+        <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${gradeBadge(gradeLabel, gradeKo)}</td>
       </tr>`;
   });
 
@@ -246,13 +277,15 @@ export async function exportDiagnosisReportPdf(
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 12px;">
           <span style="font-weight: 700; font-size: 13px; color: ${THEME.ink};">${escapeHtml(view.formatProblemId(row.problem_id))}</span>
           <span style="display: flex; gap: 8px; align-items: center; font-size: 12px; color: ${THEME.muted};">
-            ${gradeBadge(gradeLabel)}
-            <span style="font-weight: 700; color: ${THEME.navy};">${escapeHtml(view.formatScorePoints(Math.round(score_100)))}</span>
+            ${gradeBadge(gradeLabel, gradeKo)}
+            <span style="font-weight: 700; color: ${THEME.ink};">${escapeHtml(view.formatScorePoints(Math.round(score_100)))}</span>
           </span>
         </div>
-        ${progressBar(score_100)}
-        <div style="margin-top: 8px; font-size: 11px; color: ${THEME.muted};">
-          ${escapeHtml(view.formatCountHigh(row.high_count))} · ${escapeHtml(view.formatCountMid(row.mid_count))} · ${escapeHtml(view.formatCountLow(row.low_count))}
+        ${stackedLevelBar(row.high_count, row.mid_count, row.low_count)}
+        <div style="margin-top: 8px; font-size: 11px; color: ${THEME.muted}; display: flex; gap: 12px; flex-wrap: wrap;">
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:${LEVEL_COLORS.high};margin-right:4px;vertical-align:middle;"></span>${escapeHtml(view.formatCountHigh(row.high_count))}</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:${LEVEL_COLORS.mid};margin-right:4px;vertical-align:middle;"></span>${escapeHtml(view.formatCountMid(row.mid_count))}</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:${LEVEL_COLORS.low};margin-right:4px;vertical-align:middle;"></span>${escapeHtml(view.formatCountLow(row.low_count))}</span>
         </div>
       </div>`;
   });
@@ -308,7 +341,7 @@ export async function exportDiagnosisReportPdf(
             <span style="color: ${THEME.muted};">${escapeHtml(info.detailLabel)}</span>
           </td>
           <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center; font-weight: 600;">${stepCount > 0 ? Math.round(score_100) : "-"}</td>
-          <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${gradeBadge(gradeLabel, STAGE_COLORS[g] || THEME.navy)}</td>
+          <td style="border: 1px solid ${THEME.line}; padding: 9px 10px; text-align: center;">${gradeBadge(gradeLabel, gradeKo)}</td>
         </tr>`;
     });
   });
@@ -344,7 +377,12 @@ export async function exportDiagnosisReportPdf(
     const rows = byGroup[g] || [];
     if (rows.length === 0) return;
     const stageLabel = view.getStepGroupInfo(`${g}-1`).stageLabel;
-    const color = STAGE_COLORS[g] || THEME.navy;
+    const stagePalette = STAGE_COLORS[g] || {
+      accent: THEME.navy,
+      bg: THEME.soft,
+      border: THEME.line,
+      text: THEME.navy,
+    };
     let items = "";
     rows.forEach((row) => {
       const info = view.getStepGroupInfo(row.display_code);
@@ -360,32 +398,33 @@ export async function exportDiagnosisReportPdf(
       const score_100 = stepCount > 0 ? (sum / (stepCount * 2)) * 100 : 0;
       const gradeKo = stepCount > 0 ? scoreToGradeFrom100(score_100) : "-";
       const gradeLabel = view.formatGrade(gradeKo);
+      const gradeColor = GRADE_COLORS[gradeKo] || THEME.muted;
       const feedbackText = (row.feedback_summary || "").trim();
       const feedbackHtml = feedbackText
         ? `<div style="margin-top: 8px;">
              <div style="font-size: 11px; font-weight: 600; color: ${THEME.muted}; margin-bottom: 4px;">${escapeHtml(view.stageFeedbackLabel)}</div>
-             <div style="padding: 8px 10px; background: ${THEME.soft}; border-radius: 8px; border-left: 3px solid ${color}; font-size: 11px; color: ${THEME.ink}; line-height: 1.5;">${escapeHtml(feedbackText)}</div>
+             <div style="padding: 8px 10px; background: #f7f8fa; border-radius: 8px; border-left: 3px solid ${gradeColor}; font-size: 11px; color: ${THEME.ink}; line-height: 1.5;">${escapeHtml(feedbackText)}</div>
            </div>`
         : "";
       items += `
         <div style="margin-bottom: 14px; padding: 12px 14px; border: 1px solid ${THEME.line}; border-radius: 10px; background: #fff;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px;">
             <span style="font-size: 12px; font-weight: 600; color: ${THEME.ink};">
-              <span style="color: ${color}; font-weight: 800;">${escapeHtml(row.display_code)}</span>
+              <span style="color: ${stagePalette.accent}; font-weight: 800;">${escapeHtml(row.display_code)}</span>
               · ${escapeHtml(info.detailLabel)}
             </span>
             <span style="display: flex; gap: 8px; align-items: center; font-size: 12px; color: ${THEME.muted};">
-              ${gradeBadge(gradeLabel, color)}
-              <span style="font-weight: 700; color: ${color};">${escapeHtml(view.formatScorePoints(Math.round(score_100)))}</span>
+              ${gradeBadge(gradeLabel, gradeKo)}
+              <span style="font-weight: 700; color: ${THEME.ink};">${escapeHtml(view.formatScorePoints(Math.round(score_100)))}</span>
             </span>
           </div>
-          ${progressBar(stepCount > 0 ? score_100 : 0, color)}
+          ${progressBar(stepCount > 0 ? score_100 : 0, gradeColor)}
           ${feedbackHtml}
         </div>`;
     });
     stageGraphs += `
-      <div style="margin-bottom: 18px; border: 1.5px solid ${THEME.line}; border-radius: 14px; overflow: hidden;">
-        <div style="background: ${color}; color: #fff; padding: 10px 14px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;">${escapeHtml(stageLabel)}</div>
+      <div style="margin-bottom: 18px; border: 1.5px solid ${stagePalette.border}; border-radius: 14px; overflow: hidden;">
+        <div style="background: ${stagePalette.bg}; color: ${stagePalette.text}; border-bottom: 1px solid ${stagePalette.border}; padding: 10px 14px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;">${escapeHtml(stageLabel)}</div>
         <div style="padding: 14px; background: #fbfcfe;">${items}</div>
       </div>`;
   });
