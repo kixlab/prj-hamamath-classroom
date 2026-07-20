@@ -748,7 +748,14 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 onChange={(e) => {
                   const value = e.target.value;
                   setSelectedProblem(value);
-                  if (!value) return; // 직접 입력하기
+                  if (!value) {
+                    // 직접 입력하기 — 이전 예제/저장 문제 내용을 비워 빈 폼에서 새로 작성 가능하게
+                    hydratedProblemIdRef.current = null;
+                    setFormData(INITIAL_FORM_DATA);
+                    setCustomProblemId("");
+                    if (imageInputRef.current) imageInputRef.current.value = "";
+                    return;
+                  }
                   if (problemList.includes(value)) {
                     handleLoadSaved(value); // 계정 저장 문제 → 워크플로우 로드
                   } else {
