@@ -34,6 +34,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const [pendingSubqAutoStart, setPendingSubqAutoStart] = useState(false);
   const [studentAnswerSeed, setStudentAnswerSeed] = useState<StudentAnswerSeed | null>(null);
   const [requestedExampleFile, setRequestedExampleFile] = useState<string | null>(null);
+  const [selectedAuxiliaryMaterialIds, setSelectedAuxiliaryMaterialIds] = useState<string[]>([]);
 
   const reset = useCallback(() => {
     setCurrentProblemId(null);
@@ -49,6 +50,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setFinalizedSubQuestionForRubric(null);
     setPendingSubqAutoStart(false);
     setStudentAnswerSeed(null);
+    // 참고 자료 선택은 목록 로드 시 초기화되고, 업로드·직접 선택으로만 활성화됨
   }, []);
 
   const value: AppContextType = {
@@ -85,6 +87,8 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setStudentAnswerSeed,
     requestedExampleFile,
     setRequestedExampleFile,
+    selectedAuxiliaryMaterialIds,
+    setSelectedAuxiliaryMaterialIds,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

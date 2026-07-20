@@ -7,7 +7,7 @@ import { useMathJax } from "../../hooks/useMathJax";
 import { formatQuestion, formatAnswer } from "../../utils/formatting";
 import { MainProblemSidebar } from "../MainProblemSidebar/MainProblemSidebar";
 import { api } from "../../services/api";
-import { getSavedResults, fetchHistoryListForUser, loadResultForUser } from "../../hooks/useStorage";
+import { fetchHistoryListForUser, loadResultForUser } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
 import { compressImageDataUrl } from "../../utils/imageCompression";
 import { getDemoSourceUserId, isDemoUserId } from "../../demo/demoAccount";
@@ -51,10 +51,6 @@ interface ProblemStepSummary {
   feedbackByDisplayCode?: Record<string, string>;
 }
 type LevelType = "상" | "중" | "하";
-
-// 학생 진단 상태를 브라우저에 임시로 보관하기 위한 로컬 스토리지 키
-const getStudentAnswersStorageKey = (userId: string) => `hamamath_student_answers_${userId}`; // 구버전 호환용
-const getStudentDiagnosisStateKey = (userId: string) => `hamamath_student_diagnosis_state_${userId}`;
 
 /** guide_sub_questions에서 sub_question_id → display_code 매핑 생성 (리포트용 요약 복원 시 사용) */
 function buildSubQuestionIdToDisplayCode(guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }>): Record<string, string> {
@@ -364,18 +360,14 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       }
       try {
         const result = await api.getResult(problemIdForDiagnosis);
-        const saved = getSavedResults();
-        const local = saved[problemIdForDiagnosis] || null;
         if (result) {
-          // 메인 문제/정답/학년/수학 영역 등도 함께 저장된 CoT 데이터에서 가져온다.
-          const cot = result.cotData || local?.cotData || null;
+          const cot = result.cotData || null;
           setDiagnosisCotData(cot);
 
           const rubricsFromServer = Array.isArray((result as any).rubrics) ? (result as any).rubrics : null;
-          const rubricsFromLocal = Array.isArray((local as any)?.rubrics) ? (local as any).rubrics : null;
-          setApiRubrics(rubricsFromServer ?? rubricsFromLocal ?? null);
+          setApiRubrics(rubricsFromServer ?? null);
 
-          const gd = (result as any).subQuestionData || (result as any).guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData || null;
+          const gd = (result as any).subQuestionData || (result as any).guidelineData || null;
           if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
             setApiGuideSubQuestions(gd.guide_sub_questions);
           } else {
@@ -550,48 +542,36 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   /** 해당 학생·문제별 업로드한 손글씨 이미지 (data URL). [이미지1, 이미지2] */
   const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, [string | null, string | null]>>>({});
 
-  // 브라우저 로컬 스토리지에서 기존 학생 진단 상태 복원
+  /** Firebase workspace 저장 디바운스 */
+  const workspaceSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 서버(Firestore)에 저장된 학생 진단 UI 상태 복원
   useEffect(() => {
     if (isDemo) return;
-    try {
-      const raw = window.localStorage.getItem(getStudentDiagnosisStateKey(userId));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          if (parsed.studentAnswers && typeof parsed.studentAnswers === "object") {
-            setStudentAnswers(parsed.studentAnswers);
-          }
-          if (parsed.diagnosisResults && typeof parsed.diagnosisResults === "object") {
-            setDiagnosisResults(parsed.diagnosisResults);
-          }
-          if (parsed.canDiagnose && typeof parsed.canDiagnose === "object") {
-            setCanDiagnose(parsed.canDiagnose);
-          }
-          if (parsed.studentProblemSummaries && typeof parsed.studentProblemSummaries === "object") {
-            setStudentProblemSummaries(parsed.studentProblemSummaries);
-          }
-          if (parsed.currentStudentId && typeof parsed.currentStudentId === "string") {
-            setCurrentStudentId(parsed.currentStudentId);
-          }
-          if (parsed.selectedProblemId && typeof parsed.selectedProblemId === "string") {
-            setSelectedProblemId(parsed.selectedProblemId);
-          }
-          // 학생 목록은 서버(getStudentList)만 소스로 사용. localStorage에서는 복원하지 않음 → 삭제 후 재접속 시 서버 목록과 일치
+    let cancelled = false;
+    (async () => {
+      try {
+        const ws = await api.getDiagnosisWorkspace(userId);
+        if (cancelled || !ws) return;
+        if (ws.can_diagnose && typeof ws.can_diagnose === "object") {
+          setCanDiagnose(ws.can_diagnose);
         }
-      } else {
-        // 구버전(답안만 저장)과의 호환
-        const legacyRaw = window.localStorage.getItem(getStudentAnswersStorageKey(userId));
-        if (legacyRaw) {
-          const legacyParsed = JSON.parse(legacyRaw);
-          if (legacyParsed && typeof legacyParsed === "object") {
-            setStudentAnswers(legacyParsed);
-          }
+        if (ws.student_problem_summaries && typeof ws.student_problem_summaries === "object") {
+          setStudentProblemSummaries((prev) => ({
+            ...prev,
+            ...(ws.student_problem_summaries as Record<string, Record<string, ProblemStepSummary>>),
+          }));
         }
+        if (ws.current_student_id) setCurrentStudentId(ws.current_student_id);
+        if (ws.selected_problem_id) setSelectedProblemId(ws.selected_problem_id);
+      } catch (err) {
+        console.warn("저장된 학생 진단 상태를 불러오는 중 오류:", err);
       }
-    } catch (err) {
-      console.error("저장된 학생 진단 상태를 불러오는 중 오류:", err);
-    }
-  }, [userId, historyItems, isDemo]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, isDemo]);
 
   // 서버에 저장된 학생 목록 불러오기 (단일 소스: 삭제 반영·다른 브라우저 복원)
   useEffect(() => {
@@ -599,7 +579,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const { students: serverStudents } = await api.getStudentList();
+        const { students: serverStudents } = await api.getStudentList(userId);
         if (cancelled) return;
         if (Array.isArray(serverStudents)) {
           const list = serverStudents.filter((s: any) => s && s.id).map((s: any) => ({ id: s.id, name: s.name || s.id }));
@@ -620,7 +600,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const { items } = await api.getStudentAnswersList();
+        const { items } = await api.getStudentAnswersList(userId);
         if (cancelled || !items?.length) return;
         const mergedFromServer: Array<{ studentId: string; problemId: string }> = [];
         setStudentAnswers((prev) => {
@@ -690,8 +670,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
           try {
             const result = await api.getResult(problemId);
-            const local = getSavedResults()[problemId] || null;
-            const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData;
+            const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || null;
             if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
               guideSubQuestions = gd.guide_sub_questions;
             }
@@ -747,7 +726,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId);
+        const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId, userId);
         if (cancelled || !item?.answers) return;
         const problemKey = problemIdForDiagnosis;
         setStudentAnswers((prev) => ({
@@ -805,24 +784,25 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     };
   }, [userId, problemIdForDiagnosis, currentStudentId, isDemo]);
 
-  // 학생 진단 상태가 변경될 때마다 로컬 스토리지에 자동 저장 (다른 탭/같은 브라우저 복원용)
+  // 학생 진단 UI 상태 변경 시 서버(Firestore)에 자동 저장
   useEffect(() => {
     if (isDemo) return;
-    try {
-      const stateToSave = {
-        studentAnswers,
-        diagnosisResults,
-        canDiagnose,
-        studentProblemSummaries,
-        currentStudentId,
-        selectedProblemId,
-        students,
-      };
-      window.localStorage.setItem(getStudentDiagnosisStateKey(userId), JSON.stringify(stateToSave));
-    } catch (err) {
-      console.error("학생 진단 상태를 저장하는 중 오류:", err);
-    }
-  }, [userId, studentAnswers, diagnosisResults, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, students, isDemo]);
+    if (workspaceSaveTimerRef.current) clearTimeout(workspaceSaveTimerRef.current);
+    workspaceSaveTimerRef.current = setTimeout(() => {
+      api
+        .saveDiagnosisWorkspace({
+          user_id: userId,
+          can_diagnose: canDiagnose,
+          current_student_id: currentStudentId,
+          selected_problem_id: selectedProblemId,
+          student_problem_summaries: studentProblemSummaries,
+        })
+        .catch((err) => console.error("학생 진단 상태를 저장하는 중 오류:", err));
+    }, 800);
+    return () => {
+      if (workspaceSaveTimerRef.current) clearTimeout(workspaceSaveTimerRef.current);
+    };
+  }, [userId, canDiagnose, studentProblemSummaries, currentStudentId, selectedProblemId, isDemo]);
 
   const startEditStudentName = (studentId: string) => {
     const s = students.find((x) => x.id === studentId);
@@ -1358,9 +1338,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   const containerRef = useMathJax([activeItem, finalizedSubQuestionForRubric, currentRubrics, currentStudentId, studentAnswers]);
 
-  /** 모달에 표시 중인 학생의 진단 문제 수 (학생별 리포트용) */
-  const reportSummaryProblemIds = Object.keys(studentProblemSummaries[reportStudentId ?? ""] ?? {});
-
   // 하: 0점 / 중: 1점 / 상: 2점
   const LEVEL_SCORE: Record<LevelType, number> = { 상: 2, 중: 1, 하: 0 };
 
@@ -1381,6 +1358,23 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     if (score_100 >= 20) return "중하";
     return "하";
   };
+
+  const getReportGradeClass = (gradeKo: string): string => {
+    switch (gradeKo) {
+      case "상":
+        return styles.reportGradeHigh;
+      case "중상":
+        return styles.reportGradeMidHigh;
+      case "중":
+        return styles.reportGradeMid;
+      case "중하":
+        return styles.reportGradeMidLow;
+      case "하":
+        return styles.reportGradeLow;
+      default:
+        return styles.reportGradeEmpty;
+    }
+  };
   const handleDownloadReportPdf = async () => {
     const sid = reportStudentId ?? currentStudentId;
     if (!reportData || !sid) return;
@@ -1395,8 +1389,41 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         },
       ]),
     );
+    // 모달에 보이는 피드백 편집값을 PDF에도 동일하게 반영
+    const reportDataForPdf = {
+      ...reportData,
+      step_rows: reportData.step_rows.map((r) => ({
+        ...r,
+        feedback_summary: (reportFeedbackEdits[r.display_code] ?? r.feedback_summary ?? "") || null,
+      })),
+    };
+    const studentName = students.find((s) => s.id === sid)?.name ?? t("diagnosis.student");
     try {
-      await exportDiagnosisReportPdf(reportData, students.find((s) => s.id === sid)?.name ?? t("diagnosis.student"), sid, summariesForPdf);
+      await exportDiagnosisReportPdf(reportDataForPdf, studentName, sid, summariesForPdf, {
+        researchTitle: t("exportPdf.coverResearchTitle"),
+        reportTitle: t("diagnosis.reportTitle"),
+        studentName,
+        levelSummaryTitle: t("diagnosis.levelSummary"),
+        stageSummaryTitle: t("diagnosis.stageSummaryReport"),
+        colProblemId: t("diagnosis.problemId"),
+        colDiagnosedStepCount: t("diagnosis.diagnosedStepCount"),
+        colHigh: formatLevel("상"),
+        colMid: formatLevel("중"),
+        colLow: formatLevel("하"),
+        colAverageGrade: t("diagnosis.averageGrade"),
+        colStage: t("diagnosis.problemSolvingStage"),
+        colSubSkill: t("diagnosis.subSkill"),
+        colScore100: t("diagnosis.score100"),
+        colFinalGrade: t("diagnosis.finalGrade"),
+        stageFeedbackLabel: t("diagnosis.stageFeedback"),
+        formatProblemId: getProblemDisplayLabel,
+        formatGrade,
+        formatScorePoints: (n) => t("diagnosis.scorePoints", { n }),
+        formatCountHigh: (n) => t("diagnosis.countHigh", { n }),
+        formatCountMid: (n) => t("diagnosis.countMid", { n }),
+        formatCountLow: (n) => t("diagnosis.countLow", { n }),
+        getStepGroupInfo,
+      });
     } catch (err: any) {
       alert(err?.message || t("diagnosis.pdfError"));
     }
@@ -1425,15 +1452,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }
     let fullPerStudent: Record<string, ProblemStepSummary> = { ...(studentProblemSummaries[studentId] ?? {}) };
     if (!isDemo) {
-      const saved = getSavedResults();
       for (const problemId of diagnosisProblemIds) {
         const perProblem = diagnosisResults[studentId]?.[problemId];
         if (!perProblem || typeof perProblem !== "object") continue;
         let guideSubQuestions: Array<{ sub_question_id?: string; step_name?: string }> = [];
         try {
           const result = await api.getResult(problemId);
-          const local = saved[problemId] || null;
-          const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData || (local as any)?.subQuestionData || (local as any)?.guidelineData;
+          const gd = (result as any)?.subQuestionData || (result as any)?.guidelineData;
           if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
             guideSubQuestions = gd.guide_sub_questions;
           }
@@ -2008,15 +2033,45 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                           </div>
 
                           <footer className={styles.studentPanelFooter}>
+                            <p className={styles.studentActionFlowHint}>{t("diagnosis.actionFlowHint")}</p>
                             {saveMessage && <span className={styles.studentSaveMessage}>{saveMessage}</span>}
                             <div className={styles.studentPanelFooterActions}>
-                              {canDiagnose[currentStudentId]?.[currentProblemKey] && activeItem && (
-                                <button type="button" className={styles.studentDiagnoseBtn} onClick={handleRunDiagnosisForAll} disabled={bulkDiagnosing}>
-                                  {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
-                                </button>
-                              )}
-                              <button type="button" className={styles.studentSaveBtn} onClick={handleSaveCurrentStudentAnswers} disabled={saving}>
+                              <button
+                                type="button"
+                                className={`${styles.studentActionBtn} ${
+                                  canDiagnose[currentStudentId]?.[currentProblemKey]
+                                    ? styles.studentActionBtnSecondary
+                                    : styles.studentActionBtnPrimary
+                                }`}
+                                onClick={handleSaveCurrentStudentAnswers}
+                                disabled={saving || bulkDiagnosing}
+                              >
                                 {saving ? t("diagnosis.saving") : t("diagnosis.saveAllAnswers")}
+                              </button>
+                              <span className={styles.studentActionFlowArrow} aria-hidden>
+                                →
+                              </span>
+                              <button
+                                type="button"
+                                className={`${styles.studentActionBtn} ${
+                                  canDiagnose[currentStudentId]?.[currentProblemKey]
+                                    ? styles.studentActionBtnPrimary
+                                    : styles.studentActionBtnSecondary
+                                }`}
+                                onClick={handleRunDiagnosisForAll}
+                                disabled={
+                                  !canDiagnose[currentStudentId]?.[currentProblemKey] ||
+                                  !activeItem ||
+                                  bulkDiagnosing ||
+                                  saving
+                                }
+                                title={
+                                  canDiagnose[currentStudentId]?.[currentProblemKey]
+                                    ? undefined
+                                    : t("diagnosis.saveFirstToDiagnose")
+                                }
+                              >
+                                {bulkDiagnosing ? t("diagnosis.bulkDiagnosing") : t("diagnosis.bulkDiagnose")}
                               </button>
                             </div>
                           </footer>
@@ -2044,14 +2099,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         <div className={styles.reportOverlay} role="dialog" aria-modal="true">
           <div className={styles.reportModal}>
             <header className={styles.reportHeader}>
-              <div>
-                <h2 className={styles.reportTitle}>{t("diagnosis.reportTitle")}</h2>
-                <p className={styles.reportSubtitle}>
-                  {t("diagnosis.reportMeta", {
-                    name: students.find((s) => s.id === reportStudentId)?.name ?? t("diagnosis.student"),
-                    count: reportSummaryProblemIds.length,
-                  })}
-                </p>
+              <div className={styles.reportHeaderIdentity}>
+                <p className={styles.reportEyebrow}>{t("diagnosis.reportTitle")}</p>
+                <h2 className={styles.reportStudentName}>
+                  {students.find((s) => s.id === reportStudentId)?.name ?? t("diagnosis.student")}
+                </h2>
               </div>
               <div className={styles.reportHeaderActions}>
                 <button type="button" className={styles.reportRefreshBtn} onClick={handleRefreshReport} disabled={reportLoading} title={t("diagnosis.refreshTitle")}>
@@ -2105,7 +2157,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               <td>{row.high_count}</td>
                               <td>{row.mid_count}</td>
                               <td>{row.low_count}</td>
-                              <td>{formatGrade(gradeKo)}</td>
+                              <td>
+                                <span className={`${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                  {formatGrade(gradeKo)}
+                                </span>
+                              </td>
                               <td>
                                 <button type="button" className={styles.reportRemoveProblemBtn} onClick={() => handleRemoveProblemFromReport(row.problem_id)} disabled={reportLoading}>
                                   {t("diagnosis.excludeFromReport")}
@@ -2127,17 +2183,43 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             <div className={styles.reportGraphHeader}>
                               <span className={styles.reportGraphTitle}>{getProblemDisplayLabel(row.problem_id)}</span>
                               <div className={styles.reportGraphHeaderRight}>
-                                <span className={styles.reportGraphLevelBadge}>{formatGrade(gradeKo)}</span>
+                                <span className={`${styles.reportGraphLevelBadge} ${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                  {formatGrade(gradeKo)}
+                                </span>
                                 <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
                               </div>
                             </div>
                             <div className={styles.reportGraphBar}>
-                              <div className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`} style={{ width: `${score_100}%` }} />
+                              {total > 0 ? (
+                                <>
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphHigh}`}
+                                    style={{ width: `${(row.high_count / total) * 100}%` }}
+                                  />
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphMid}`}
+                                    style={{ width: `${(row.mid_count / total) * 100}%` }}
+                                  />
+                                  <div
+                                    className={`${styles.reportGraphSegment} ${styles.reportGraphLow}`}
+                                    style={{ width: `${(row.low_count / total) * 100}%` }}
+                                  />
+                                </>
+                              ) : null}
                             </div>
                             <div className={styles.reportGraphLegend}>
-                              <span>{t("diagnosis.countHigh", { n: row.high_count })}</span>
-                              <span>{t("diagnosis.countMid", { n: row.mid_count })}</span>
-                              <span>{t("diagnosis.countLow", { n: row.low_count })}</span>
+                              <span>
+                                <i className={`${styles.reportLegendDot} ${styles.reportLegendDotHigh}`} aria-hidden />
+                                {t("diagnosis.countHigh", { n: row.high_count })}
+                              </span>
+                              <span>
+                                <i className={`${styles.reportLegendDot} ${styles.reportLegendDotMid}`} aria-hidden />
+                                {t("diagnosis.countMid", { n: row.mid_count })}
+                              </span>
+                              <span>
+                                <i className={`${styles.reportLegendDot} ${styles.reportLegendDotLow}`} aria-hidden />
+                                {t("diagnosis.countLow", { n: row.low_count })}
+                              </span>
                             </div>
                           </div>
                         );
@@ -2149,7 +2231,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
               <div className={styles.problemSummaryBlock}>
                 <h4 className={styles.problemSummarySubTitle}>
-                  {reportData ? t("diagnosis.stageSummaryReport", { count: reportData.problem_rows.length }) : t("diagnosis.stageSummary")}
+                  {reportData ? t("diagnosis.stageSummaryReport") : t("diagnosis.stageSummary")}
                 </h4>
                 {reportLoading && <p className={styles.problemSummaryEmpty}>{t("diagnosis.loadingReport")}</p>}
                 {reportError && !reportLoading && <p className={styles.problemSummaryEmpty}>{reportError}</p>}
@@ -2208,7 +2290,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                         <span className={styles.stepAbilityText}>{info.detailLabel}</span>
                                       </td>
                                       <td>{stepCount > 0 ? Math.round(score_100) : "-"}</td>
-                                      <td>{formatGrade(gradeKo)}</td>
+                                      <td>
+                                        <span className={`${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                          {formatGrade(gradeKo)}
+                                        </span>
+                                      </td>
                                     </tr>
                                   );
                                 }),
@@ -2258,12 +2344,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                               {row.display_code} · {info.detailLabel}
                                             </span>
                                             <div className={styles.reportGraphHeaderRight}>
-                                              <span className={`${styles.reportGraphLevelBadge} ${groupClass}`}>{formatGrade(gradeKo)}</span>
+                                              <span className={`${styles.reportGraphLevelBadge} ${styles.reportGradeBadge} ${getReportGradeClass(gradeKo)}`}>
+                                                {formatGrade(gradeKo)}
+                                              </span>
                                               <span className={styles.reportGraphScoreText}>{t("diagnosis.scorePoints", { n: Math.round(score_100) })}</span>
                                             </div>
                                           </div>
                                           <div className={styles.reportGraphBar}>
-                                            <div className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${groupClass}`} style={{ width: `${score_100}%` }} />
+                                            <div
+                                              className={`${styles.reportGraphSegment} ${styles.reportGraphStepFill} ${getReportGradeClass(gradeKo)}`}
+                                              style={{ width: `${score_100}%` }}
+                                            />
                                           </div>
                                           <div className={styles.reportGraphFeedbackEdit}>
                                             <label className={styles.reportGraphFeedbackLabel}>{t("diagnosis.stageFeedback")}</label>

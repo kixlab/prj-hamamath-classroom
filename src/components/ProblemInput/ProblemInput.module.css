@@ -187,6 +187,11 @@
   min-width: 0;
 }
 
+.requiredMark {
+  color: #dc2626;
+  font-weight: 700;
+}
+
 .panelHeaderAction {
   display: flex;
   align-items: center;
@@ -418,6 +423,158 @@
 .editBtnSecondary:hover:not(:disabled) {
   background: var(--color-bg-secondary);
   border-color: #cbd5e1;
+}
+
+/* ── 참고 자료(RAG) ── */
+.auxPanel {
+  padding: var(--card-padding) calc(var(--card-padding) + 2px);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auxHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.auxTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.auxTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.auxHint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.auxSelectBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.auxSelectHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.auxUploadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.auxUploadBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.auxFileTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auxFileTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.auxFileTabActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.auxFileTabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.auxFileTabDelete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.12);
+  color: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.auxFileTabActive .auxFileTabDelete {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.auxEmpty,
+.auxError,
+.auxNote {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.auxSelectBox .auxEmpty {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.auxError {
+  color: #b91c1c;
 }
 
 @media (max-width: 520px) {

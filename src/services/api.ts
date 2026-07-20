@@ -19,6 +19,7 @@ interface CoTCreateData {
   semester?: string;
   textbook_id?: string;
   use_textbook_rag?: boolean;
+  auxiliary_material_ids?: string[];
   image_data?: string | null;
   /** 파이프라인 출력 언어. 기본 ko, 영어 en */
   language?: string;
@@ -40,6 +41,7 @@ interface GenerateSubQuestionData {
   semester?: string;
   textbook_id?: string;
   use_textbook_rag?: boolean;
+  auxiliary_material_ids?: string[];
   cot_step: {
     step_id: string;
     sub_skill_id: string;
@@ -139,6 +141,17 @@ export interface TextbookRagPreviewResult {
   context_text: string;
 }
 
+export interface AuxiliaryMaterialItem {
+  id: string;
+  grade: string;
+  title: string;
+  filename: string;
+  content_type: string;
+  chunk_count: number;
+  created_at: string;
+  has_embeddings: boolean;
+}
+
 export interface SubQuestionPromptPreviewResult {
   sub_question_id: string;
   step_name: string;
@@ -167,10 +180,14 @@ export const api = {
   },
 
   // CoT 생성
-  async createCoT(data: CoTCreateData) {
+  async createCoT(data: CoTCreateData, userId?: string | null) {
+    const uid = userId?.trim();
     const response = await fetch(getApiUrl("/api/v1/cot/"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uid ? encodeUserIdForHeader(uid) : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -195,10 +212,14 @@ export const api = {
   },
 
   // 단일 하위 문항 생성
-  async generateSingleSubQuestion(data: GenerateSubQuestionData) {
+  async generateSingleSubQuestion(data: GenerateSubQuestionData, userId?: string | null) {
+    const uid = userId?.trim();
     const response = await fetch(getApiUrl("/api/v1/sub-question/generate-single"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uid ? encodeUserIdForHeader(uid) : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -209,10 +230,14 @@ export const api = {
   },
 
   // 하위 문항 재생성
-  async regenerateSingleSubQuestion(data: GenerateSubQuestionData) {
+  async regenerateSingleSubQuestion(data: GenerateSubQuestionData, userId?: string | null) {
+    const uid = userId?.trim();
     const response = await fetch(getApiUrl("/api/v1/sub-question/regenerate-single"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uid ? encodeUserIdForHeader(uid) : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -291,9 +316,9 @@ export const api = {
   },
 
   /** 학생 목록 조회 (다른 브라우저에서 왼쪽 패널 복원용). 404면 빈 목록 반환 */
-  async getStudentList(): Promise<{ students: Array<{ id: string; name: string }> }> {
+  async getStudentList(userId?: string | null): Promise<{ students: Array<{ id: string; name: string }> }> {
     const response = await fetch(getApiUrl("/api/v1/student-list"), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (response.status === 404) return { students: [] };
     if (!response.ok) {
@@ -303,6 +328,85 @@ export const api = {
       );
     }
     return response.json();
+  },
+
+  /** 사용자별 문제 ID 순번 할당 (Firebase user_prefs) */
+  async getNextProblemSeq(userId?: string | null): Promise<number> {
+    const response = await fetch(getApiUrl("/api/v1/user-prefs/next-problem-seq"), {
+      method: "POST",
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "문제 번호를 할당하는 중 오류가 발생했습니다."
+      );
+    }
+    const data = (await response.json()) as { next_seq?: number };
+    return data.next_seq ?? 1;
+  },
+
+  /** 마지막 작업 문제 ID 저장 */
+  async updateUserPrefs(lastProblemId: string, userId?: string | null): Promise<void> {
+    const response = await fetch(getApiUrl("/api/v1/user-prefs"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(userId) },
+      body: JSON.stringify({ last_problem_id: lastProblemId }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "사용자 설정 저장 중 오류가 발생했습니다."
+      );
+    }
+  },
+
+  /** 학생 진단 UI 상태 조회 (Firestore workspace) */
+  async getDiagnosisWorkspace(userId?: string | null): Promise<{
+    can_diagnose: Record<string, Record<string, boolean>>;
+    current_student_id: string | null;
+    selected_problem_id: string | null;
+    student_problem_summaries: Record<string, Record<string, unknown>>;
+  }> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/workspace"), {
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (response.status === 404) {
+      return {
+        can_diagnose: {},
+        current_student_id: null,
+        selected_problem_id: null,
+        student_problem_summaries: {},
+      };
+    }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 상태를 불러오는 중 오류가 발생했습니다."
+      );
+    }
+    return response.json();
+  },
+
+  /** 학생 진단 UI 상태 저장 */
+  async saveDiagnosisWorkspace(payload: {
+    user_id: string;
+    can_diagnose: Record<string, Record<string, boolean>>;
+    current_student_id?: string | null;
+    selected_problem_id?: string | null;
+    student_problem_summaries: Record<string, Record<string, unknown>>;
+  }): Promise<void> {
+    const response = await fetch(getApiUrl("/api/v1/diagnosis/workspace"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(payload.user_id) },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || "진단 상태를 저장하는 중 오류가 발생했습니다."
+      );
+    }
   },
 
   /** 학생 목록 저장 (다른 브라우저에서 복원용). userIdForHeader 있으면 헤더 폴백으로 사용 */
@@ -321,12 +425,12 @@ export const api = {
     }
   },
 
-  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 다른 브라우저 복원용. student_name 있으면 학생 목록 표시에 사용 */
-  async getStudentAnswersList(): Promise<{
+  /** 저장된 학생 답안 목록 (problem_id, student_id별 최신) — 로그인 아이디별 Firestore/서버 복원용 */
+  async getStudentAnswersList(userId?: string | null): Promise<{
     items: Array<{ problem_id: string; student_id: string; student_name?: string; answers: Record<string, string> }>;
   }> {
     const response = await fetch(getApiUrl("/api/v1/student-answers/list"), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -340,11 +444,12 @@ export const api = {
   /** 동일 로그인 id·문제·학생에 해당하는 저장 답안 1건 조회 (없으면 null) */
   async getStudentAnswers(
     problemId: string,
-    studentId: string
+    studentId: string,
+    userId?: string | null,
   ): Promise<{ problem_id: string; student_id: string; answers: Record<string, string> } | null> {
     const params = new URLSearchParams({ problem_id: problemId, student_id: studentId });
     const response = await fetch(getApiUrl(`/api/v1/student-answers/get?${params}`), {
-      headers: getHistoryHeaders(),
+      headers: getHistoryHeadersWithFallback(userId),
     });
     if (response.status === 404) return null;
     if (!response.ok) {
@@ -889,9 +994,10 @@ export const api = {
     previous_sub_questions?: unknown[];
     semester?: string | null;
     use_textbook_rag?: boolean;
+    auxiliary_material_ids?: string[];
     language?: string;
     image_data?: string | null;
-  }): Promise<SubQuestionPromptPreviewResult> {
+  }, userId?: string | null): Promise<SubQuestionPromptPreviewResult> {
     const body: Record<string, unknown> = {
       main_problem: data.main_problem,
       main_answer: data.main_answer,
@@ -906,10 +1012,16 @@ export const api = {
     if (data.semester?.trim()) body.semester = data.semester.trim();
     if (data.language) body.language = data.language;
     if (data.image_data) body.image_data = data.image_data;
+    if (data.auxiliary_material_ids?.length) body.auxiliary_material_ids = data.auxiliary_material_ids;
 
     const response = await fetch(getApiUrl("/api/v1/sub-question/preview-prompt"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(userId?.trim()
+          ? encodeUserIdForHeader(userId.trim())
+          : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -917,5 +1029,86 @@ export const api = {
       throw new Error((errorData as { detail?: string }).detail || "프롬프트 미리보기 중 오류가 발생했습니다.");
     }
     return response.json();
+  },
+
+  /** 참고 자료(RAG) 목록 — 로그인 사용자별로만 조회 */
+  async listAuxiliaryMaterials(
+    grade?: string | null,
+    userId?: string | null,
+  ): Promise<{ items: AuxiliaryMaterialItem[] }> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다. 참고 자료는 아이디별로 관리됩니다.");
+    }
+    const params = new URLSearchParams();
+    if (grade?.trim()) params.set("grade", grade.trim());
+    const qs = params.toString();
+    const response = await fetch(getApiUrl(`/api/v1/auxiliary-materials${qs ? `?${qs}` : ""}`), {
+      headers: encodeUserIdForHeader(uid),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "참고 자료 목록을 불러오지 못했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 참고 자료(RAG) 업로드 — multipart (최대 200MB). 로그인 사용자 폴더에만 저장 */
+  async uploadAuxiliaryMaterial(
+    payload: {
+      file: File;
+      grade?: string;
+      title?: string;
+    },
+    userId?: string | null,
+  ): Promise<{ item: AuxiliaryMaterialItem }> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다. 참고 자료는 아이디별로 관리됩니다.");
+    }
+    const maxBytes = 200 * 1024 * 1024;
+    if (payload.file.size > maxBytes) {
+      throw new Error("파일이 너무 큽니다. 최대 200MB까지 업로드할 수 있습니다.");
+    }
+
+    const form = new FormData();
+    form.append("file", payload.file, payload.file.name);
+    if (payload.grade?.trim()) form.append("grade", payload.grade.trim());
+    if (payload.title?.trim()) form.append("title", payload.title.trim());
+
+    const response = await fetch(getApiUrl("/api/v1/auxiliary-materials/upload"), {
+      method: "POST",
+      headers: {
+        // Content-Type은 FormData가 boundary 포함해 자동 설정
+        ...encodeUserIdForHeader(uid),
+      },
+      body: form,
+    });
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error(
+          "파일이 너무 커서 서버에서 거부되었습니다. 최대 200MB까지 업로드할 수 있습니다.",
+        );
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "참고 자료 업로드에 실패했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 참고 자료(RAG) 삭제 — 본인 자료만 */
+  async deleteAuxiliaryMaterial(materialId: string, userId?: string | null): Promise<void> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다. 참고 자료는 아이디별로 관리됩니다.");
+    }
+    const response = await fetch(getApiUrl(`/api/v1/auxiliary-materials/${encodeURIComponent(materialId)}`), {
+      method: "DELETE",
+      headers: encodeUserIdForHeader(uid),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "참고 자료 삭제에 실패했습니다.");
+    }
   },
 };

@@ -101,6 +101,7 @@ export const SubQs = () => {
     currentStep,
     pendingSubqAutoStart,
     setPendingSubqAutoStart,
+    selectedAuxiliaryMaterialIds,
   } = useApp();
 
   useEffect(() => {
@@ -137,9 +138,14 @@ export const SubQs = () => {
       String((currentCotData as any)?.grade ?? ""),
       (currentCotData as any)?.semester,
     );
+    const fromCot = Array.isArray((currentCotData as any)?.auxiliary_material_ids)
+      ? ((currentCotData as any).auxiliary_material_ids as string[])
+      : [];
+    const ids = selectedAuxiliaryMaterialIds.length ? selectedAuxiliaryMaterialIds : fromCot;
     return {
       ...(semester ? { semester } : {}),
       use_textbook_rag: true,
+      ...(ids.length ? { auxiliary_material_ids: ids } : {}),
     };
   };
 
@@ -538,7 +544,7 @@ export const SubQs = () => {
         previous_sub_questions: previousForGeneration,
         language: getAppLanguage(locale),
         ...getTextbookRagParams(),
-      });
+      }, userId);
 
       const subQuestion: SubQuestion = normalizeSubQuestion(subQuestionResponse.sub_question);
       const previousSubQuestions = guideSubQuestions.slice();
@@ -687,7 +693,7 @@ export const SubQs = () => {
           previous_sub_questions: previousForGeneration,
           language: getAppLanguage(locale),
           ...getTextbookRagParams(),
-        });
+        }, userId);
 
         const subQuestion: SubQuestion = normalizeSubQuestion(subQuestionResponse.sub_question);
         const previousSubQuestions = guideSubQuestions.slice();
@@ -983,7 +989,7 @@ export const SubQs = () => {
         failing_verifiers: ["stage_elicitation", "context_alignment", "answer_validity", "prompt_validity"],
         language: getAppLanguage(locale),
         ...getTextbookRagParams(),
-      } as any);
+      } as any, userId);
 
       const updated = (regenerateResponse as any).sub_question as SubQuestion;
       const merged: SubQuestion = normalizeSubQuestion(
