@@ -83,7 +83,7 @@ export const MainProblemSidebar = ({
   guideSubQuestions = [],
   considerations = [],
 }: MainProblemSidebarProps) => {
-  const { currentStep } = useApp();
+  const { currentStep, selectedAuxiliaryMaterialIds, userId } = useApp();
   const { t, locale } = useLocale();
   const mainProblem = problem?.trim() || '';
   const mainAnswer = answer?.trim() || '';
@@ -182,9 +182,12 @@ export const MainProblemSidebar = ({
           previous_sub_questions: buildPreviousSubQuestions(cotSteps, guideSubQuestions, stepId),
           semester: semesterText || null,
           use_textbook_rag: true,
+          ...(selectedAuxiliaryMaterialIds.length
+            ? { auxiliary_material_ids: selectedAuxiliaryMaterialIds }
+            : {}),
           language: getAppLanguage(locale),
           image_data: imageData || null,
-        });
+        }, userId);
         setPromptView({
           source: 'preview',
           system_prompt: result.system_prompt,
@@ -206,9 +209,11 @@ export const MainProblemSidebar = ({
       mainAnswer,
       mainProblem,
       mainSolution,
+      selectedAuxiliaryMaterialIds,
       semesterText,
       subjectArea,
       t,
+      userId,
     ],
   );
 

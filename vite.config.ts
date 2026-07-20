@@ -13,6 +13,8 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true,
         ws: false, // WebSocket은 프록시하지 않음
+        timeout: 600_000, // 대용량 보조자료(PDF) 업로드용
+        proxyTimeout: 600_000,
       },
     },
   },

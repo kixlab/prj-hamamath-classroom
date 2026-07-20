@@ -19,6 +19,7 @@ interface CoTCreateData {
   semester?: string;
   textbook_id?: string;
   use_textbook_rag?: boolean;
+  auxiliary_material_ids?: string[];
   image_data?: string | null;
   /** 파이프라인 출력 언어. 기본 ko, 영어 en */
   language?: string;
@@ -40,6 +41,7 @@ interface GenerateSubQuestionData {
   semester?: string;
   textbook_id?: string;
   use_textbook_rag?: boolean;
+  auxiliary_material_ids?: string[];
   cot_step: {
     step_id: string;
     sub_skill_id: string;
@@ -139,6 +141,17 @@ export interface TextbookRagPreviewResult {
   context_text: string;
 }
 
+export interface AuxiliaryMaterialItem {
+  id: string;
+  grade: string;
+  title: string;
+  filename: string;
+  content_type: string;
+  chunk_count: number;
+  created_at: string;
+  has_embeddings: boolean;
+}
+
 export interface SubQuestionPromptPreviewResult {
   sub_question_id: string;
   step_name: string;
@@ -167,10 +180,14 @@ export const api = {
   },
 
   // CoT 생성
-  async createCoT(data: CoTCreateData) {
+  async createCoT(data: CoTCreateData, userId?: string | null) {
+    const uid = userId?.trim();
     const response = await fetch(getApiUrl("/api/v1/cot/"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uid ? encodeUserIdForHeader(uid) : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -195,10 +212,14 @@ export const api = {
   },
 
   // 단일 하위 문항 생성
-  async generateSingleSubQuestion(data: GenerateSubQuestionData) {
+  async generateSingleSubQuestion(data: GenerateSubQuestionData, userId?: string | null) {
+    const uid = userId?.trim();
     const response = await fetch(getApiUrl("/api/v1/sub-question/generate-single"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uid ? encodeUserIdForHeader(uid) : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -209,10 +230,14 @@ export const api = {
   },
 
   // 하위 문항 재생성
-  async regenerateSingleSubQuestion(data: GenerateSubQuestionData) {
+  async regenerateSingleSubQuestion(data: GenerateSubQuestionData, userId?: string | null) {
+    const uid = userId?.trim();
     const response = await fetch(getApiUrl("/api/v1/sub-question/regenerate-single"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(uid ? encodeUserIdForHeader(uid) : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -889,9 +914,10 @@ export const api = {
     previous_sub_questions?: unknown[];
     semester?: string | null;
     use_textbook_rag?: boolean;
+    auxiliary_material_ids?: string[];
     language?: string;
     image_data?: string | null;
-  }): Promise<SubQuestionPromptPreviewResult> {
+  }, userId?: string | null): Promise<SubQuestionPromptPreviewResult> {
     const body: Record<string, unknown> = {
       main_problem: data.main_problem,
       main_answer: data.main_answer,
@@ -906,10 +932,16 @@ export const api = {
     if (data.semester?.trim()) body.semester = data.semester.trim();
     if (data.language) body.language = data.language;
     if (data.image_data) body.image_data = data.image_data;
+    if (data.auxiliary_material_ids?.length) body.auxiliary_material_ids = data.auxiliary_material_ids;
 
     const response = await fetch(getApiUrl("/api/v1/sub-question/preview-prompt"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(userId?.trim()
+          ? encodeUserIdForHeader(userId.trim())
+          : getHistoryHeadersWithFallback(userId)),
+      },
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -917,5 +949,86 @@ export const api = {
       throw new Error((errorData as { detail?: string }).detail || "프롬프트 미리보기 중 오류가 발생했습니다.");
     }
     return response.json();
+  },
+
+  /** 참고 자료(RAG) 목록 — 로그인 사용자별로만 조회 */
+  async listAuxiliaryMaterials(
+    grade?: string | null,
+    userId?: string | null,
+  ): Promise<{ items: AuxiliaryMaterialItem[] }> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다. 참고 자료는 아이디별로 관리됩니다.");
+    }
+    const params = new URLSearchParams();
+    if (grade?.trim()) params.set("grade", grade.trim());
+    const qs = params.toString();
+    const response = await fetch(getApiUrl(`/api/v1/auxiliary-materials${qs ? `?${qs}` : ""}`), {
+      headers: encodeUserIdForHeader(uid),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "참고 자료 목록을 불러오지 못했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 참고 자료(RAG) 업로드 — multipart (최대 200MB). 로그인 사용자 폴더에만 저장 */
+  async uploadAuxiliaryMaterial(
+    payload: {
+      file: File;
+      grade?: string;
+      title?: string;
+    },
+    userId?: string | null,
+  ): Promise<{ item: AuxiliaryMaterialItem }> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다. 참고 자료는 아이디별로 관리됩니다.");
+    }
+    const maxBytes = 200 * 1024 * 1024;
+    if (payload.file.size > maxBytes) {
+      throw new Error("파일이 너무 큽니다. 최대 200MB까지 업로드할 수 있습니다.");
+    }
+
+    const form = new FormData();
+    form.append("file", payload.file, payload.file.name);
+    if (payload.grade?.trim()) form.append("grade", payload.grade.trim());
+    if (payload.title?.trim()) form.append("title", payload.title.trim());
+
+    const response = await fetch(getApiUrl("/api/v1/auxiliary-materials/upload"), {
+      method: "POST",
+      headers: {
+        // Content-Type은 FormData가 boundary 포함해 자동 설정
+        ...encodeUserIdForHeader(uid),
+      },
+      body: form,
+    });
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error(
+          "파일이 너무 커서 서버에서 거부되었습니다. 최대 200MB까지 업로드할 수 있습니다.",
+        );
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "참고 자료 업로드에 실패했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 참고 자료(RAG) 삭제 — 본인 자료만 */
+  async deleteAuxiliaryMaterial(materialId: string, userId?: string | null): Promise<void> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다. 참고 자료는 아이디별로 관리됩니다.");
+    }
+    const response = await fetch(getApiUrl(`/api/v1/auxiliary-materials/${encodeURIComponent(materialId)}`), {
+      method: "DELETE",
+      headers: encodeUserIdForHeader(uid),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "참고 자료 삭제에 실패했습니다.");
+    }
   },
 };

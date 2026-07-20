@@ -2,7 +2,7 @@ import { useState, useRef, ChangeEvent, FormEvent, ReactNode, useEffect } from "
 import { useApp } from "../../contexts/AppContext";
 import type { CoTData } from "../../types";
 import { saveResult, fetchHistoryListForUser, loadResult } from "../../hooks/useStorage";
-import { api } from "../../services/api";
+import { api, type AuxiliaryMaterialItem } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
@@ -14,6 +14,7 @@ import { buildDemoCotFromProblemInput, loadDemoSavedWorkflow } from "../../demo/
 import { loadMirroredTestResult } from "../../demo/demoMirror";
 import { getDemoSourceUserId } from "../../demo/demoAccount";
 import { PROBLEM_DROPDOWN_OPTIONS, getProblemDisplayLabel } from "../../utils/problemIdAlias";
+import { resolveAuxUploadGrade } from "../../utils/auxiliaryMaterial";
 import styles from "./ProblemInput.module.css";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
@@ -296,6 +297,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     setPreferredVersion,
     requestedExampleFile,
     setRequestedExampleFile,
+    selectedAuxiliaryMaterialIds,
+    setSelectedAuxiliaryMaterialIds,
   } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
@@ -304,7 +307,11 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const [customProblemId, setCustomProblemId] = useState<string>("");
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const auxInputRef = useRef<HTMLInputElement>(null);
   const hydratedProblemIdRef = useRef<string | null>(null);
+  const [auxMaterials, setAuxMaterials] = useState<AuxiliaryMaterialItem[]>([]);
+  const [auxUploading, setAuxUploading] = useState(false);
+  const [auxError, setAuxError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentProblemId && !currentCotData) {
@@ -366,6 +373,87 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       cancelled = true;
     };
   }, [userId, isDemoMode]);
+
+  /** 참고 자료 목록 로드 — 기존 자료는 비활성(미선택), 업로드 시에만 자동 선택 */
+  const reloadAuxMaterials = async () => {
+    if (isDemoMode || !userId?.trim()) {
+      setAuxMaterials([]);
+      setSelectedAuxiliaryMaterialIds([]);
+      return;
+    }
+    try {
+      const data = await api.listAuxiliaryMaterials(null, userId);
+      setAuxMaterials(Array.isArray(data.items) ? data.items : []);
+      setSelectedAuxiliaryMaterialIds([]);
+      setAuxError(null);
+    } catch (err) {
+      console.warn("참고 자료 목록 조회 실패:", err);
+      setAuxError(t("problemInput.auxLoadFail"));
+    }
+  };
+
+  useEffect(() => {
+    void reloadAuxMaterials();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, isDemoMode]);
+
+  const toggleAuxMaterial = (id: string) => {
+    const next = selectedAuxiliaryMaterialIds.includes(id)
+      ? selectedAuxiliaryMaterialIds.filter((x) => x !== id)
+      : [...selectedAuxiliaryMaterialIds, id];
+    setSelectedAuxiliaryMaterialIds(next);
+  };
+
+  const handleAuxUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (isDemoMode) {
+      setAuxError(t("problemInput.auxDemoNote"));
+      return;
+    }
+    const isPdf =
+      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setAuxError(t("problemInput.auxPdfOnly"));
+      return;
+    }
+    const uploadGrade = resolveAuxUploadGrade(formData.grade);
+    setAuxUploading(true);
+    setAuxError(null);
+    try {
+      const result = await api.uploadAuxiliaryMaterial(
+        {
+          file,
+          grade: uploadGrade === "common" ? "" : uploadGrade,
+          title: file.name.replace(/\.[^.]+$/, ""),
+        },
+        userId,
+      );
+      const item = result.item;
+      setAuxMaterials((prev) => [item, ...prev.filter((m) => m.id !== item.id)]);
+      // 방금 업로드한 자료만 자동 활성화
+      if (!selectedAuxiliaryMaterialIds.includes(item.id)) {
+        setSelectedAuxiliaryMaterialIds([...selectedAuxiliaryMaterialIds, item.id]);
+      }
+    } catch (err: any) {
+      setAuxError(err?.message || t("problemInput.auxUploadFail"));
+    } finally {
+      setAuxUploading(false);
+    }
+  };
+
+  const handleAuxDelete = async (materialId: string) => {
+    if (!window.confirm(t("problemInput.auxDeleteConfirm"))) return;
+    if (isDemoMode) return;
+    try {
+      await api.deleteAuxiliaryMaterial(materialId, userId);
+      setAuxMaterials((prev) => prev.filter((m) => m.id !== materialId));
+      setSelectedAuxiliaryMaterialIds(selectedAuxiliaryMaterialIds.filter((id) => id !== materialId));
+    } catch (err: any) {
+      setAuxError(err?.message || t("problemInput.auxUploadFail"));
+    }
+  };
 
   /** 드롭다운에서 계정 저장 문제를 고르면 해당 워크플로우를 불러온다(사이드바 클릭과 동일). */
   const handleLoadSaved = async (problemId: string) => {
@@ -563,17 +651,26 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
         grade: formData.grade,
         ...(semester ? { semester } : {}),
         use_textbook_rag: true,
+        ...(selectedAuxiliaryMaterialIds.length
+          ? { auxiliary_material_ids: selectedAuxiliaryMaterialIds }
+          : {}),
         image_data: imageData,
         language: getAppLanguage(locale),
       };
 
-      const result = (await api.createCoT(requestData)) as CoTData;
-      const cotDataWithExtras: CoTData & { img_description: string } = {
+      const result = (await api.createCoT(requestData, userId)) as CoTData;
+      const cotDataWithExtras: CoTData & {
+        img_description: string;
+        auxiliary_material_ids?: string[];
+      } = {
         ...result,
         img_description: formData.imgDescription,
         image_data: imageData ?? formData.imageData,
         main_solution: formData.solution,
         ...(semester ? { semester } : {}),
+        ...(selectedAuxiliaryMaterialIds.length
+          ? { auxiliary_material_ids: selectedAuxiliaryMaterialIds }
+          : {}),
       };
 
       const problemId = selectedProblem || customProblemId.trim() || getNextProblemSeq();
@@ -705,6 +802,83 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             </button>
           </div>
         </div>
+
+        <section className={styles.auxPanel} aria-label={t("problemInput.auxTitle")}>
+          <div className={styles.auxHeader}>
+            <div className={styles.auxTitleBlock}>
+              <h3 className={styles.auxTitle}>{t("problemInput.auxTitle")}</h3>
+              <p className={styles.auxHint}>{t("problemInput.auxHint")}</p>
+            </div>
+            <div>
+              <input
+                ref={auxInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className={styles.fileInputHidden}
+                onChange={handleAuxUpload}
+              />
+              <button
+                type="button"
+                className={styles.auxUploadBtn}
+                disabled={auxUploading || isDemoMode}
+                onClick={() => auxInputRef.current?.click()}
+              >
+                {auxUploading ? t("problemInput.auxUploading") : t("problemInput.auxUpload")}
+              </button>
+            </div>
+          </div>
+
+          {isDemoMode && <p className={styles.auxNote}>{t("problemInput.auxDemoNote")}</p>}
+          {auxError && <p className={styles.auxError}>{auxError}</p>}
+
+          <div className={styles.auxSelectBox}>
+            {auxMaterials.length > 0 ? (
+              <>
+                <p className={styles.auxSelectHint}>{t("problemInput.auxSelectHint")}</p>
+                <div className={styles.auxFileTabs} role="list">
+                  {auxMaterials.map((item) => {
+                    const selected = selectedAuxiliaryMaterialIds.includes(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="listitem"
+                        className={`${styles.auxFileTab} ${selected ? styles.auxFileTabActive : ""}`}
+                        onClick={() => toggleAuxMaterial(item.id)}
+                        title={item.filename}
+                        aria-pressed={selected}
+                      >
+                        <span className={styles.auxFileTabLabel}>{item.title || item.filename}</span>
+                        {selected ? <span aria-hidden>✓</span> : null}
+                        <span
+                          className={styles.auxFileTabDelete}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={t("problemInput.auxDelete")}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            void handleAuxDelete(item.id);
+                          }}
+                          onKeyDown={(ev) => {
+                            if (ev.key === "Enter" || ev.key === " ") {
+                              ev.preventDefault();
+                              ev.stopPropagation();
+                              void handleAuxDelete(item.id);
+                            }
+                          }}
+                        >
+                          ×
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className={styles.auxEmpty}>{t("problemInput.auxEmptyAll")}</p>
+            )}
+          </div>
+        </section>
 
         <div className={styles.contentGrid}>
           <div className={styles.imageCol}>
