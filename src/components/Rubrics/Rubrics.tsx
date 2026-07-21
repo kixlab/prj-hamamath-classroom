@@ -515,12 +515,14 @@ export const Rubrics = () => {
     handleRegenerateSingle(id, feedbackText || null);
   };
 
-  if (generating && !rubrics.length) {
+  // 초기 생성뿐 아니라 "루브릭 새로 생성하기"(전체 재생성) 중에도 로딩 화면을 표시.
+  // (generating은 전체 생성/재생성 시에만 true. 단일 카드 재생성은 regeneratingIds로 별도 처리)
+  if (generating) {
     return (
       <div className={styles.rubricContainer}>
-        <div className={styles.loadingPlaceholderCard}>
+        <div className={styles.loadingPlaceholderCard} aria-busy="true">
           <div className={styles.spinner} aria-hidden />
-          <div>{generatingMessage || t("common.loading")}</div>
+          <div>{generatingMessage || t("rubric.generatingLong")}</div>
         </div>
       </div>
     );

@@ -1098,12 +1098,16 @@ export const SubQs = () => {
   const footerBusy = loading || isGeneratingSteps || hasActiveRegeneration;
   const footerProgressCurrent = Math.min(generatedCount, totalCotSteps);
 
+  // 확정본이 있으면 그것, 없으면 현재 하위문항으로 폴백 → 확정 전에도 미리보기/다운로드 가능
+  const exportSubQuestionData = finalizedSubQuestionForRubric ?? currentSubQuestionData;
+  const canExportSubQuestions = !!(exportSubQuestionData as any)?.guide_sub_questions?.length;
+
   const handleExportWord = async () => {
-    if (!currentCotData || !finalizedSubQuestionForRubric) return;
+    if (!currentCotData || !exportSubQuestionData) return;
     try {
       await api.exportWordFromSubQuestion(
         currentCotData as any,
-        finalizedSubQuestionForRubric,
+        exportSubQuestionData,
         preferredVersion,
         currentProblemId,
       );
@@ -1113,7 +1117,7 @@ export const SubQs = () => {
   };
 
   const handleOpenPreview = () => {
-    if (!currentCotData || !finalizedSubQuestionForRubric) return;
+    if (!currentCotData || !exportSubQuestionData) return;
     setPreviewOpen(true);
   };
 
@@ -1601,6 +1605,15 @@ export const SubQs = () => {
 
             {showFinalizePrompt && (
               <div className={styles.pageFooterActions}>
+                {canExportSubQuestions && (
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                    onClick={handleOpenPreview}
+                  >
+                    {t("exportPreview.openButton")}
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`${styles.btn} ${styles.btnPrimary} ${styles.btnStacked} ${styles.btnFinalize}`}
@@ -1638,7 +1651,7 @@ export const SubQs = () => {
       <WorksheetPreviewModal
         open={previewOpen}
         cotData={currentCotData as any}
-        subQuestionData={finalizedSubQuestionForRubric as any}
+        subQuestionData={exportSubQuestionData as any}
         preferredVersion={preferredVersion}
         problemId={currentProblemId}
         onClose={() => setPreviewOpen(false)}

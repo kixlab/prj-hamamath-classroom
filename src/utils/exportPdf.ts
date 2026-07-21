@@ -387,7 +387,7 @@ export async function buildWorksheetSections(
         </div>
         <div style="margin: 10px 0 0 36px;">
           <div style="font-size: 12px; color: ${THEME.muted}; margin-bottom: 8px;">${answerLabel}</div>
-          <div style="border: 1.2px solid ${THEME.line}; border-radius: 8px; background: #fbfcfe; height: 92px;"></div>
+          <div style="border: 1.2px solid ${THEME.line}; border-radius: 8px; background: #fbfcfe; height: 140px;"></div>
         </div>
       </div>`;
   });
