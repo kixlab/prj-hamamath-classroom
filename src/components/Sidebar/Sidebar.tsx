@@ -1,10 +1,11 @@
-import { useEffect, useState, MouseEvent } from "react";
+import { useEffect, useState, useRef, MouseEvent, ChangeEvent } from "react";
 import { useApp } from "../../contexts/AppContext";
-import { loadResult, deleteResult, clearAllResults, saveResultAsync, fetchHistoryListForUser, getPendingSyncCount, syncPendingResults } from "../../hooks/useStorage";
+import { loadResult, deleteResult, saveResultAsync, fetchHistoryListForUser, getPendingSyncCount, syncPendingResults } from "../../hooks/useStorage";
 import { getDemoSourceUserId } from "../../demo/demoAccount";
 import { getProblemDisplayLabel, PROBLEM_DROPDOWN_OPTIONS } from "../../utils/problemIdAlias";
 import { loadDemoSavedWorkflow } from "../../demo/demoWorkspace";
-import { api } from "../../services/api";
+import { api, type AuxiliaryMaterialItem } from "../../services/api";
+import { parseAuxMaterialGradeKey, sortAuxGradeKeys, AUX_GRADE_COMMON } from "../../utils/auxiliaryMaterial";
 import { isAdmin } from "../../utils/admin";
 import { useLocale } from "../../i18n/LocaleContext";
 import { AdminModeModal } from "../AdminMode/AdminModeModal";
@@ -14,6 +15,7 @@ interface SavedResultItem {
   problemId: string;
   timestamp: string;
   dateStr: string;
+  grade?: string | null;
 }
 
 interface SidebarProps {
@@ -61,6 +63,53 @@ const DeleteIcon = () => (
   </svg>
 );
 
+/** 학년 그룹 키 (미지정은 별도 키) */
+const UNCATEGORIZED_GRADE = "__uncat__";
+function gradeGroupKey(grade?: string | null): string {
+  return (grade || "").trim() || UNCATEGORIZED_GRADE;
+}
+function gradeGroupLabel(key: string, locale: string): string {
+  if (key === UNCATEGORIZED_GRADE) return locale === "en" ? "Uncategorized" : "미분류";
+  return key; // 예: "6학년"
+}
+/** 학년 키 정렬: 숫자 오름차순, 미분류는 맨 뒤 */
+function sortGradeKeys(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    if (a === UNCATEGORIZED_GRADE) return 1;
+    if (b === UNCATEGORIZED_GRADE) return -1;
+    const na = parseInt(a, 10);
+    const nb = parseInt(b, 10);
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return a.localeCompare(b);
+  });
+}
+function groupByGrade<T extends { grade?: string | null }>(items: T[]): Array<{ key: string; items: T[] }> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = gradeGroupKey(item.grade);
+    (map.get(key) ?? map.set(key, []).get(key)!).push(item);
+  }
+  return sortGradeKeys([...map.keys()]).map((key) => ({ key, items: map.get(key)! }));
+}
+
+/** 학습 자료(참고자료) 학년 라벨 */
+function auxGradeLabel(key: string, locale: string): string {
+  if (key === AUX_GRADE_COMMON) return locale === "en" ? "Common" : "공통";
+  return locale === "en" ? `Grade ${key}` : `${key}학년`;
+}
+/** 학습 자료를 학년 키별로 그룹핑 (parseAuxMaterialGradeKey로 정규화) */
+function groupAuxByGrade(items: AuxiliaryMaterialItem[]): Array<{ key: string; items: AuxiliaryMaterialItem[] }> {
+  const map = new Map<string, AuxiliaryMaterialItem[]>();
+  for (const m of items) {
+    const key = parseAuxMaterialGradeKey(m.grade);
+    (map.get(key) ?? map.set(key, []).get(key)!).push(m);
+  }
+  return sortAuxGradeKeys([...map.keys()]).map((key) => ({ key, items: map.get(key)! }));
+}
+
+/** 사이드바 학습 자료 업로드용 학년 선택지 (값: 서버 저장 grade. ""=공통) */
+const AUX_UPLOAD_GRADE_OPTIONS = ["", "3", "4", "5", "6"];
+
 export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProps) => {
   const { t, locale } = useLocale();
   const {
@@ -80,12 +129,75 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
     isDemoMode,
     reset,
     setRequestedExampleFile,
+    auxMaterials,
+    setAuxMaterials,
   } = useApp();
   const [savedResults, setSavedResults] = useState<SavedResultItem[]>([]);
   const [listLoadError, setListLoadError] = useState<string | null>(null);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  // 접힌 학년 그룹 키 집합 (기본 펼침)
+  const [collapsedGrades, setCollapsedGrades] = useState<Set<string>>(new Set());
+  const toggleGrade = (key: string) =>
+    setCollapsedGrades((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  // 학습 자료(참고자료) 라이브러리 — 목록(auxMaterials)은 AppContext에서 공유(문제화면과 동기화)
+  const [auxError, setAuxError] = useState<string | null>(null);
+  const [auxUploading, setAuxUploading] = useState(false);
+  const [auxUploadGrade, setAuxUploadGrade] = useState<string>("");
+  const [collapsedAuxGrades, setCollapsedAuxGrades] = useState<Set<string>>(new Set());
+  const [examplesCollapsed, setExamplesCollapsed] = useState(false);
+  const auxFileInputRef = useRef<HTMLInputElement>(null);
+  const toggleAuxGrade = (key: string) =>
+    setCollapsedAuxGrades((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const handleAuxUploadClick = () => auxFileInputRef.current?.click();
+
+  const handleAuxUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || isDemoMode) return;
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setAuxError(t("problemInput.auxPdfOnly"));
+      return;
+    }
+    setAuxUploading(true);
+    setAuxError(null);
+    try {
+      const result = await api.uploadAuxiliaryMaterial(
+        { file, grade: auxUploadGrade, title: file.name.replace(/\.[^.]+$/, "") },
+        userId,
+      );
+      setAuxMaterials((prev) => [result.item, ...prev.filter((m) => m.id !== result.item.id)]);
+    } catch (err: unknown) {
+      setAuxError(err instanceof Error ? err.message : t("problemInput.auxUploadFail"));
+    } finally {
+      setAuxUploading(false);
+    }
+  };
+
+  const handleAuxDelete = async (materialId: string, e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (isDemoMode || !window.confirm(t("problemInput.auxDeleteConfirm"))) return;
+    try {
+      await api.deleteAuxiliaryMaterial(materialId, userId);
+      setAuxMaterials((prev) => prev.filter((m) => m.id !== materialId));
+    } catch (err: unknown) {
+      setAuxError(err instanceof Error ? err.message : t("problemInput.auxUploadFail"));
+    }
+  };
 
   useEffect(() => {
     updateSavedResultsList();
@@ -136,7 +248,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
                 hour: "2-digit",
                 minute: "2-digit",
               });
-          return { problemId: item.problemId, timestamp: item.timestamp, dateStr };
+          return { problemId: item.problemId, timestamp: item.timestamp, dateStr, grade: item.grade ?? null };
         });
         setSavedResults(allResults);
       } catch (err: unknown) {
@@ -146,7 +258,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
       return;
     }
     // 서버(Firestore)를 유일한 진실 소스로 사용 — 어느 브라우저·기기에서든 동일하게 보이도록.
-    let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string }> = [];
+    let serverResults: Array<{ problem_id?: string; problemId?: string; timestamp?: string; grade?: string | null }> = [];
     try {
       const data = await api.getMyHistoryList(userId);
       serverResults = Array.isArray(data) ? data : [];
@@ -169,7 +281,7 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
             hour: "2-digit",
             minute: "2-digit",
           });
-      return { problemId: pid, timestamp: ts, dateStr };
+      return { problemId: pid, timestamp: ts, dateStr, grade: item.grade ?? null };
     });
 
     allResults.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -276,17 +388,6 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
     }
   };
 
-  const handleClearAllResults = async () => {
-    if (!window.confirm(t("sidebar.deleteAllConfirm"))) return;
-    for (const item of savedResults) {
-      const pid = item.problemId?.trim();
-      if (pid) await deleteResult(pid, userId);
-    }
-    clearAllResults();
-    await updateSavedResultsList();
-    onHistoryChanged?.();
-  };
-
   return (
     <>
       <div
@@ -347,84 +448,222 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
               </div>
             )}
 
-            <ul className={styles.historyList}>
-              {savedResults.length === 0 && !listLoadError ? (
+            {savedResults.length === 0 && !listLoadError ? (
+              <ul className={styles.historyList}>
                 <li className={styles.emptyMessage}>{t("sidebar.emptyResults")}</li>
-              ) : (
-                savedResults.map((item) => {
-                  const isActive = currentProblemId === item.problemId;
-                  return (
-                    <li
-                      key={item.problemId}
-                      className={`${styles.historyItem} ${isActive ? styles.historyItemActive : ""}`}
+              </ul>
+            ) : (
+              groupByGrade(savedResults).map((group) => {
+                const collapsed = collapsedGrades.has(group.key);
+                return (
+                  <div key={group.key} className={styles.gradeGroup}>
+                    <button
+                      type="button"
+                      className={styles.gradeGroupHeader}
+                      onClick={() => toggleGrade(group.key)}
+                      aria-expanded={!collapsed}
                     >
+                      <span
+                        className={styles.gradeGroupCaret}
+                        style={{ transform: collapsed ? "rotate(-90deg)" : "none" }}
+                        aria-hidden
+                      >
+                        ▾
+                      </span>
+                      <span className={styles.gradeGroupLabel}>{gradeGroupLabel(group.key, locale)}</span>
+                      <span className={styles.gradeGroupCount}>{group.items.length}</span>
+                    </button>
+                    {!collapsed && (
+                      <ul className={styles.historyList}>
+                        {group.items.map((item) => {
+                          const isActive = currentProblemId === item.problemId;
+                          return (
+                            <li
+                              key={item.problemId}
+                              className={`${styles.historyItem} ${isActive ? styles.historyItemActive : ""}`}
+                            >
+                              <button
+                                type="button"
+                                className={styles.historyItemMain}
+                                onClick={() => handleLoadResult(item.problemId)}
+                              >
+                                <div className={styles.historyItemTitle}>{getProblemDisplayLabel(item.problemId)}</div>
+                                {item.dateStr && <div className={styles.historyItemDate}>{item.dateStr}</div>}
+                              </button>
+                              <div className={styles.historyItemActions}>
+                                {!isDemoMode && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className={styles.itemActionBtn}
+                                      onClick={(e) => handleRenameResult(item.problemId, e)}
+                                      aria-label={t("sidebar.renameProblem")}
+                                      title={t("sidebar.renameProblem")}
+                                    >
+                                      <RenameIcon />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`${styles.itemActionBtn} ${styles.itemActionBtnDanger}`}
+                                      onClick={(e) => handleDeleteResult(item.problemId, e)}
+                                      aria-label={t("sidebar.delete")}
+                                      title={t("sidebar.delete")}
+                                    >
+                                      <DeleteIcon />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })
+            )}
+
+          </section>
+
+          {!isDemoMode && (
+            <section className={styles.historySection} aria-labelledby="sidebar-aux-heading">
+              <div className={styles.sectionHead}>
+                <h3 id="sidebar-aux-heading" className={styles.sectionTitle}>
+                  {locale === "en" ? "Learning materials" : "학습 자료"}
+                </h3>
+                {auxMaterials.length > 0 && <span className={styles.historyCount}>{auxMaterials.length}</span>}
+              </div>
+
+              <div className={styles.auxUploadRow}>
+                <select
+                  value={auxUploadGrade}
+                  onChange={(e) => setAuxUploadGrade(e.target.value)}
+                  className={styles.auxGradeSelect}
+                  disabled={auxUploading}
+                  aria-label={locale === "en" ? "Grade for upload" : "업로드할 학년"}
+                >
+                  {AUX_UPLOAD_GRADE_OPTIONS.map((g) => (
+                    <option key={g || "common"} value={g}>
+                      {auxGradeLabel(g || AUX_GRADE_COMMON, locale)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={styles.auxUploadBtn}
+                  onClick={handleAuxUploadClick}
+                  disabled={auxUploading}
+                >
+                  {auxUploading ? t("common.loading") : locale === "en" ? "Upload PDF" : "PDF 업로드"}
+                </button>
+                <input
+                  ref={auxFileInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  style={{ display: "none" }}
+                  onChange={handleAuxUpload}
+                />
+              </div>
+
+              {auxError && <p className={styles.listError}>{auxError}</p>}
+
+              {auxMaterials.length === 0 ? (
+                <ul className={styles.historyList}>
+                  <li className={styles.emptyMessage}>
+                    {locale === "en" ? "No materials uploaded yet." : "업로드된 학습 자료가 없습니다."}
+                  </li>
+                </ul>
+              ) : (
+                groupAuxByGrade(auxMaterials).map((group) => {
+                  const collapsed = collapsedAuxGrades.has(group.key);
+                  return (
+                    <div key={group.key} className={styles.gradeGroup}>
                       <button
                         type="button"
-                        className={styles.historyItemMain}
-                        onClick={() => handleLoadResult(item.problemId)}
+                        className={styles.gradeGroupHeader}
+                        onClick={() => toggleAuxGrade(group.key)}
+                        aria-expanded={!collapsed}
                       >
-                        <div className={styles.historyItemTitle}>{getProblemDisplayLabel(item.problemId)}</div>
-                        {item.dateStr && <div className={styles.historyItemDate}>{item.dateStr}</div>}
+                        <span
+                          className={styles.gradeGroupCaret}
+                          style={{ transform: collapsed ? "rotate(-90deg)" : "none" }}
+                          aria-hidden
+                        >
+                          ▾
+                        </span>
+                        <span className={styles.gradeGroupLabel}>{auxGradeLabel(group.key, locale)}</span>
+                        <span className={styles.gradeGroupCount}>{group.items.length}</span>
                       </button>
-                      <div className={styles.historyItemActions}>
-                        {!isDemoMode && (
-                          <>
-                            <button
-                              type="button"
-                              className={styles.itemActionBtn}
-                              onClick={(e) => handleRenameResult(item.problemId, e)}
-                              aria-label={t("sidebar.renameProblem")}
-                              title={t("sidebar.renameProblem")}
-                            >
-                              <RenameIcon />
-                            </button>
-                            <button
-                              type="button"
-                              className={`${styles.itemActionBtn} ${styles.itemActionBtnDanger}`}
-                              onClick={(e) => handleDeleteResult(item.problemId, e)}
-                              aria-label={t("sidebar.delete")}
-                              title={t("sidebar.delete")}
-                            >
-                              <DeleteIcon />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </li>
+                      {!collapsed && (
+                        <ul className={styles.historyList}>
+                          {group.items.map((m) => (
+                            <li key={m.id} className={styles.historyItem}>
+                              <div className={styles.historyItemMain} style={{ cursor: "default" }}>
+                                <div className={styles.historyItemTitle}>{m.title || m.filename}</div>
+                                <div className={styles.historyItemDate}>
+                                  {m.filename}
+                                  {m.chunk_count ? ` · ${m.chunk_count}${locale === "en" ? " chunks" : "청크"}` : ""}
+                                </div>
+                              </div>
+                              <div className={styles.historyItemActions}>
+                                <button
+                                  type="button"
+                                  className={`${styles.itemActionBtn} ${styles.itemActionBtnDanger}`}
+                                  onClick={(e) => handleAuxDelete(m.id, e)}
+                                  aria-label={t("sidebar.delete")}
+                                  title={t("sidebar.delete")}
+                                >
+                                  <DeleteIcon />
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   );
                 })
               )}
-            </ul>
-
-            {savedResults.length > 0 && !isDemoMode && (
-              <button type="button" className={styles.clearAllBtn} onClick={handleClearAllResults}>
-                {t("sidebar.clearAll")}
-              </button>
-            )}
-          </section>
+            </section>
+          )}
 
           <section className={styles.historySection} aria-labelledby="sidebar-examples-heading">
-            <div className={styles.sectionHead}>
-              <h3 id="sidebar-examples-heading" className={styles.sectionTitle}>
+            <button
+              type="button"
+              className={styles.sectionToggle}
+              onClick={() => setExamplesCollapsed((v) => !v)}
+              aria-expanded={!examplesCollapsed}
+            >
+              <span
+                className={styles.gradeGroupCaret}
+                style={{ transform: examplesCollapsed ? "rotate(-90deg)" : "none" }}
+                aria-hidden
+              >
+                ▾
+              </span>
+              <span id="sidebar-examples-heading" className={styles.sectionTitle}>
                 {locale === "en" ? "Examples" : "예제"}
-              </h3>
-            </div>
-            <ul className={styles.historyList}>
-              {PROBLEM_DROPDOWN_OPTIONS.map(({ file, label }) => (
-                <li
-                  key={file}
-                  className={`${styles.historyItem} ${currentProblemId === file ? styles.historyItemActive : ""}`}
-                >
-                  <button
-                    type="button"
-                    className={styles.historyItemMain}
-                    onClick={() => handleSelectExample(file)}
+              </span>
+            </button>
+            {!examplesCollapsed && (
+              <ul className={styles.historyList}>
+                {PROBLEM_DROPDOWN_OPTIONS.map(({ file, label }) => (
+                  <li
+                    key={file}
+                    className={`${styles.historyItem} ${currentProblemId === file ? styles.historyItemActive : ""}`}
                   >
-                    <div className={styles.historyItemTitle}>{label}</div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    <button
+                      type="button"
+                      className={styles.historyItemMain}
+                      onClick={() => handleSelectExample(file)}
+                    >
+                      <div className={styles.historyItemTitle}>{label}</div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {isAdmin(userId) && (

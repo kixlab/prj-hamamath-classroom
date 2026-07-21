@@ -84,7 +84,7 @@
   padding: 12px var(--page-padding-x) 20px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .navAction {
@@ -132,8 +132,14 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 0;
-  flex: 1;
+  flex-shrink: 0;
+}
+
+/* 섹션 사이 구분선 (기록 / 학습 자료 / 예제 / 관리자) */
+.historySection + .historySection,
+.historySection + .adminSection {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
 }
 
 .sectionHead {
@@ -141,6 +147,23 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* 접기/펼치기 가능한 섹션 헤더 (예제 등) */
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sectionToggle:hover .sectionTitle {
+  color: var(--color-text);
 }
 
 .sectionTitle {
@@ -179,8 +202,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow-y: auto;
-  min-height: 80px;
 }
 
 .emptyMessage {
@@ -278,27 +299,7 @@
   background: #fef2f2;
 }
 
-.clearAllBtn {
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.clearAllBtn:hover {
-  color: var(--color-error);
-}
-
 .adminSection {
-  padding-top: 4px;
-  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -314,4 +315,85 @@
 .navActionMuted {
   font-weight: 500;
   color: var(--color-text-secondary);
+}
+
+/* 학년별 그룹 (문제 기록·학습 자료 공용) */
+.gradeGroup {
+  margin-bottom: 2px;
+}
+
+.gradeGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.gradeGroupHeader:hover {
+  color: var(--color-text);
+}
+
+.gradeGroupCaret {
+  display: inline-block;
+  font-size: 0.625rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.gradeGroupLabel {
+  flex: 1;
+}
+
+.gradeGroupCount {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+/* 학습 자료 업로드 행 */
+.auxUploadRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0 8px;
+}
+
+.auxGradeSelect {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  padding: 5px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.auxUploadBtn {
+  flex: 1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.auxUploadBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

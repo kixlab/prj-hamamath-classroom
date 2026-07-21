@@ -434,7 +434,7 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .auxHeader {
@@ -448,7 +448,7 @@
 .auxTitleBlock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -463,24 +463,6 @@
   margin: 0;
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-  line-height: 1.45;
-}
-
-.auxSelectBox {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-}
-
-.auxSelectHint {
-  margin: 0;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text);
   line-height: 1.45;
 }
 
@@ -593,4 +575,142 @@
   .imageActions {
     flex-direction: column;
   }
+}
+
+/* 토글 + 활성 컨트롤(드롭다운/업로드 버튼)을 한 줄에 */
+.auxControlRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 참고 자료: 기존 자료 선택 / 직접 업로드 모드 토글 (세그먼트) */
+.auxModeTabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-bg-secondary, #f1f5f9);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.auxModeTab {
+  flex: 1;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+.auxModeTab:hover {
+  color: var(--color-text);
+}
+
+.auxModeTabActive,
+.auxModeTabActive:hover {
+  background: #fff;
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 기존 자료 선택: 드롭다운 + 선택됨 목록 */
+.auxSelectBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auxSelectDropdown {
+  flex: 1 1 200px;
+  min-width: 180px;
+  font-size: 0.875rem;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.auxSelectDropdown:disabled {
+  background: var(--color-bg-secondary, #f1f5f9);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.auxSelectDropdown:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.auxSelectedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auxSelectedRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.auxSelectedTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auxSelectedRemove {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.auxSelectedRemove:hover {
+  border-color: var(--color-error, #ef4444);
+  color: var(--color-error, #ef4444);
+}
+
+/* 직접 업로드 영역 */
+.auxUploadZone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+}
+
+.auxUploadHint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
 }

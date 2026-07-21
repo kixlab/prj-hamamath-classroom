@@ -2,7 +2,7 @@ import { useState, useRef, ChangeEvent, FormEvent, ReactNode, useEffect } from "
 import { useApp } from "../../contexts/AppContext";
 import type { CoTData } from "../../types";
 import { saveResult, fetchHistoryListForUser, loadResult } from "../../hooks/useStorage";
-import { api, type AuxiliaryMaterialItem } from "../../services/api";
+import { api } from "../../services/api";
 import { logUserEvent } from "../../services/eventLogger";
 import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
@@ -14,7 +14,7 @@ import { buildDemoCotFromProblemInput, loadDemoSavedWorkflow } from "../../demo/
 import { loadMirroredTestResult } from "../../demo/demoMirror";
 import { getDemoSourceUserId } from "../../demo/demoAccount";
 import { PROBLEM_DROPDOWN_OPTIONS, getProblemDisplayLabel } from "../../utils/problemIdAlias";
-import { resolveAuxUploadGrade } from "../../utils/auxiliaryMaterial";
+import { resolveAuxUploadGrade, parseAuxMaterialGradeKey, AUX_GRADE_COMMON } from "../../utils/auxiliaryMaterial";
 import styles from "./ProblemInput.module.css";
 
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
@@ -315,6 +315,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     setRequestedExampleFile,
     selectedAuxiliaryMaterialIds,
     setSelectedAuxiliaryMaterialIds,
+    auxMaterials,
+    setAuxMaterials,
   } = useApp();
   const { t, locale } = useLocale();
   const [problemList, setProblemList] = useState<string[]>([]);
@@ -325,9 +327,10 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const auxInputRef = useRef<HTMLInputElement>(null);
   const hydratedProblemIdRef = useRef<string | null>(null);
-  const [auxMaterials, setAuxMaterials] = useState<AuxiliaryMaterialItem[]>([]);
   const [auxUploading, setAuxUploading] = useState(false);
   const [auxError, setAuxError] = useState<string | null>(null);
+  /** 참고 자료 입력 방식: 기존 라이브러리에서 선택 vs 새 파일 직접 업로드 */
+  const [auxMode, setAuxMode] = useState<"select" | "upload">("select");
 
   useEffect(() => {
     if (!currentProblemId && !currentCotData) {
@@ -390,35 +393,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     };
   }, [userId, isDemoMode]);
 
-  /** 참고 자료 목록 로드 — 기존 자료는 비활성(미선택), 업로드 시에만 자동 선택 */
-  const reloadAuxMaterials = async () => {
-    if (isDemoMode || !userId?.trim()) {
-      setAuxMaterials([]);
-      setSelectedAuxiliaryMaterialIds([]);
-      return;
-    }
-    try {
-      const data = await api.listAuxiliaryMaterials(null, userId);
-      setAuxMaterials(Array.isArray(data.items) ? data.items : []);
-      setSelectedAuxiliaryMaterialIds([]);
-      setAuxError(null);
-    } catch (err) {
-      console.warn("참고 자료 목록 조회 실패:", err);
-      setAuxError(t("problemInput.auxLoadFail"));
-    }
-  };
+  // 참고 자료 목록 로드는 AppProvider가 계정 변경 시 수행 (사이드바와 공유). 여기선 공유 목록을 그대로 사용.
 
-  useEffect(() => {
-    void reloadAuxMaterials();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, isDemoMode]);
-
-  const toggleAuxMaterial = (id: string) => {
-    const next = selectedAuxiliaryMaterialIds.includes(id)
-      ? selectedAuxiliaryMaterialIds.filter((x) => x !== id)
-      : [...selectedAuxiliaryMaterialIds, id];
-    setSelectedAuxiliaryMaterialIds(next);
-  };
 
   const handleAuxUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -452,6 +428,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
       if (!selectedAuxiliaryMaterialIds.includes(item.id)) {
         setSelectedAuxiliaryMaterialIds([...selectedAuxiliaryMaterialIds, item.id]);
       }
+      // 업로드 후 선택 목록으로 전환 → 방금 올린 자료가 체크된 상태로 보이게
+      setAuxMode("select");
     } catch (err: any) {
       setAuxError(err?.message || t("problemInput.auxUploadFail"));
     } finally {
@@ -459,17 +437,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     }
   };
 
-  const handleAuxDelete = async (materialId: string) => {
-    if (!window.confirm(t("problemInput.auxDeleteConfirm"))) return;
-    if (isDemoMode) return;
-    try {
-      await api.deleteAuxiliaryMaterial(materialId, userId);
-      setAuxMaterials((prev) => prev.filter((m) => m.id !== materialId));
-      setSelectedAuxiliaryMaterialIds(selectedAuxiliaryMaterialIds.filter((id) => id !== materialId));
-    } catch (err: any) {
-      setAuxError(err?.message || t("problemInput.auxUploadFail"));
-    }
-  };
+  // 참고 자료 삭제는 사이드바 '학습 자료' 라이브러리에서 관리 (문제화면에서는 선택/업로드만)
 
   /** 드롭다운에서 계정 저장 문제를 고르면 해당 워크플로우를 불러온다(사이드바 클릭과 동일). */
   const handleLoadSaved = async (problemId: string) => {
@@ -733,6 +701,19 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     && formData.semester.trim()
   );
 
+  // 현재 문제 학년의 참고 자료만 표시 (+ 공통 자료는 항상). 학년 미입력 시 전체 표시.
+  const currentAuxGradeKey = resolveAuxUploadGrade(formData.grade);
+  const visibleAuxMaterials =
+    currentAuxGradeKey === AUX_GRADE_COMMON
+      ? auxMaterials
+      : auxMaterials.filter((m) => {
+          const key = parseAuxMaterialGradeKey(m.grade);
+          return key === currentAuxGradeKey || key === AUX_GRADE_COMMON;
+        });
+  // 드롭다운(아직 선택 안 된 현재 학년 자료) / 선택됨 목록(전체에서 선택된 것)
+  const auxMaterialsToAdd = visibleAuxMaterials.filter((m) => !selectedAuxiliaryMaterialIds.includes(m.id));
+  const selectedAuxMaterials = auxMaterials.filter((m) => selectedAuxiliaryMaterialIds.includes(m.id));
+
   return (
     <div className={styles.page}>
       <form onSubmit={handleSubmit} className={styles.shell}>
@@ -841,75 +822,126 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               <h3 className={styles.auxTitle}>{t("problemInput.auxTitle")}</h3>
               <p className={styles.auxHint}>{t("problemInput.auxHint")}</p>
             </div>
-            <div>
-              <input
-                ref={auxInputRef}
-                type="file"
-                accept=".pdf,application/pdf"
-                className={styles.fileInputHidden}
-                onChange={handleAuxUpload}
-              />
-              <button
-                type="button"
-                className={styles.auxUploadBtn}
-                disabled={auxUploading || isDemoMode}
-                onClick={() => auxInputRef.current?.click()}
-              >
-                {auxUploading ? t("problemInput.auxUploading") : t("problemInput.auxUpload")}
-              </button>
-            </div>
           </div>
 
           {isDemoMode && <p className={styles.auxNote}>{t("problemInput.auxDemoNote")}</p>}
           {auxError && <p className={styles.auxError}>{auxError}</p>}
 
-          <div className={styles.auxSelectBox}>
-            {auxMaterials.length > 0 ? (
-              <>
-                <p className={styles.auxSelectHint}>{t("problemInput.auxSelectHint")}</p>
-                <div className={styles.auxFileTabs} role="list">
-                  {auxMaterials.map((item) => {
-                    const selected = selectedAuxiliaryMaterialIds.includes(item.id);
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="listitem"
-                        className={`${styles.auxFileTab} ${selected ? styles.auxFileTabActive : ""}`}
-                        onClick={() => toggleAuxMaterial(item.id)}
-                        title={item.filename}
-                        aria-pressed={selected}
-                      >
-                        <span className={styles.auxFileTabLabel}>{item.title || item.filename}</span>
-                        {selected ? <span aria-hidden>✓</span> : null}
-                        <span
-                          className={styles.auxFileTabDelete}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={t("problemInput.auxDelete")}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            void handleAuxDelete(item.id);
-                          }}
-                          onKeyDown={(ev) => {
-                            if (ev.key === "Enter" || ev.key === " ") {
-                              ev.preventDefault();
-                              ev.stopPropagation();
-                              void handleAuxDelete(item.id);
-                            }
-                          }}
-                        >
-                          ×
-                        </span>
-                      </button>
-                    );
-                  })}
+          {!isDemoMode && (
+            <>
+              {/* 입력 방식 토글 + 활성 컨트롤(드롭다운/업로드)을 한 줄에 배치 */}
+              <div className={styles.auxControlRow}>
+                <div className={styles.auxModeTabs} role="tablist" aria-label={t("problemInput.auxTitle")}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={auxMode === "select"}
+                    className={`${styles.auxModeTab} ${auxMode === "select" ? styles.auxModeTabActive : ""}`}
+                    onClick={() => setAuxMode("select")}
+                  >
+                    {locale === "en" ? "Select existing" : "기존 자료 선택"}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={auxMode === "upload"}
+                    className={`${styles.auxModeTab} ${auxMode === "upload" ? styles.auxModeTabActive : ""}`}
+                    onClick={() => setAuxMode("upload")}
+                  >
+                    {locale === "en" ? "Upload new" : "직접 업로드"}
+                  </button>
                 </div>
-              </>
-            ) : (
-              <p className={styles.auxEmpty}>{t("problemInput.auxEmptyAll")}</p>
-            )}
-          </div>
+
+                {auxMode === "select" ? (
+                  <select
+                    className={styles.auxSelectDropdown}
+                    value=""
+                    disabled={visibleAuxMaterials.length === 0}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      if (id && !selectedAuxiliaryMaterialIds.includes(id)) {
+                        setSelectedAuxiliaryMaterialIds([...selectedAuxiliaryMaterialIds, id]);
+                      }
+                    }}
+                  >
+                    <option value="">
+                      {visibleAuxMaterials.length === 0
+                        ? locale === "en"
+                          ? "No materials for this grade"
+                          : "이 학년 자료 없음"
+                        : auxMaterialsToAdd.length > 0
+                          ? locale === "en"
+                            ? "Select a material…"
+                            : "자료를 선택하세요…"
+                          : locale === "en"
+                            ? "All materials added"
+                            : "모든 자료가 추가됨"}
+                    </option>
+                    {auxMaterialsToAdd.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.title || m.filename}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <>
+                    <input
+                      ref={auxInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className={styles.fileInputHidden}
+                      onChange={handleAuxUpload}
+                    />
+                    <button
+                      type="button"
+                      className={styles.auxUploadBtn}
+                      disabled={auxUploading}
+                      onClick={() => auxInputRef.current?.click()}
+                    >
+                      {auxUploading
+                        ? t("problemInput.auxUploading")
+                        : locale === "en"
+                          ? "Choose PDF file"
+                          : "PDF 파일 선택"}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* 기존 자료 선택 모드: 선택된 자료 목록 (아래 전체 폭) */}
+              {auxMode === "select" && selectedAuxMaterials.length > 0 && (
+                <ul className={styles.auxSelectedList}>
+                  {selectedAuxMaterials.map((m) => (
+                    <li key={m.id} className={styles.auxSelectedRow}>
+                      <span className={styles.auxSelectedTitle} title={m.filename}>
+                        {m.title || m.filename}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.auxSelectedRemove}
+                        onClick={() =>
+                          setSelectedAuxiliaryMaterialIds(
+                            selectedAuxiliaryMaterialIds.filter((id) => id !== m.id),
+                          )
+                        }
+                      >
+                        {locale === "en" ? "Remove" : "제거"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* 직접 업로드 모드: 저장 학년 안내 */}
+              {auxMode === "upload" && (
+                <p className={styles.auxUploadHint}>
+                  {locale === "en"
+                    ? `Saved under grade: ${formData.grade.trim() || "Common"}`
+                    : `저장 학년: ${formData.grade.trim() || "공통"}`}
+                </p>
+              )}
+            </>
+          )}
         </section>
 
         <div className={styles.contentGrid}>

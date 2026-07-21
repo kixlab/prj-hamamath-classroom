@@ -127,6 +127,7 @@ export function getSavedResults(): SavedResults {
 export interface HistoryListItem {
   problemId: string;
   timestamp: string;
+  grade?: string | null;
 }
 
 function enqueuePending(userId: string, result: SavedResult): void {
@@ -189,7 +190,7 @@ export async function fetchHistoryListForUser(userId: string): Promise<HistoryLi
 
   if (isDemoUserId(uid)) {
     return Object.entries(readDemoStore(uid))
-      .map(([problemId, result]) => ({ problemId, timestamp: result.timestamp ?? '' }))
+      .map(([problemId, result]) => ({ problemId, timestamp: result.timestamp ?? '', grade: (result.cotData as { grade?: string } | null)?.grade ?? null }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
@@ -202,6 +203,7 @@ export async function fetchHistoryListForUser(userId: string): Promise<HistoryLi
           ?? (item as { problemId?: string }).problemId
           ?? '').trim(),
         timestamp: (item as { timestamp?: string }).timestamp ?? '',
+        grade: (item as { grade?: string | null }).grade ?? null,
       }))
       .filter((item) => item.problemId)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
