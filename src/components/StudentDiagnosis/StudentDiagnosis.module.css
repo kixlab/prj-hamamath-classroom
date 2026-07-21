@@ -1976,6 +1976,30 @@
   color: var(--color-primary);
 }
 
+.handwritingRecognizeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.handwritingRecognizeBtn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.handwritingRecognizeBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .handwritingFileInput {
   position: absolute;
   width: 0;

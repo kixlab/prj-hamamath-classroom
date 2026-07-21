@@ -495,6 +495,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     );
   }, [locale, defaultStudentName, isDefaultStudentName]);
   const [currentStudentId, setCurrentStudentId] = useState<string>("student-1");
+  // 지금까지 사용된 최대 학생 번호. 삭제해도 줄지 않아 번호를 재사용하지 않는다.
+  const [studentSeq, setStudentSeq] = useState<number>(1);
+  const currentStudentName =
+    students.find((student) => student.id === currentStudentId)?.name ?? currentStudentId;
   // studentAnswers[studentId][problemKey][subQuestionId] = answer
   const [studentAnswers, setStudentAnswers] = useState<Record<string, Record<string, Record<string, string>>>>({});
   const [saving, setSaving] = useState(false);
@@ -502,6 +506,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // 학생별·문제별로 최소 한 번 이상 저장이 완료되었는지 여부
   const [canDiagnose, setCanDiagnose] = useState<Record<string, Record<string, boolean>>>({});
   const [bulkDiagnosing, setBulkDiagnosing] = useState(false);
+  const [recognizingAnswers, setRecognizingAnswers] = useState(false);
   // diagnosisResults[studentId][problemKey][subQuestionId] = { level, reason }
   const [diagnosisResults, setDiagnosisResults] = useState<Record<string, Record<string, Record<string, { level: string; reason: string }>>>>({});
   // 개별 하위문항 진단 편집 모드 (등급/피드백)
@@ -579,11 +584,16 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const { students: serverStudents } = await api.getStudentList(userId);
+        const { students: serverStudents, seq } = await api.getStudentList(userId);
         if (cancelled) return;
         if (Array.isArray(serverStudents)) {
           const list = serverStudents.filter((s: any) => s && s.id).map((s: any) => ({ id: s.id, name: s.name || s.id }));
           setStudents(list.length > 0 ? list : [{ id: "student-1", name: defaultStudentName(1) }]);
+          const maxExisting = list.reduce((max: number, s: any) => {
+            const m = /^student-(\d+)$/.exec(s.id);
+            return m ? Math.max(max, parseInt(m[1], 10)) : max;
+          }, 0);
+          setStudentSeq(Math.max(typeof seq === "number" ? seq : 0, maxExisting, 1));
         }
       } catch (err) {
         if (!cancelled) console.warn("학생 목록 불러오기 오류:", err);
@@ -758,7 +768,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.getHandwritten(currentStudentId, problemIdForDiagnosis, userId);
+        const res = await api.getHandwritten(
+          currentStudentId,
+          currentStudentName,
+          problemIdForDiagnosis,
+          userId,
+        );
         if (cancelled) return;
         setHandwrittenUploads((prev) => ({
           ...prev,
@@ -782,7 +797,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return () => {
       cancelled = true;
     };
-  }, [userId, problemIdForDiagnosis, currentStudentId, isDemo]);
+  }, [userId, problemIdForDiagnosis, currentStudentId, currentStudentName, isDemo]);
 
   // 학생 진단 UI 상태 변경 시 서버(Firestore)에 자동 저장
   useEffect(() => {
@@ -838,23 +853,26 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   };
 
   const handleAddStudent = () => {
-    const name = window.prompt(t("diagnosis.addStudentPrompt"), defaultStudentName(students.length + 1));
+    const maxExisting = students.reduce((max, s) => {
+      const m = /^student-(\d+)$/.exec(s.id);
+      return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    // 삭제된 번호를 재사용하지 않도록 지금까지의 최대 번호(studentSeq) 다음 값을 사용
+    const nextNum = Math.max(studentSeq, maxExisting) + 1;
+    const name = window.prompt(t("diagnosis.addStudentPrompt"), defaultStudentName(nextNum));
     if (!name || !name.trim()) return;
-    const nextNum =
-      students.reduce((max, s) => {
-        const m = /^student-(\d+)$/.exec(s.id);
-        return m ? Math.max(max, parseInt(m[1], 10)) : max;
-      }, 0) + 1;
     const id = `student-${nextNum}`;
     const newStudent = { id, name: name.trim() };
     const nextList = [...students, newStudent];
     setStudents(nextList);
     setCurrentStudentId(id);
+    setStudentSeq(nextNum);
     if (isDemo) return;
     api
       .saveStudentList(
         nextList.map((s) => ({ id: s.id, name: s.name })),
         userId,
+        nextNum,
       )
       .catch((err) => console.warn("학생 목록 저장 실패:", err));
   };
@@ -922,7 +940,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       });
       if (isDemo) return;
       try {
-        await api.deleteHandwritten(currentStudentId, currentProblemKey, slot, userId);
+        await api.deleteHandwritten(
+          currentStudentId,
+          currentStudentName,
+          currentProblemKey,
+          slot,
+          userId,
+        );
       } catch (err: any) {
         console.warn("손글씨 이미지 서버 삭제 실패:", err);
       }
@@ -946,13 +970,92 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       });
       if (isDemo) return;
       try {
-        await api.uploadHandwritten(currentStudentId, currentProblemKey, slot, dataUrl, userId);
+        await api.uploadHandwritten(
+          currentStudentId,
+          currentStudentName,
+          currentProblemKey,
+          slot,
+          dataUrl,
+          userId,
+        );
       } catch (err: any) {
         console.warn("손글씨 이미지 서버 저장 실패:", err);
         alert(err?.message ?? t("diagnosis.imageSaveFail"));
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  /** 업로드된 풀이 이미지를 Vision으로 읽어 하위문항별 답안 칸에 채움 (이후 수정 가능) */
+  const handleRecognizeAnswersFromImages = async () => {
+    if (isDemo) {
+      alert(t("diagnosis.recognizeDemoUnavailable"));
+      return;
+    }
+    if (!currentStudentId || !currentProblemKey) return;
+    const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
+    const images = urls.filter((u): u is string => !!u?.trim());
+    if (images.length === 0) {
+      alert(t("diagnosis.recognizeNeedImage"));
+      return;
+    }
+    if (diagnosisItems.length === 0) {
+      alert(t("diagnosis.recognizeNeedSubq"));
+      return;
+    }
+
+    const existing = studentAnswers[currentStudentId]?.[currentProblemKey] ?? {};
+    const hasExisting = diagnosisItems.some((item) => (existing[item.id] ?? "").trim().length > 0);
+    if (hasExisting && !window.confirm(t("diagnosis.recognizeOverwriteConfirm"))) {
+      return;
+    }
+
+    setRecognizingAnswers(true);
+    try {
+      const { answers } = await api.recognizeHandwrittenAnswers(
+        {
+          images,
+          sub_questions: diagnosisItems.map((item, index) => ({
+            sub_question_id: item.id,
+            display_code: item.displayCode,
+            question: item.question,
+            // 학습지 PDF의 원형 번호(1,2,3…)와 동일 — 영역별 매칭용
+            item_number: index + 1,
+          })),
+          language: getAppLanguage(locale),
+        },
+        userId,
+      );
+
+      let filled = 0;
+      const nextByProblem: Record<string, string> = {
+        ...(studentAnswers[currentStudentId]?.[currentProblemKey] ?? {}),
+      };
+      for (const item of diagnosisItems) {
+        const text = (answers?.[item.id] ?? "").trim();
+        if (!text) continue;
+        nextByProblem[item.id] = text;
+        filled += 1;
+      }
+      setStudentAnswers((prev) => ({
+        ...prev,
+        [currentStudentId]: {
+          ...(prev[currentStudentId] ?? {}),
+          [currentProblemKey]: nextByProblem,
+        },
+      }));
+
+      if (filled === 0) {
+        alert(t("diagnosis.recognizeEmpty"));
+      } else {
+        setSaveMessage(t("diagnosis.recognizeDone", { n: filled }));
+      }
+    } catch (err: any) {
+      console.error("손글씨 답안 인식 오류:", err);
+      alert(err?.message ?? t("diagnosis.recognizeFail"));
+    } finally {
+      setRecognizingAnswers(false);
+    }
   };
 
   const handleStudentAnswerChange = (id: string, value: string) => {
@@ -1850,6 +1953,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   }}
                                 />
                               </label>
+                              {hasAnyImage && (
+                                <button
+                                  type="button"
+                                  className={styles.handwritingRecognizeBtn}
+                                  onClick={handleRecognizeAnswersFromImages}
+                                  disabled={recognizingAnswers || diagnosisItems.length === 0}
+                                  title={t("diagnosis.recognizeAnswers")}
+                                >
+                                  {recognizingAnswers ? t("diagnosis.recognizingAnswers") : t("diagnosis.recognizeAnswers")}
+                                </button>
+                              )}
                               {([1, 2] as const).map((slot) => {
                                 const dataUrl = urls[slot - 1];
                                 if (!dataUrl) return null;

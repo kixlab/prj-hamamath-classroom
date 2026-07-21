@@ -316,11 +316,11 @@ export const api = {
   },
 
   /** 학생 목록 조회 (다른 브라우저에서 왼쪽 패널 복원용). 404면 빈 목록 반환 */
-  async getStudentList(userId?: string | null): Promise<{ students: Array<{ id: string; name: string }> }> {
+  async getStudentList(userId?: string | null): Promise<{ students: Array<{ id: string; name: string }>; seq?: number }> {
     const response = await fetch(getApiUrl("/api/v1/student-list"), {
       headers: getHistoryHeadersWithFallback(userId),
     });
-    if (response.status === 404) return { students: [] };
+    if (response.status === 404) return { students: [], seq: 0 };
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
@@ -410,8 +410,9 @@ export const api = {
   },
 
   /** 학생 목록 저장 (다른 브라우저에서 복원용). userIdForHeader 있으면 헤더 폴백으로 사용 */
-  async saveStudentList(students: Array<{ id: string; name: string }>, userIdForHeader?: string): Promise<void> {
-    const body = { students };
+  async saveStudentList(students: Array<{ id: string; name: string }>, userIdForHeader?: string, seq?: number): Promise<void> {
+    const body: { students: Array<{ id: string; name: string }>; seq?: number } = { students };
+    if (typeof seq === "number") body.seq = seq;
     const response = await fetch(getApiUrl("/api/v1/student-list"), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...getHistoryHeadersWithFallback(userIdForHeader) },
@@ -647,9 +648,41 @@ export const api = {
     return response.json();
   },
 
+  /** 손글씨 이미지에서 하위문항별 답안 인식 (Vision). 결과는 편집 가능하도록 프론트에서 입력칸에 채움 */
+  async recognizeHandwrittenAnswers(
+    payload: {
+      images: string[];
+      sub_questions: Array<{
+        sub_question_id: string;
+        display_code?: string;
+        question?: string;
+        item_number?: number;
+      }>;
+      language?: string;
+    },
+    userId?: string | null
+  ): Promise<{ answers: Record<string, string> }> {
+    const response = await fetch(getApiUrl("/api/v1/handwritten/recognize"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(
+        (err as { detail?: string }).detail || "손글씨 답안 인식에 실패했습니다."
+      );
+    }
+    return response.json();
+  },
+
   /** 손글씨 이미지 업로드 (해당 학생·문제, slot 1 또는 2). image는 data URL 또는 base64 문자열. */
   async uploadHandwritten(
     studentId: string,
+    studentName: string,
     problemId: string,
     slot: 1 | 2,
     imageDataUrl: string,
@@ -663,6 +696,7 @@ export const api = {
       },
       body: JSON.stringify({
         student_id: studentId,
+        student_name: studentName,
         problem_id: problemId,
         slot,
         image: imageDataUrl,
@@ -683,10 +717,15 @@ export const api = {
   /** 손글씨 이미지 조회 (해당 학생·문제, slot1/slot2 base64 data URL). 404면 없음으로 반환 */
   async getHandwritten(
     studentId: string,
+    studentName: string,
     problemId: string,
     userId?: string | null
   ): Promise<{ slot1: string | null; slot2: string | null }> {
-    const params = new URLSearchParams({ student_id: studentId, problem_id: problemId });
+    const params = new URLSearchParams({
+      student_id: studentId,
+      student_name: studentName,
+      problem_id: problemId,
+    });
     const response = await fetch(getApiUrl(`/api/v1/handwritten?${params}`), {
       headers: getHistoryHeadersWithFallback(userId),
     });
@@ -700,11 +739,17 @@ export const api = {
   /** 손글씨 이미지 삭제 (해당 학생·문제, slot 1 또는 2) */
   async deleteHandwritten(
     studentId: string,
+    studentName: string,
     problemId: string,
     slot: 1 | 2,
     userId?: string | null
   ): Promise<{ status: string; deleted: boolean }> {
-    const params = new URLSearchParams({ student_id: studentId, problem_id: problemId, slot: String(slot) });
+    const params = new URLSearchParams({
+      student_id: studentId,
+      student_name: studentName,
+      problem_id: problemId,
+      slot: String(slot),
+    });
     const response = await fetch(getApiUrl(`/api/v1/handwritten?${params}`), {
       method: "DELETE",
       headers: getHistoryHeadersWithFallback(userId),
