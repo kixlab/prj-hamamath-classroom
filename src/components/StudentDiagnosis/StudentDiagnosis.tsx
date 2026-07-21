@@ -437,9 +437,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const mainSolution = effectiveCotData?.main_solution ?? null;
   const grade = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
   const semester = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.semester : undefined) ?? effectiveCotData?.semester ?? "";
-  const subjectArea = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
-  const cotStepsForPrompt = effectiveCotData?.steps;
-  const considerationsForPrompt = effectiveCotData?.considerations as string[] | undefined;
 
   // sub_question_id 기준으로 루브릭을 빠르게 찾을 수 있도록 매핑
   const rubricBySubQuestionId: Record<string, any> = {};
@@ -1792,10 +1789,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               solution={mainSolution}
               grade={grade}
               semester={semester}
-              subjectArea={subjectArea}
-              cotSteps={cotStepsForPrompt}
-              guideSubQuestions={guideSubQuestions}
-              considerations={considerationsForPrompt}
             />
           ) : (
             <aside className={styles.diagnosisProblemPlaceholder}>
