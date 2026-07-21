@@ -1,3 +1,5 @@
+import type { AuxiliaryMaterialItem } from '../services/api';
+
 // API 응답 타입 정의 (createCoT 응답·UI 공용)
 export interface CoTStep {
   step_number: number;
@@ -84,6 +86,12 @@ export interface AppContextType {
   /** 문항 생성 시 RAG에 사용할 참고 자료 ID 목록 */
   selectedAuxiliaryMaterialIds: string[];
   setSelectedAuxiliaryMaterialIds: (ids: string[]) => void;
+  /** 참고 자료 라이브러리 (사이드바·문제화면 공유 — 어느 쪽에서 업로드/삭제해도 즉시 반영) */
+  auxMaterials: AuxiliaryMaterialItem[];
+  setAuxMaterials: (
+    items: AuxiliaryMaterialItem[] | ((prev: AuxiliaryMaterialItem[]) => AuxiliaryMaterialItem[]),
+  ) => void;
+  reloadAuxMaterials: () => Promise<void>;
 }
 
 /** 루브릭 확정 후 학생 진단 화면에 주입할 답안 시드 */
