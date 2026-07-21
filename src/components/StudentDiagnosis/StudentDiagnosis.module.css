@@ -141,44 +141,6 @@
   background: var(--color-bg);
 }
 
-.railProblemSelect {
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.railProblemSelectLabel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.railProblemSelectCaption {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.railProblemSelectInput {
-  width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  font-size: 0.8rem;
-  color: var(--color-text);
-  box-sizing: border-box;
-}
-
-.railProblemSelectInput:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
 .studentListRail {
   width: 220px;
   flex-shrink: 0;
@@ -307,6 +269,83 @@
   overflow-y: auto;
   padding: var(--page-padding-y) var(--page-padding-x) var(--page-padding-bottom);
   box-sizing: border-box;
+}
+
+.problemTabsSection {
+  margin-bottom: 14px;
+  min-width: 0;
+}
+
+.problemTabsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.problemTabsTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.problemTabsStudent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.problemTabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+}
+
+.problemTab {
+  flex: 0 0 auto;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.problemTab:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.problemTabActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.problemTabActive:hover {
+  color: #fff;
+}
+
+.problemTabsEmpty {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
 }
 
 .studentTitleName {
@@ -1922,6 +1961,37 @@
   margin-top: 8px;
 }
 
+.problemAnswerLoading {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--color-text-secondary);
+}
+
+.problemAnswerLoading p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.problemAnswerLoadingSpinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: problemAnswerLoadingSpin 0.75s linear infinite;
+}
+
+@keyframes problemAnswerLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .handwritingToolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1976,6 +2046,30 @@
   color: var(--color-primary);
 }
 
+.handwritingRecognizeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.handwritingRecognizeBtn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.handwritingRecognizeBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .handwritingFileInput {
   position: absolute;
   width: 0;
@@ -1991,6 +2085,71 @@
   border-radius: 4px;
   border: 1px solid var(--color-border);
   display: block;
+}
+
+.handwritingThumbButton {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: zoom-in;
+}
+
+.handwritingThumbButton:hover .handwritingThumb,
+.handwritingThumbButton:focus-visible .handwritingThumb {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.handwritingPreviewOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.handwritingPreviewDialog {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: min(1100px, 96vw);
+  max-height: 92vh;
+}
+
+.handwritingPreviewImage {
+  display: block;
+  max-width: 100%;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.handwritingPreviewClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.handwritingPreviewClose:hover {
+  background: rgba(15, 23, 42, 0.92);
 }
 
 .handwritingRemoveBtn {

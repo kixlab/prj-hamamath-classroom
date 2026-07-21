@@ -113,6 +113,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const [diagnosisCotData, setDiagnosisCotData] = useState<any | null>(null);
   const [apiRubrics, setApiRubrics] = useState<any[] | null>(null);
   const [apiGuideSubQuestions, setApiGuideSubQuestions] = useState<any[] | null>(null);
+  const [problemContentLoading, setProblemContentLoading] = useState(false);
+  const [studentAnswerLoading, setStudentAnswerLoading] = useState(false);
 
   // 로그인한 사용자 저장 결과 목록만 가져와 드롭다운에 표시
   useEffect(() => {
@@ -333,17 +335,22 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const isCurrentProblemSelected = !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
 
   useEffect(() => {
+    let cancelled = false;
     const fetchRubrics = async () => {
-      if (!problemIdForDiagnosis) return;
-      if (isDemo) {
-        const isCurrent =
-          !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
-        if (isCurrent && currentRubrics?.length) return;
-        const sourceUserId = getDemoSourceUserId();
-        if (!sourceUserId) return;
-        try {
+      if (!problemIdForDiagnosis) {
+        setProblemContentLoading(false);
+        return;
+      }
+      setProblemContentLoading(true);
+      try {
+        if (isDemo) {
+          const isCurrent =
+            !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
+          if (isCurrent && currentRubrics?.length) return;
+          const sourceUserId = getDemoSourceUserId();
+          if (!sourceUserId) return;
           const saved = await loadResultForUser(problemIdForDiagnosis, sourceUserId);
-          if (saved) {
+          if (!cancelled && saved) {
             setDiagnosisCotData(saved.cotData ?? null);
             setApiRubrics(saved.rubrics?.length ? saved.rubrics : null);
             const gd = saved.subQuestionData;
@@ -353,13 +360,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               setApiGuideSubQuestions(null);
             }
           }
-        } catch (err) {
-          console.error("데모 루브릭 불러오기 오류:", err);
+          return;
         }
-        return;
-      }
-      try {
+
         const result = await api.getResult(problemIdForDiagnosis);
+        if (cancelled) return;
         if (result) {
           const cot = result.cotData || null;
           setDiagnosisCotData(cot);
@@ -391,13 +396,20 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           }
         }
       } catch (err: any) {
-        console.error("루브릭 불러오기 오류:", err);
-        setDiagnosisCotData(null);
-        setApiRubrics(null);
-        setApiGuideSubQuestions(null);
+        if (!cancelled) {
+          console.error("루브릭 불러오기 오류:", err);
+          setDiagnosisCotData(null);
+          setApiRubrics(null);
+          setApiGuideSubQuestions(null);
+        }
+      } finally {
+        if (!cancelled) setProblemContentLoading(false);
       }
     };
     fetchRubrics();
+    return () => {
+      cancelled = true;
+    };
   }, [problemIdForDiagnosis, isDemo, currentProblemId, currentRubrics]);
 
   // 현재 워크플로우에서 작업 중인 문제를 선택한 경우에는,
@@ -437,9 +449,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const mainSolution = effectiveCotData?.main_solution ?? null;
   const grade = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.grade : undefined) ?? effectiveCotData?.grade ?? "";
   const semester = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.semester : undefined) ?? effectiveCotData?.semester ?? "";
-  const subjectArea = (!problemIdForDiagnosis ? (finalizedSubQuestionForRubric as any)?.subject_area : undefined) ?? effectiveCotData?.subject_area ?? "";
-  const cotStepsForPrompt = effectiveCotData?.steps;
-  const considerationsForPrompt = effectiveCotData?.considerations as string[] | undefined;
 
   // sub_question_id 기준으로 루브릭을 빠르게 찾을 수 있도록 매핑
   const rubricBySubQuestionId: Record<string, any> = {};
@@ -495,6 +504,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     );
   }, [locale, defaultStudentName, isDefaultStudentName]);
   const [currentStudentId, setCurrentStudentId] = useState<string>("student-1");
+  // 지금까지 사용된 최대 학생 번호. 삭제해도 줄지 않아 번호를 재사용하지 않는다.
+  const [studentSeq, setStudentSeq] = useState<number>(1);
+  const currentStudentName =
+    students.find((student) => student.id === currentStudentId)?.name ?? currentStudentId;
   // studentAnswers[studentId][problemKey][subQuestionId] = answer
   const [studentAnswers, setStudentAnswers] = useState<Record<string, Record<string, Record<string, string>>>>({});
   const [saving, setSaving] = useState(false);
@@ -502,6 +515,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // 학생별·문제별로 최소 한 번 이상 저장이 완료되었는지 여부
   const [canDiagnose, setCanDiagnose] = useState<Record<string, Record<string, boolean>>>({});
   const [bulkDiagnosing, setBulkDiagnosing] = useState(false);
+  const [recognizingAnswers, setRecognizingAnswers] = useState(false);
   // diagnosisResults[studentId][problemKey][subQuestionId] = { level, reason }
   const [diagnosisResults, setDiagnosisResults] = useState<Record<string, Record<string, Record<string, { level: string; reason: string }>>>>({});
   // 개별 하위문항 진단 편집 모드 (등급/피드백)
@@ -541,6 +555,19 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
   /** 해당 학생·문제별 업로드한 손글씨 이미지 (data URL). [이미지1, 이미지2] */
   const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, [string | null, string | null]>>>({});
+  const [previewHandwrittenImage, setPreviewHandwrittenImage] = useState<{
+    src: string;
+    slot: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!previewHandwrittenImage) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewHandwrittenImage(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [previewHandwrittenImage]);
 
   /** Firebase workspace 저장 디바운스 */
   const workspaceSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -579,11 +606,16 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     let cancelled = false;
     (async () => {
       try {
-        const { students: serverStudents } = await api.getStudentList(userId);
+        const { students: serverStudents, seq } = await api.getStudentList(userId);
         if (cancelled) return;
         if (Array.isArray(serverStudents)) {
           const list = serverStudents.filter((s: any) => s && s.id).map((s: any) => ({ id: s.id, name: s.name || s.id }));
           setStudents(list.length > 0 ? list : [{ id: "student-1", name: defaultStudentName(1) }]);
+          const maxExisting = list.reduce((max: number, s: any) => {
+            const m = /^student-(\d+)$/.exec(s.id);
+            return m ? Math.max(max, parseInt(m[1], 10)) : max;
+          }, 0);
+          setStudentSeq(Math.max(typeof seq === "number" ? seq : 0, maxExisting, 1));
         }
       } catch (err) {
         if (!cancelled) console.warn("학생 목록 불러오기 오류:", err);
@@ -722,8 +754,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   // 동일 로그인 id·문제·학생에 해당하는 저장 답안이 있으면 화면에 표시
   useEffect(() => {
-    if (isDemo || !problemIdForDiagnosis || !currentStudentId) return;
+    if (isDemo || !problemIdForDiagnosis || !currentStudentId) {
+      setStudentAnswerLoading(false);
+      return;
+    }
     let cancelled = false;
+    setStudentAnswerLoading(true);
     (async () => {
       try {
         const item = await api.getStudentAnswers(problemIdForDiagnosis, currentStudentId, userId);
@@ -745,6 +781,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         }));
       } catch (err) {
         if (!cancelled) console.error("저장된 학생 답안(단건) 불러오기 오류:", err);
+      } finally {
+        if (!cancelled) setStudentAnswerLoading(false);
       }
     })();
     return () => {
@@ -752,37 +790,48 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     };
   }, [userId, problemIdForDiagnosis, currentStudentId, isDemo]);
 
-  // 해당 학생·문제의 손글씨 이미지 서버에서 조회 (다른 브라우저 동기화)
+  // 해당 학생·문제의 손글씨 이미지 서버(Firebase Storage)에서 조회 — 다른 브라우저 동기화
   useEffect(() => {
     if (isDemo || !problemIdForDiagnosis || !currentStudentId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.getHandwritten(currentStudentId, problemIdForDiagnosis, userId);
+        const res = await api.getHandwritten(
+          currentStudentId,
+          currentStudentName,
+          problemIdForDiagnosis,
+          userId,
+        );
         if (cancelled) return;
-        setHandwrittenUploads((prev) => ({
-          ...prev,
-          [currentStudentId]: {
-            ...(prev[currentStudentId] ?? {}),
-            [problemIdForDiagnosis]: [res.slot1 ?? null, res.slot2 ?? null],
-          },
-        }));
-      } catch {
-        if (!cancelled) {
-          setHandwrittenUploads((prev) => ({
+        setHandwrittenUploads((prev) => {
+          const serverSlots: [string | null, string | null] = [res.slot1 ?? null, res.slot2 ?? null];
+          const existing = prev[currentStudentId]?.[problemIdForDiagnosis];
+          // 서버가 비어 있는데 방금 업로드한 로컬 미리보기만 있으면 유지(레이스 방지)
+          if (
+            !serverSlots[0] &&
+            !serverSlots[1] &&
+            existing &&
+            (existing[0] || existing[1])
+          ) {
+            return prev;
+          }
+          return {
             ...prev,
             [currentStudentId]: {
               ...(prev[currentStudentId] ?? {}),
-              [problemIdForDiagnosis]: [null, null],
+              [problemIdForDiagnosis]: serverSlots,
             },
-          }));
-        }
+          };
+        });
+      } catch (err) {
+        // 조회 실패 시 기존 미리보기를 지우지 않음 (새로고침·다른 기기에서만 서버 기준 복원)
+        if (!cancelled) console.error("손글씨 이미지 불러오기 오류:", err);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [userId, problemIdForDiagnosis, currentStudentId, isDemo]);
+  }, [userId, problemIdForDiagnosis, currentStudentId, currentStudentName, isDemo]);
 
   // 학생 진단 UI 상태 변경 시 서버(Firestore)에 자동 저장
   useEffect(() => {
@@ -838,23 +887,26 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   };
 
   const handleAddStudent = () => {
-    const name = window.prompt(t("diagnosis.addStudentPrompt"), defaultStudentName(students.length + 1));
+    const maxExisting = students.reduce((max, s) => {
+      const m = /^student-(\d+)$/.exec(s.id);
+      return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    // 삭제된 번호를 재사용하지 않도록 지금까지의 최대 번호(studentSeq) 다음 값을 사용
+    const nextNum = Math.max(studentSeq, maxExisting) + 1;
+    const name = window.prompt(t("diagnosis.addStudentPrompt"), defaultStudentName(nextNum));
     if (!name || !name.trim()) return;
-    const nextNum =
-      students.reduce((max, s) => {
-        const m = /^student-(\d+)$/.exec(s.id);
-        return m ? Math.max(max, parseInt(m[1], 10)) : max;
-      }, 0) + 1;
     const id = `student-${nextNum}`;
     const newStudent = { id, name: name.trim() };
     const nextList = [...students, newStudent];
     setStudents(nextList);
     setCurrentStudentId(id);
+    setStudentSeq(nextNum);
     if (isDemo) return;
     api
       .saveStudentList(
         nextList.map((s) => ({ id: s.id, name: s.name })),
         userId,
+        nextNum,
       )
       .catch((err) => console.warn("학생 목록 저장 실패:", err));
   };
@@ -908,7 +960,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
 
   const handleHandwrittenUpload = async (slot: 1 | 2, file: File | null) => {
-    if (!currentStudentId || !currentProblemKey) return;
+    if (!currentStudentId || !problemIdForDiagnosis) return;
+    const problemKey = problemIdForDiagnosis;
     if (file && !file.type.startsWith("image/")) {
       alert(t("diagnosis.imagesOnly"));
       return;
@@ -916,13 +969,19 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     if (!file) {
       setHandwrittenUploads((prev) => {
         const byStudent = prev[currentStudentId] ?? {};
-        const current = byStudent[currentProblemKey] ?? [null, null];
+        const current = byStudent[problemKey] ?? [null, null];
         const next: [string | null, string | null] = slot === 1 ? [null, current[1]] : [current[0], null];
-        return { ...prev, [currentStudentId]: { ...byStudent, [currentProblemKey]: next } };
+        return { ...prev, [currentStudentId]: { ...byStudent, [problemKey]: next } };
       });
       if (isDemo) return;
       try {
-        await api.deleteHandwritten(currentStudentId, currentProblemKey, slot, userId);
+        await api.deleteHandwritten(
+          currentStudentId,
+          currentStudentName,
+          problemKey,
+          slot,
+          userId,
+        );
       } catch (err: any) {
         console.warn("손글씨 이미지 서버 삭제 실패:", err);
       }
@@ -938,21 +997,125 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         console.warn("이미지 압축 실패, 원본으로 전송:", e);
         dataUrl = rawDataUrl;
       }
+      const previousSlotsRef: { current: [string | null, string | null] } = {
+        current: [null, null],
+      };
       setHandwrittenUploads((prev) => {
         const byStudent = prev[currentStudentId] ?? {};
-        const current = byStudent[currentProblemKey] ?? [null, null];
+        const current = byStudent[problemKey] ?? [null, null];
+        previousSlotsRef.current = current;
         const next: [string | null, string | null] = slot === 1 ? [dataUrl, current[1]] : [current[0], dataUrl];
-        return { ...prev, [currentStudentId]: { ...byStudent, [currentProblemKey]: next } };
+        return { ...prev, [currentStudentId]: { ...byStudent, [problemKey]: next } };
       });
       if (isDemo) return;
       try {
-        await api.uploadHandwritten(currentStudentId, currentProblemKey, slot, dataUrl, userId);
+        await api.uploadHandwritten(
+          currentStudentId,
+          currentStudentName,
+          problemKey,
+          slot,
+          dataUrl,
+          userId,
+        );
+        // Firebase에 확정 저장된 본을 다시 읽어 다른 브라우저와 동일 소스 유지
+        const res = await api.getHandwritten(
+          currentStudentId,
+          currentStudentName,
+          problemKey,
+          userId,
+        );
+        setHandwrittenUploads((prev) => ({
+          ...prev,
+          [currentStudentId]: {
+            ...(prev[currentStudentId] ?? {}),
+            [problemKey]: [res.slot1 ?? null, res.slot2 ?? null],
+          },
+        }));
       } catch (err: any) {
         console.warn("손글씨 이미지 서버 저장 실패:", err);
+        setHandwrittenUploads((prev) => ({
+          ...prev,
+          [currentStudentId]: {
+            ...(prev[currentStudentId] ?? {}),
+            [problemKey]: previousSlotsRef.current,
+          },
+        }));
         alert(err?.message ?? t("diagnosis.imageSaveFail"));
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  /** 업로드된 풀이 이미지를 Vision으로 읽어 하위문항별 답안 칸에 채움 (이후 수정 가능) */
+  const handleRecognizeAnswersFromImages = async () => {
+    if (isDemo) {
+      alert(t("diagnosis.recognizeDemoUnavailable"));
+      return;
+    }
+    if (!currentStudentId || !currentProblemKey) return;
+    const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
+    const images = urls.filter((u): u is string => !!u?.trim());
+    if (images.length === 0) {
+      alert(t("diagnosis.recognizeNeedImage"));
+      return;
+    }
+    if (diagnosisItems.length === 0) {
+      alert(t("diagnosis.recognizeNeedSubq"));
+      return;
+    }
+
+    const existing = studentAnswers[currentStudentId]?.[currentProblemKey] ?? {};
+    const hasExisting = diagnosisItems.some((item) => (existing[item.id] ?? "").trim().length > 0);
+    if (hasExisting && !window.confirm(t("diagnosis.recognizeOverwriteConfirm"))) {
+      return;
+    }
+
+    setRecognizingAnswers(true);
+    try {
+      const { answers } = await api.recognizeHandwrittenAnswers(
+        {
+          images,
+          sub_questions: diagnosisItems.map((item, index) => ({
+            sub_question_id: item.id,
+            display_code: item.displayCode,
+            question: item.question,
+            // 학습지 PDF의 원형 번호(1,2,3…)와 동일 — 영역별 매칭용
+            item_number: index + 1,
+          })),
+          language: getAppLanguage(locale),
+        },
+        userId,
+      );
+
+      let filled = 0;
+      const nextByProblem: Record<string, string> = {
+        ...(studentAnswers[currentStudentId]?.[currentProblemKey] ?? {}),
+      };
+      for (const item of diagnosisItems) {
+        const text = (answers?.[item.id] ?? "").trim();
+        if (!text) continue;
+        nextByProblem[item.id] = text;
+        filled += 1;
+      }
+      setStudentAnswers((prev) => ({
+        ...prev,
+        [currentStudentId]: {
+          ...(prev[currentStudentId] ?? {}),
+          [currentProblemKey]: nextByProblem,
+        },
+      }));
+
+      if (filled === 0) {
+        alert(t("diagnosis.recognizeEmpty"));
+      } else {
+        setSaveMessage(t("diagnosis.recognizeDone", { n: filled }));
+      }
+    } catch (err: any) {
+      console.error("손글씨 답안 인식 오류:", err);
+      alert(err?.message ?? t("diagnosis.recognizeFail"));
+    } finally {
+      setRecognizingAnswers(false);
+    }
   };
 
   const handleStudentAnswerChange = (id: string, value: string) => {
@@ -1689,10 +1852,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
               solution={mainSolution}
               grade={grade}
               semester={semester}
-              subjectArea={subjectArea}
-              cotSteps={cotStepsForPrompt}
-              guideSubQuestions={guideSubQuestions}
-              considerations={considerationsForPrompt}
             />
           ) : (
             <aside className={styles.diagnosisProblemPlaceholder}>
@@ -1706,27 +1865,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             ) : (
               <>
             <aside className={styles.studentListRail}>
-              {historyItems.length > 0 && (
-                <div className={styles.railProblemSelect}>
-                  <label className={styles.railProblemSelectLabel}>
-                    <span className={styles.railProblemSelectCaption}>{t("diagnosis.selectProblemLabel")}</span>
-                    <select
-                      className={styles.railProblemSelectInput}
-                      value={selectedProblemId ?? ""}
-                      onChange={(e) => setSelectedProblemId(e.target.value || null)}
-                    >
-                      <option value="">{t("diagnosis.selectProblem")}</option>
-                      {historyItems.map((item: any) => (
-                        <option key={item.problem_id} value={item.problem_id}>
-                          {getProblemDisplayLabel(item.problem_id)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )}
               <div className={styles.studentListRailHead}>
-                <h3 className={styles.studentListTitle}>{t("diagnosis.studentList")}</h3>
+                <h3 className={styles.studentListTitle}>{t("diagnosis.selectStudentStep")}</h3>
                 <span className={styles.studentListCount}>{students.length}</span>
               </div>
               <div className={styles.studentList}>
@@ -1812,8 +1952,44 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
+                  <nav className={styles.problemTabsSection} aria-label={t("diagnosis.selectProblemLabel")}>
+                    <div className={styles.problemTabsHeader}>
+                      <span className={styles.problemTabsTitle}>{t("diagnosis.selectProblemStep")}</span>
+                    </div>
+                    {historyItems.length > 0 ? (
+                      <div className={styles.problemTabs} role="tablist">
+                        {historyItems.map((item: any) => {
+                          const isActiveProblem = selectedProblemId === item.problem_id;
+                          return (
+                            <button
+                              key={item.problem_id}
+                              type="button"
+                              role="tab"
+                              aria-selected={isActiveProblem}
+                              className={`${styles.problemTab} ${isActiveProblem ? styles.problemTabActive : ""}`}
+                              onClick={() => {
+                                if (item.problem_id === selectedProblemId) return;
+                                setProblemContentLoading(true);
+                                setStudentAnswerLoading(!isDemo);
+                                setSelectedProblemId(item.problem_id);
+                              }}
+                            >
+                              {getProblemDisplayLabel(item.problem_id)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className={styles.problemTabsEmpty}>{t("diagnosis.noSavedProblems")}</p>
+                    )}
+                  </nav>
                   {!problemIdForDiagnosis ? (
                     <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemTop")}</p>
+                  ) : problemContentLoading || studentAnswerLoading ? (
+                    <div className={styles.problemAnswerLoading} role="status" aria-live="polite">
+                      <span className={styles.problemAnswerLoadingSpinner} aria-hidden />
+                      <p>{t("diagnosis.loadingProblemAnswers")}</p>
+                    </div>
                   ) : (
                     <>
                       <header className={styles.studentHeader}>
@@ -1850,16 +2026,34 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   }}
                                 />
                               </label>
+                              {hasAnyImage && (
+                                <button
+                                  type="button"
+                                  className={styles.handwritingRecognizeBtn}
+                                  onClick={handleRecognizeAnswersFromImages}
+                                  disabled={recognizingAnswers || diagnosisItems.length === 0}
+                                  title={t("diagnosis.recognizeAnswers")}
+                                >
+                                  {recognizingAnswers ? t("diagnosis.recognizingAnswers") : t("diagnosis.recognizeAnswers")}
+                                </button>
+                              )}
                               {([1, 2] as const).map((slot) => {
                                 const dataUrl = urls[slot - 1];
                                 if (!dataUrl) return null;
                                 return (
                                   <div key={slot} className={styles.handwritingSlotCompact}>
-                                    <img
-                                      src={dataUrl}
-                                      alt={t("diagnosis.handwritingAlt", { n: slot })}
-                                      className={styles.handwritingThumb}
-                                    />
+                                    <button
+                                      type="button"
+                                      className={styles.handwritingThumbButton}
+                                      onClick={() => setPreviewHandwrittenImage({ src: dataUrl, slot })}
+                                      aria-label={t("diagnosis.enlargeImage", { n: slot })}
+                                    >
+                                      <img
+                                        src={dataUrl}
+                                        alt={t("diagnosis.handwritingAlt", { n: slot })}
+                                        className={styles.handwritingThumb}
+                                      />
+                                    </button>
                                     <button
                                       type="button"
                                       className={styles.handwritingRemoveBtn}
@@ -2094,6 +2288,32 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           </div>
         </div>
       </main>
+
+      {previewHandwrittenImage && (
+        <div
+          className={styles.handwritingPreviewOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("diagnosis.enlargeImage", { n: previewHandwrittenImage.slot })}
+          onClick={() => setPreviewHandwrittenImage(null)}
+        >
+          <div className={styles.handwritingPreviewDialog} onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className={styles.handwritingPreviewClose}
+              onClick={() => setPreviewHandwrittenImage(null)}
+              aria-label={t("common.close")}
+            >
+              ×
+            </button>
+            <img
+              src={previewHandwrittenImage.src}
+              alt={t("diagnosis.handwritingAlt", { n: previewHandwrittenImage.slot })}
+              className={styles.handwritingPreviewImage}
+            />
+          </div>
+        </div>
+      )}
 
       {reportOpen && (
         <div className={styles.reportOverlay} role="dialog" aria-modal="true">

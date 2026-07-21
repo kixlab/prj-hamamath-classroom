@@ -7,7 +7,6 @@ import { loadResult, syncPendingResults } from './hooks/useStorage';
 import { api } from './services/api';
 import {
   clearPreviousUserId,
-  DEMO_USER_ID,
   isDemoUserId,
   rememberPreviousUserId,
 } from './demo/demoAccount';
@@ -24,7 +23,6 @@ import { Rubrics } from './components/Rubrics/Rubrics';
 import { AdminDbView } from './components/AdminDbView/AdminDbView';
 import { StudentDiagnosis } from './components/StudentDiagnosis/StudentDiagnosis';
 import styles from './App.module.css';
-import type { CoTStep } from './types';
 
 interface AppContentProps {
   userId: string;
@@ -43,7 +41,6 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
     currentStep,
     setCurrentStep,
     currentCotData,
-    currentSubQuestionData,
     loading,
     error,
     reset,
@@ -56,7 +53,6 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
     setFinalizedSubQuestionForRubric,
     setLoading,
     setError,
-    isDemoMode,
   } = useApp();
   const mainProblem = (currentCotData as any)?.problem;
   const mainAnswer = (currentCotData as any)?.answer;
@@ -64,10 +60,6 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
   const mainSolution = (currentCotData as any)?.main_solution;
   const grade = (currentCotData as any)?.grade;
   const semester = (currentCotData as any)?.semester;
-  const subjectArea = (currentSubQuestionData as any)?.subject_area || (currentCotData as any)?.subject_area;
-  const cotSteps = (currentCotData as any)?.steps as CoTStep[] | undefined;
-  const guideSubQuestions = (currentSubQuestionData as any)?.guide_sub_questions;
-  const considerations = (currentCotData as any)?.considerations as string[] | undefined;
 
   const renderWorkflowSplit = (main: ReactNode) => (
     <div className={styles.workflowSplitLayout}>
@@ -78,10 +70,6 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
         solution={mainSolution}
         grade={grade}
         semester={semester}
-        subjectArea={subjectArea}
-        cotSteps={cotSteps}
-        guideSubQuestions={guideSubQuestions}
-        considerations={considerations}
       />
       <main className={styles.workflowMainColumn}>{main}</main>
     </div>
