@@ -108,47 +108,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     return name === koDefault || name === enDefault;
   }, []);
 
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [diagnosisCotData, setDiagnosisCotData] = useState<any | null>(null);
   const [apiRubrics, setApiRubrics] = useState<any[] | null>(null);
   const [apiGuideSubQuestions, setApiGuideSubQuestions] = useState<any[] | null>(null);
   const [problemContentLoading, setProblemContentLoading] = useState(false);
   const [studentAnswerLoading, setStudentAnswerLoading] = useState(false);
-
-  // 로그인한 사용자 저장 결과 목록만 가져와 드롭다운에 표시
-  useEffect(() => {
-    if (!userId?.trim()) {
-      setHistoryItems([]);
-      return;
-    }
-    if (isDemo) {
-      const sourceUserId = getDemoSourceUserId();
-      if (!sourceUserId) {
-        setHistoryItems([]);
-        return;
-      }
-      void (async () => {
-        try {
-          const list = await fetchHistoryListForUser(sourceUserId);
-          setHistoryItems(list.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp })));
-        } catch (err) {
-          console.error("데모 저장 결과 목록 불러오기 오류:", err);
-          setHistoryItems([]);
-        }
-      })();
-      return;
-    }
-    const fetchHistory = async () => {
-      try {
-        const list = await api.getMyHistoryList(userId);
-        setHistoryItems(list || []);
-      } catch (err) {
-        console.error("저장 결과 목록 불러오기 오류:", err);
-      }
-    };
-    fetchHistory();
-  }, [userId, currentProblemId, historyRefreshToken, isDemo]);
 
   // 데모 계정: test 저장 이력과 동기화된 목록·시드 데이터 적용
   useEffect(() => {
@@ -166,8 +131,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       if (sourceUserId) {
         const list = await fetchHistoryListForUser(sourceUserId);
         if (cancelled) return;
-
-        setHistoryItems(list.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp })));
 
         if (list.length > 0) {
           const primaryProblemId =
@@ -221,15 +184,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         resolveDemoRubrics(mirrored, subQuestionData);
       const cotData = mirrored?.cotData ?? currentCotData ?? snapshot.cotData;
       const seed = getDemoDiagnosisSeed(problemId, rubrics);
-      const localHistory = sourceUserId ? await fetchHistoryListForUser(sourceUserId) : [];
       if (cancelled) return;
-      setHistoryItems(
-        localHistory.length > 0
-          ? localHistory.map((item) => ({ problem_id: item.problemId, timestamp: item.timestamp }))
-          : problemId
-            ? [{ problem_id: problemId }]
-            : [],
-      );
       setSelectedProblemId(seed.problemId);
       setStudents(seed.students);
       setStudentAnswers(seed.studentAnswers);
@@ -251,7 +206,6 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
           const problemId = currentProblemId ?? workflowPack.subQuestionData.problem_id;
           const rubrics = resolveDemoRubrics(null, workflowPack.subQuestionData);
           const seed = getDemoDiagnosisSeed(problemId, rubrics);
-          setHistoryItems(problemId ? [{ problem_id: problemId }] : []);
           setSelectedProblemId(seed.problemId);
           setStudents(seed.students);
           setStudentAnswers(seed.studentAnswers);
@@ -331,8 +285,18 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     setStudentAnswerSeed(null);
   }, [studentAnswerSeed, isDemo, setStudentAnswerSeed]);
 
-  const problemIdForDiagnosis = selectedProblemId;
+  // 진단 대상 문제는 사이드바 선택(currentProblemId)이 단일 소스.
+  // selectedProblemId는 워크스페이스 저장/복원과 데모 시드용으로만 남겨두고, 사이드바 선택이 있으면 항상 그쪽을 따름
+  const problemIdForDiagnosis = currentProblemId ?? selectedProblemId;
   const isCurrentProblemSelected = !!problemIdForDiagnosis && problemIdForDiagnosis === currentProblemId;
+
+  // 사이드바에서 문제를 바꾸면 진단 화면도 따라감
+  useEffect(() => {
+    if (!currentProblemId || currentProblemId === selectedProblemId) return;
+    setProblemContentLoading(true);
+    setStudentAnswerLoading(!isDemo);
+    setSelectedProblemId(currentProblemId);
+  }, [currentProblemId, selectedProblemId, isDemo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -379,17 +343,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             setApiGuideSubQuestions(null);
           }
         } else {
-          // 서버에 결과가 없으면 로컬 저장 결과라도 최대한 사용
-          if (local) {
-            setDiagnosisCotData(local.cotData ?? null);
-            setApiRubrics((local as any).rubrics ?? null);
-            const gd = (local as any).subQuestionData || (local as any).guidelineData;
-            if (gd?.guide_sub_questions && Array.isArray(gd.guide_sub_questions)) {
-              setApiGuideSubQuestions(gd.guide_sub_questions);
-            } else {
-              setApiGuideSubQuestions(null);
-            }
-          } else {
+          // 서버(Firestore)에 결과가 없으면 비움
+          {
             setDiagnosisCotData(null);
             setApiRubrics(null);
             setApiGuideSubQuestions(null);
@@ -1952,37 +1907,17 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
-                  <nav className={styles.problemTabsSection} aria-label={t("diagnosis.selectProblemLabel")}>
-                    <div className={styles.problemTabsHeader}>
-                      <span className={styles.problemTabsTitle}>{t("diagnosis.selectProblemStep")}</span>
-                    </div>
-                    {historyItems.length > 0 ? (
-                      <div className={styles.problemTabs} role="tablist">
-                        {historyItems.map((item: any) => {
-                          const isActiveProblem = selectedProblemId === item.problem_id;
-                          return (
-                            <button
-                              key={item.problem_id}
-                              type="button"
-                              role="tab"
-                              aria-selected={isActiveProblem}
-                              className={`${styles.problemTab} ${isActiveProblem ? styles.problemTabActive : ""}`}
-                              onClick={() => {
-                                if (item.problem_id === selectedProblemId) return;
-                                setProblemContentLoading(true);
-                                setStudentAnswerLoading(!isDemo);
-                                setSelectedProblemId(item.problem_id);
-                              }}
-                            >
-                              {getProblemDisplayLabel(item.problem_id)}
-                            </button>
-                          );
-                        })}
-                      </div>
+                  {/* 문제 선택은 사이드바에서만. 여기서는 진단 중인 문제 ID만 보여준다. */}
+                  <div className={styles.currentProblemBar}>
+                    <span className={styles.currentProblemLabel}>{t("diagnosis.problemId")}</span>
+                    {problemIdForDiagnosis ? (
+                      <span className={styles.currentProblemId} title={problemIdForDiagnosis}>
+                        {getProblemDisplayLabel(problemIdForDiagnosis)}
+                      </span>
                     ) : (
-                      <p className={styles.problemTabsEmpty}>{t("diagnosis.noSavedProblems")}</p>
+                      <span className={styles.currentProblemEmpty}>{t("diagnosis.selectProblemTop")}</span>
                     )}
-                  </nav>
+                  </div>
                   {!problemIdForDiagnosis ? (
                     <p className={styles.mainProblemEmpty}>{t("diagnosis.selectProblemTop")}</p>
                   ) : problemContentLoading || studentAnswerLoading ? (

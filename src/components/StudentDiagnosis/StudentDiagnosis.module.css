@@ -271,81 +271,42 @@
   box-sizing: border-box;
 }
 
-.problemTabsSection {
-  margin-bottom: 14px;
-  min-width: 0;
-}
-
-.problemTabsHeader {
+/* 진단 중인 문제 표시 (선택은 사이드바에서만 — 여기서는 읽기 전용) */
+.currentProblemBar {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
 }
 
-.problemTabsTitle {
-  font-size: 0.85rem;
+.currentProblemLabel {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.currentProblemId {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.problemTabsStudent {
+.currentProblemEmpty {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
-}
-
-.problemTabs {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 2px 2px 8px;
-  scrollbar-width: thin;
-}
-
-.problemTab {
-  flex: 0 0 auto;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 8px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
   font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-}
-
-.problemTab:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.problemTabActive {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.problemTabActive:hover {
-  color: #fff;
-}
-
-.problemTabsEmpty {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px dashed var(--color-border);
-  border-radius: 8px;
   color: var(--color-text-secondary);
-  font-size: 0.8rem;
 }
 
 .studentTitleName {
