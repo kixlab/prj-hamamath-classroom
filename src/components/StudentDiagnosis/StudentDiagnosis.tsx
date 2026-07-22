@@ -1306,6 +1306,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       // 현재 학생 진단 리포트도 서버에 저장 (다른 브라우저에서 리포트까지 복원되도록)
       if (Object.keys(levelOnlyByDisplayCode).length > 0 && userId?.trim()) {
         const serverProblemKey = currentProblemKey === "__current__" ? (currentProblemId ?? currentProblemKey) : currentProblemKey;
+        // 이 학생의 진단 내용이 방금 바뀌었으므로 화면에 캐시된 리포트는 더 이상 최신이 아님. 모달이 열려 있으면 즉시 최신 리포트로 갱신, 닫혀 있으면 캐시를 지워 다음에 열 때 서버 최신본 조회
+        if (!reportOpen && reportStudentId === currentStudentId) {
+          setReportData(null);
+        }
         const existingSummaries = studentProblemSummaries[currentStudentId] ?? {};
         const mergedSummaries: Record<string, { levelsByDisplayCode: Record<string, LevelType>; feedbackByDisplayCode?: Record<string, string> }> = { ...existingSummaries };
         mergedSummaries[serverProblemKey] = { levelsByDisplayCode: levelOnlyByDisplayCode, feedbackByDisplayCode: Object.keys(feedbackByDisplayCode ?? {}).length > 0 ? feedbackByDisplayCode : undefined };
