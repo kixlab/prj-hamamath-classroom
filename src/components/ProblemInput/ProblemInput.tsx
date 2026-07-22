@@ -17,6 +17,9 @@ import { PROBLEM_DROPDOWN_OPTIONS, getProblemDisplayLabel } from "../../utils/pr
 import { resolveAuxUploadGrade, parseAuxMaterialGradeKey, AUX_GRADE_COMMON } from "../../utils/auxiliaryMaterial";
 import styles from "./ProblemInput.module.css";
 
+/** 서버 Storage에 업로드된 문제 이미지 URL 식별자 (base64 재변환 대상에서 제외) */
+const PROBLEM_IMAGE_URL_PREFIX = "/api/v1/problem-images/";
+
 /** data/finalized_data/*.json 로컬 로드용 (문제 불러오기·폼 채우기) */
 const dataJsonGlob = import.meta.glob<{ default: Record<string, unknown> }>("../../../data/finalized_data/*.json");
 
@@ -329,6 +332,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const hydratedProblemIdRef = useRef<string | null>(null);
   const [auxUploading, setAuxUploading] = useState(false);
   const [auxError, setAuxError] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   /** 참고 자료 입력 방식: 기존 라이브러리에서 선택 vs 새 파일 직접 업로드 */
   const [auxMode, setAuxMode] = useState<"select" | "upload">("select");
 
@@ -553,24 +558,38 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedExampleFile]);
 
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    // 미리보기는 로컬에서 즉시 (업로드 왕복을 기다리지 않음)
+    const previewUrl = await new Promise<string>((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        setFormData((prev) => ({
-          ...prev,
-          image: file,
-          imagePreview: base64String,
-          imageData: base64String,
-        }));
-      };
+      reader.onloadend = () => resolve(reader.result as string);
       reader.readAsDataURL(file);
+    });
+    setFormData((prev) => ({ ...prev, image: file, imagePreview: previewUrl, imageData: previewUrl }));
+
+    // 데모 계정은 서버 저장 없이 base64만 사용
+    if (isDemoMode) return;
+
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      // 업로드 즉시 Storage에 저장하고, 저장값은 URL로 교체
+      // (base64를 Firestore 문서에 넣으면 1MiB 한도에 걸린다)
+      const result = await api.uploadProblemImage(file, userId);
+      setFormData((prev) => (prev.image === file ? { ...prev, imageData: result.url } : prev));
+    } catch (err: any) {
+      // 업로드 실패해도 base64 미리보기는 남겨 두어 "생성하기"는 가능하게 함
+      setImageError(err?.message || "이미지 업로드에 실패했습니다.");
+    } finally {
+      setImageUploading(false);
     }
   };
 
   const handleRemoveImage = () => {
+    setImageError(null);
     setFormData((prev) => ({
       ...prev,
       image: null,
@@ -618,7 +637,10 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
     try {
       let imageData = formData.imageData || null;
-      if (imageData && (imageData.startsWith("http") || imageData.startsWith("/"))) {
+      // Storage에 업로드한 문제 이미지는 URL 그대로 보낸다(서버가 Storage에서 직접 읽음).
+      // 예제 문제의 번들 에셋 URL(/assets/...)은 서버가 접근할 수 없으므로 기존대로 base64 변환.
+      const isUploadedImageUrl = !!imageData && imageData.includes(PROBLEM_IMAGE_URL_PREFIX);
+      if (imageData && !isUploadedImageUrl && (imageData.startsWith("http") || imageData.startsWith("/"))) {
         try {
           imageData = await urlToBase64(imageData);
         } catch (err) {
@@ -956,17 +978,32 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                 )}
               </div>
               <div className={styles.imageActions}>
-                <button type="button" className={styles.uploadBtn} onClick={() => imageInputRef.current?.click()}>
+                <button
+                  type="button"
+                  className={styles.uploadBtn}
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={imageUploading}
+                >
                   <svg viewBox="0 0 24 24" aria-hidden className={styles.uploadIcon}>
                     <path d="M12 16V4M12 4l-4 4M12 4l4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     <path d="M4 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
-                  {t("problemInput.upload")}
+                  {imageUploading
+                    ? locale === "en"
+                      ? "Uploading…"
+                      : "업로드 중…"
+                    : t("problemInput.upload")}
                 </button>
-                <button type="button" className={styles.removeImageBtn} onClick={handleRemoveImage} disabled={!formData.imagePreview}>
+                <button
+                  type="button"
+                  className={styles.removeImageBtn}
+                  onClick={handleRemoveImage}
+                  disabled={!formData.imagePreview || imageUploading}
+                >
                   {t("problemInput.removeImage")}
                 </button>
               </div>
+              {imageError && <p className={styles.auxError}>{imageError}</p>}
             </InputPanel>
           </div>
 

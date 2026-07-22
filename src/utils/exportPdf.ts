@@ -403,9 +403,18 @@ export async function buildWorksheetSections(
        </div>`
     : "";
 
-  const imageHtml = cotData.image_data
+  // 서버 Storage 이미지는 URL로 저장돼 있다. html2canvas가 원격 이미지를 캡처하면
+  // canvas가 오염돼 빈칸으로 나올 수 있으므로, 미리 dataURL로 바꿔서 심는다.
+  const rawImage = cotData.image_data;
+  const embeddedImage = rawImage
+    ? rawImage.startsWith("data:")
+      ? rawImage
+      : await urlToDataUrl(rawImage)
+    : null;
+
+  const imageHtml = embeddedImage
     ? `<div data-block style="margin-bottom: 20px; text-align: center;">
-         <img src="${cotData.image_data}" alt="${escapeHtml(L("app.problemImage"))}" style="max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid ${THEME.line}; border-radius: 8px; padding: 8px;" />
+         <img src="${embeddedImage}" alt="${escapeHtml(L("app.problemImage"))}" style="max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid ${THEME.line}; border-radius: 8px; padding: 8px;" />
        </div>`
     : "";
 
