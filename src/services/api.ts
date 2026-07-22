@@ -1141,6 +1141,44 @@ export const api = {
     return response.json();
   },
 
+  /**
+   * 문제 이미지 업로드 — Firebase Storage에 저장하고 서빙 URL을 받는다.
+   * cot_data.image_data에는 base64 대신 이 URL을 넣어 Firestore 1MiB 한도를 피한다.
+   */
+  async uploadProblemImage(
+    file: File,
+    userId?: string | null,
+  ): Promise<{ url: string; storage_path: string; filename: string; size: number; content_type: string }> {
+    const uid = userId?.trim();
+    if (!uid) {
+      throw new Error("로그인이 필요합니다.");
+    }
+    const maxBytes = 10 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      throw new Error("이미지가 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.");
+    }
+
+    const form = new FormData();
+    form.append("file", file, file.name);
+
+    const response = await fetch(getApiUrl("/api/v1/problem-images/upload"), {
+      method: "POST",
+      headers: {
+        // Content-Type은 FormData가 boundary 포함해 자동 설정
+        ...encodeUserIdForHeader(uid),
+      },
+      body: form,
+    });
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error("이미지가 너무 커서 서버에서 거부되었습니다. 최대 10MB.");
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as { detail?: string }).detail || "이미지 업로드에 실패했습니다.");
+    }
+    return response.json();
+  },
+
   /** 참고 자료(RAG) 삭제 — 본인 자료만 */
   async deleteAuxiliaryMaterial(materialId: string, userId?: string | null): Promise<void> {
     const uid = userId?.trim();
