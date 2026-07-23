@@ -330,6 +330,8 @@ export const Sidebar = ({ userId, onOpenAdminDb, onHistoryChanged }: SidebarProp
         setCurrentCotData(result.cotData);
         setCurrentSubQData(result.subQData ?? null);
         setCurrentSubQuestionData(result.subQuestionData ?? null);
+        // 확정본도 함께 교체함. 안 그러면 이전 문제 것이 남아 루브릭·진단이 엉뚱한 문항으로 그려짐
+        setFinalizedSubQuestionForRubric(result.subQuestionData ?? null);
         if (setPreferredVersion) setPreferredVersion(result.preferredVersion || {});
         if (setCurrentRubrics) setCurrentRubrics(result.rubrics ?? null);
 

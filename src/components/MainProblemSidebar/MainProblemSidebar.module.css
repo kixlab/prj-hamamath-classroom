@@ -4,7 +4,8 @@
   align-self: flex-start;
   position: sticky;
   top: calc(var(--header-height) + var(--workflow-tabs-height));
-  max-height: calc(100vh - var(--header-height) - var(--workflow-tabs-height));
+  /* 내용이 짧아도 구분선·배경이 화면 끝까지 이어지도록 높이를 채움 */
+  height: calc(100vh - var(--header-height) - var(--workflow-tabs-height));
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
   background: var(--color-bg-secondary);
