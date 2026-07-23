@@ -4,6 +4,23 @@
   padding-top: var(--header-height);
 }
 
+/* 진단 화면: 화면 높이에 고정하고 작업 영역만 내부 스크롤 */
+.appFixed {
+  height: 100vh;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.containerFixed {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
 .container {
   width: 100%;
   margin: 0;

@@ -152,7 +152,7 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
 
   if (showStudentDiagnosis) {
     return (
-      <div className={styles.app}>
+      <div className={`${styles.app} ${styles.appFixed}`}>
         <Header
           onNewProblem={handleNewProblem}
           onShowUserIdPage={onShowUserIdPage}
@@ -167,7 +167,7 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
           onOpenAdminDb={() => setShowAdminDbView(true)}
           onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
         />
-        <div className={styles.container}>
+        <div className={`${styles.container} ${styles.containerFixed}`}>
           <StudentDiagnosis
             key={`${userId}-${currentProblemId ?? "none"}-${historyRefreshToken}`}
             userId={userId}
