@@ -56,6 +56,7 @@ const ko = {
   "common.cancel": "취소",
   "common.save": "저장",
   "common.edit": "편집",
+  "common.editAndRegenerate": "편집 · 재생성",
   "common.endEdit": "편집 종료",
   "common.feedback": "피드백",
   "common.submit": "입력",
@@ -199,6 +200,12 @@ const ko = {
   "app.promptNeedCot": "CoT 단계가 있어야 프롬프트를 확인할 수 있습니다.",
 
   "cot.generateSubq": "하위문항 생성하기",
+  "cot.stepFeedbackDivider": "또는 피드백으로 재생성",
+  "cot.stepFeedbackPlaceholder": "이 단계를 어떻게 고칠지 입력하세요. (예: 더 쉬운 말로 두 문장 이내)",
+  "cot.regenerateStep": "재생성",
+  "cot.regeneratingStep": "재생성 중...",
+  "cot.regenerateStepFailed": "단계 재생성에 실패했습니다.",
+  "cot.undoRegenerate": "되돌리기",
 
   "subq.notGenerated": "하위문항이 생성되지 않았습니다.",
   "subq.originalQuestion": "원본 문항",
@@ -463,6 +470,7 @@ const en: Record<TranslationKey, string> = {
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.edit": "Edit",
+  "common.editAndRegenerate": "Edit · Regenerate",
   "common.endEdit": "Done editing",
   "common.feedback": "Feedback",
   "common.submit": "Submit",
@@ -606,6 +614,12 @@ const en: Record<TranslationKey, string> = {
   "app.promptNeedCot": "CoT steps are required to preview prompts.",
 
   "cot.generateSubq": "Generate sub-questions",
+  "cot.stepFeedbackDivider": "Or regenerate with feedback",
+  "cot.stepFeedbackPlaceholder": "Describe how to revise this step (e.g. simpler wording, two sentences max).",
+  "cot.regenerateStep": "Regenerate",
+  "cot.regeneratingStep": "Regenerating...",
+  "cot.regenerateStepFailed": "Failed to regenerate the step.",
+  "cot.undoRegenerate": "Undo",
 
   "subq.notGenerated": "Sub-questions have not been generated.",
   "subq.originalQuestion": "Original item",

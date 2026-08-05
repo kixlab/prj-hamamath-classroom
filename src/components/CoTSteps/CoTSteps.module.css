@@ -219,6 +219,48 @@
   justify-content: flex-end;
 }
 
+.stepHeaderActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* 편집 저장과 피드백 재생성을 시각적으로 분리 */
+.feedbackDivider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  color: var(--color-text-tertiary, #888);
+  font-size: 0.75rem;
+}
+
+.feedbackDivider::before,
+.feedbackDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border, #ddd);
+}
+
+.feedbackDividerLabel {
+  white-space: nowrap;
+}
+
+.regenerateError {
+  margin: 0;
+  color: var(--color-danger, #c0392b);
+  font-size: 0.8125rem;
+}
+
+.editBtn:disabled,
+.cancelBtn:disabled,
+.saveBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .editBtn {
   flex-shrink: 0;
   background: var(--color-primary);

@@ -6,7 +6,9 @@ export interface CoTStep {
   step_title: string;
   step_content: string;
   sub_skill_id?: string;
+  step_id?: number;
   step_name?: string;
+  step_name_en?: string;
   sub_skill_name?: string;
   prompt_used?: string | null;
 }
@@ -21,6 +23,7 @@ export interface CoTData {
   semester?: string;
   main_solution?: string | null;
   image_data?: string | null;
+  subject_area?: string | null;
   steps: CoTStep[];
 }
 
