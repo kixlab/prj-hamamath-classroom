@@ -1463,7 +1463,7 @@ export const SubQs = () => {
                           className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
                           onClick={handleTopBarEdit}
                         >
-                          {t("common.edit")}
+                          {t("common.editAndRegenerate")}
                         </button>
                       </>
                     )
@@ -1475,7 +1475,7 @@ export const SubQs = () => {
                       className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
                       onClick={() => toggleOriginalEdit(subQ.sub_question_id)}
                     >
-                      {t("common.edit")}
+                      {t("common.editAndRegenerate")}
                     </button>
                   )}
                 </div>

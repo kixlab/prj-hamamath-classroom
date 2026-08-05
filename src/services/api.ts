@@ -57,6 +57,30 @@ interface GenerateSubQuestionData {
   language?: string;
 }
 
+interface CoTStepPayload {
+  step_id: number;
+  sub_skill_id: string;
+  step_name: string;
+  step_name_en: string;
+  sub_skill_name: string;
+  step_content: string;
+  prompt_used?: string | null;
+}
+
+interface RegenerateCotStepData {
+  main_problem: string;
+  main_answer?: string | null;
+  main_solution?: string | null;
+  img_description?: string | null;
+  image_data?: string | null;
+  grade: string;
+  target_step: CoTStepPayload;
+  previous_steps: CoTStepPayload[];
+  user_feedback: string;
+  subject_area?: string | null;
+  language?: string;
+}
+
 interface VerifyAndRegenerateData {
   main_problem: string;
   main_answer: string;
@@ -195,6 +219,23 @@ export const api = {
       throw new Error(errorData.detail || "CoT 생성 중 오류가 발생했습니다.");
     }
     return response.json();
+  },
+
+  // CoT 단계 하나만 피드백 반영해 재생성
+  async regenerateCotStep(data: RegenerateCotStepData) {
+    const response = await fetch(getApiUrl("/api/v1/cot/step/regenerate"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || "단계 재생성 중 오류가 발생했습니다.");
+    }
+    return response.json() as Promise<{
+      step: CoTStepPayload;
+      previous_content: string;
+    }>;
   },
 
   // 수학 영역 매칭

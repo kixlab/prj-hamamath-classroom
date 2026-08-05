@@ -7,6 +7,7 @@ import { frameworkStepSectionStyle, resolveFrameworkStepId } from '../../utils/f
 import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
+import { api } from '../../services/api';
 import type { CoTData, CoTStep } from '../../types';
 import styles from './CoTSteps.module.css';
 
@@ -25,6 +26,11 @@ export const CoTSteps = () => {
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>('');
+  const [feedbackText, setFeedbackText] = useState<string>('');
+  const [regeneratingStepId, setRegeneratingStepId] = useState<string | null>(null);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  // 재생성 직전 내용. 단계별로 1회 되돌리기를 지원한다.
+  const [undoContent, setUndoContent] = useState<Record<string, string>>({});
 
   const stepRows = useMemo(
     () => chunkSteps((currentCotData?.steps ?? []) as CoTStep[], 2),
@@ -64,11 +70,100 @@ export const CoTSteps = () => {
   const startEdit = (step: CoTStep) => {
     setEditingStepId(step.sub_skill_id ?? null);
     setEditingContent(step.step_content ?? '');
+    setFeedbackText('');
+    setRegenerateError(null);
   };
 
   const cancelEdit = () => {
     setEditingStepId(null);
     setEditingContent('');
+    setFeedbackText('');
+    setRegenerateError(null);
+  };
+
+  /** 단계 내용을 교체하고 저장·로깅까지 한 번에 처리 */
+  const applyStepContent = (subSkillId: string, content: string) => {
+    if (!currentCotData?.steps) return;
+    const newSteps = currentCotData.steps.map((s: CoTStep) =>
+      s.sub_skill_id === subSkillId ? { ...s, step_content: content } : s,
+    );
+    const updated = { ...currentCotData, steps: newSteps };
+    setCurrentCotData(updated);
+    if (currentProblemId) {
+      saveResult(currentProblemId, updated, undefined, undefined, undefined, undefined, userId);
+    }
+  };
+
+  const handleRegenerateStep = async (step: CoTStep) => {
+    const subSkillId = step.sub_skill_id;
+    const feedback = feedbackText.trim();
+    if (!subSkillId || !feedback || !currentCotData?.steps) return;
+
+    const cot = currentCotData as CoTData;
+    const steps = (cot.steps ?? []) as CoTStep[];
+    const index = steps.findIndex((s) => s.sub_skill_id === subSkillId);
+    if (index < 0) return;
+
+    // 편집창에 이미 손댄 내용이 있으면 그것을 기준으로 재생성한다
+    const baseContent = editingContent || step.step_content || '';
+    const toPayload = (s: CoTStep) => ({
+      step_id: Number(s.step_id ?? 0),
+      sub_skill_id: s.sub_skill_id ?? '',
+      step_name: s.step_name ?? s.step_title ?? '',
+      step_name_en: s.step_name_en ?? '',
+      sub_skill_name: s.sub_skill_name ?? '',
+      step_content: s.step_content ?? '',
+      prompt_used: s.prompt_used ?? null,
+    });
+
+    setRegeneratingStepId(subSkillId);
+    setRegenerateError(null);
+    try {
+      const res = await api.regenerateCotStep({
+        main_problem: cot.problem ?? '',
+        main_answer: cot.answer ?? null,
+        main_solution: cot.main_solution ?? null,
+        grade: String(cot.grade ?? ''),
+        target_step: { ...toPayload(step), step_content: baseContent },
+        previous_steps: steps.slice(0, index).map(toPayload),
+        user_feedback: feedback,
+        subject_area: cot.subject_area ?? null,
+      });
+
+      const newContent = res.step?.step_content ?? '';
+      if (!newContent.trim()) throw new Error(t('cot.regenerateStepFailed'));
+
+      setUndoContent((prev) => ({ ...prev, [subSkillId]: baseContent }));
+      applyStepContent(subSkillId, newContent);
+      logUserEvent('cot_step_regenerated', {
+        stepId: subSkillId,
+        step_name: step.step_name ?? step.step_title,
+        sub_skill_name: step.sub_skill_name,
+        feedback,
+        previousContent: baseContent,
+        newContent,
+      });
+
+      setEditingStepId(null);
+      setEditingContent('');
+      setFeedbackText('');
+    } catch (e) {
+      setRegenerateError(e instanceof Error ? e.message : t('cot.regenerateStepFailed'));
+    } finally {
+      setRegeneratingStepId(null);
+    }
+  };
+
+  const handleUndoRegenerate = (subSkillId: string) => {
+    const previous = undoContent[subSkillId];
+    if (previous === undefined) return;
+    applyStepContent(subSkillId, previous);
+    setUndoContent((prev) => {
+      const next = { ...prev };
+      delete next[subSkillId];
+      return next;
+    });
+    logUserEvent('cot_step_regenerate_undone', { stepId: subSkillId });
   };
 
   const saveEdit = () => {
@@ -95,6 +190,7 @@ export const CoTSteps = () => {
   const renderStepCard = (step: CoTStep, stepIndex: number) => {
     const stepKey = step.sub_skill_id ?? `step-${stepIndex}`;
     const isEditing = editingStepId === step.sub_skill_id;
+    const isRegenerating = regeneratingStepId === step.sub_skill_id;
     const skillLabel = formatCotSubSkill(step, locale);
     const skillDefinition = formatSubSkillDescription(step.sub_skill_id, locale);
 
@@ -118,9 +214,20 @@ export const CoTSteps = () => {
             </div>
           </div>
           {!isEditing && (
-            <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>
-              {t('common.edit')}
-            </button>
+            <div className={styles.stepHeaderActions}>
+              {undoContent[step.sub_skill_id ?? ''] !== undefined && (
+                <button
+                  type="button"
+                  className={styles.cancelBtn}
+                  onClick={() => handleUndoRegenerate(step.sub_skill_id ?? '')}
+                >
+                  {t('cot.undoRegenerate')}
+                </button>
+              )}
+              <button type="button" className={styles.editBtn} onClick={() => startEdit(step)}>
+                {t('common.editAndRegenerate')}
+              </button>
+            </div>
           )}
         </header>
         {isEditing ? (
@@ -131,13 +238,52 @@ export const CoTSteps = () => {
               onChange={(e) => setEditingContent(e.target.value)}
               rows={5}
               aria-label={skillLabel}
+              disabled={isRegenerating}
             />
             <div className={styles.editActions}>
-              <button type="button" className={styles.cancelBtn} onClick={cancelEdit}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={cancelEdit}
+                disabled={isRegenerating}
+              >
                 {t('common.cancel')}
               </button>
-              <button type="button" className={styles.saveBtn} onClick={saveEdit}>
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={saveEdit}
+                disabled={isRegenerating}
+              >
                 {t('common.save')}
+              </button>
+            </div>
+
+            <div className={styles.feedbackDivider}>
+              <span className={styles.feedbackDividerLabel}>{t('cot.stepFeedbackDivider')}</span>
+            </div>
+            <textarea
+              className={styles.editTextarea}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              rows={3}
+              placeholder={t('cot.stepFeedbackPlaceholder')}
+              aria-label={t('cot.stepFeedbackDivider')}
+              disabled={isRegenerating}
+            />
+            {regenerateError && (
+              <p className={styles.regenerateError} role="alert">
+                {regenerateError}
+              </p>
+            )}
+            <div className={styles.editActions}>
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={() => handleRegenerateStep(step)}
+                disabled={isRegenerating || !feedbackText.trim()}
+              >
+                {isRegenerating ? t('cot.regeneratingStep') : t('cot.regenerateStep')}
               </button>
             </div>
           </div>
