@@ -45,15 +45,17 @@ function normalizeMathDelimiters(text: string): string {
   return s;
 }
 
+/** 수식 구간($$..$$, \[..\], $..$, \(..\)). 캡처 그룹이 정확히 하나여야 split 결과의 홀수 인덱스가 수식이 된다. */
+const MATH_SEGMENT_RE = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[^$\n]*?\$|\\\([\s\S]*?\\\))/g;
+
 /**
  * 수식($$..$$, $..$, \(..\), \[..\]) 구간 '바깥'의 텍스트에서 LaTeX 이스케이프를 일반 텍스트로 복원.
  * (예: 수식 밖에 남은 `\_\_\_` → `___`, `\,` → 공백) 수식 구간은 MathJax가 처리하도록 그대로 둔다.
  */
 function unescapeTextOutsideMath(text: string): string {
   if (!text) return text;
-  const mathRe = /(\$\$[\s\S]*?\$\$|\$[^$\n]*?\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/g;
   return text
-    .split(mathRe)
+    .split(MATH_SEGMENT_RE)
     .map((part, i) => {
       if (i % 2 === 1) return part; // 캡처된 수식 구간 → 유지
       return part
@@ -148,11 +150,43 @@ export const splitQuestionAndAnswer = (
   };
 };
 
+/**
+ * marked는 LaTeX 백슬래시를 마크다운 이스케이프로 해석해 지워버린다.
+ * `\\`(행 구분자) → `\`, `\[` → `[`. 그러면 array의 행이 서로 붙어
+ * "Misplaced \hline"이 나고, 디스플레이 수식은 구분자를 잃어 조판조차 되지 않는다.
+ * breaks:true가 수식 중간에 <br>을 넣는 문제도 같이 생긴다.
+ *
+ * 그래서 수식 구간을 자리표시자로 빼두고 마크다운을 돌린 뒤 원문으로 되돌린다.
+ * 자리표시자는 마크다운 문법 문자를 쓰지 않아야 하므로 영문자+숫자만 사용한다.
+ */
+const MATH_TOKEN_PREFIX = "mjxmathseg";
+const MATH_TOKEN_SUFFIX = "endmjx";
+
+function renderMarkdownPreservingMath(text: string): string {
+  const segments: string[] = [];
+  const masked = text.replace(MATH_SEGMENT_RE, (segment) => {
+    segments.push(segment);
+    return `${MATH_TOKEN_PREFIX}${segments.length - 1}${MATH_TOKEN_SUFFIX}`;
+  });
+
+  const html = marked.parse(masked, { async: false }) as string;
+
+  return html.replace(
+    new RegExp(`${MATH_TOKEN_PREFIX}(\\d+)${MATH_TOKEN_SUFFIX}`, "g"),
+    (whole, index: string) => {
+      const segment = segments[Number(index)];
+      if (segment === undefined) return whole;
+      // MathJax는 DOM 텍스트를 읽으므로 &, <, > 만 엔티티로 돌려놓으면 원문 그대로 조판된다
+      return segment.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    },
+  );
+}
+
 /** LaTeX 전처리 후 마크다운 → HTML (정답·모범답안 등) */
 function formatRichTextHtml(text: string): string {
   const formatted = prepareMathText(text);
   if (!formatted) return "";
-  return marked.parse(formatted, { async: false }) as string;
+  return renderMarkdownPreservingMath(formatted);
 }
 
 export const formatAnswer = (answer: string | null | undefined): string => {
@@ -166,10 +200,18 @@ export const formatQuestion = (question: string | null | undefined): string => {
   return formatted || "";
 };
 
-/** formatQuestion + 줄바꿈을 <br>로 (dangerouslySetInnerHTML용) */
+/**
+ * formatQuestion + 줄바꿈을 <br>로 (dangerouslySetInnerHTML용).
+ * 수식 구간 안의 줄바꿈은 그대로 둔다 — $$..$$ 사이에 <br>이 끼면 MathJax가
+ * 수식 구간을 찾지 못해 array 같은 여러 줄 수식이 조판되지 않는다.
+ */
 export const formatQuestionHtml = (question: string | null | undefined): string => {
   const formatted = formatQuestion(question);
-  return formatted ? formatted.replace(/\n/g, "<br>") : "";
+  if (!formatted) return "";
+  return formatted
+    .split(MATH_SEGMENT_RE)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/\n/g, "<br>")))
+    .join("");
 };
 
 /** 모범답안 등 긴 수식 텍스트 (formatAnswer와 동일) */
