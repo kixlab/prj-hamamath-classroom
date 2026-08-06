@@ -86,4 +86,22 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 
+/*
+ * MathJax 조판 결과는 줄바꿈되지 않는다. 그래서 넓은 표(\begin{array})나 긴 수식이
+ * 들어오면 컨테이너를 그대로 넘쳐 옆 칸(문항↔정답 2단 배치 등) 위를 덮어버린다.
+ * 디스플레이 수식이 스스로 가로 스크롤을 갖게 해서 자기 칸 안에 머무르도록 한다.
+ */
+mjx-container[display="true"] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* 스크롤바가 표 아래 테두리를 가리지 않도록 */
+  padding-bottom: 2px;
+}
+
+/* 인라인 수식은 스크롤을 만들지 않되, 칸 밖으로 밀고 나가지도 않게 한다 */
+mjx-container:not([display="true"]) {
+  max-width: 100%;
+}
+
 /* 반응형 디자인 */
