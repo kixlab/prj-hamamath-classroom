@@ -119,9 +119,41 @@
   flex-wrap: wrap;
 }
 
+.footerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .hint {
   font-size: 12.5px;
   color: #8a94a6;
+}
+
+/* 푸터 옵션 컨트롤 (예: "모범답안 포함" 체크박스) */
+.optionToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1a2230;
+  cursor: pointer;
+  user-select: none;
+}
+.optionToggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #004191;
+  cursor: pointer;
+}
+.optionToggle input:disabled {
+  cursor: default;
+}
+.optionToggle:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .actions {
@@ -191,6 +223,12 @@
   .closeBtn:hover {
     background: #232c39;
     color: #e6ecf5;
+  }
+  .optionToggle {
+    color: #e6ecf5;
+  }
+  .optionToggle input {
+    accent-color: #2563eb;
   }
   .secondaryBtn {
     background: #232c39;
