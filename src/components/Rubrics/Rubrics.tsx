@@ -11,6 +11,7 @@ import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/f
 import { demoDelay, DEMO_RUBRIC_LOADING_MS, DEMO_REGENERATE_MS } from "../../demo/demoDelay";
 import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
 import { buildRandomAnswersFromRubrics } from "../../utils/randomStudentAnswers";
+import { RubricPreviewModal } from "./RubricPreviewModal";
 import styles from "./Rubrics.module.css";
 
 interface RubricLevel {
@@ -198,6 +199,7 @@ export const Rubrics = () => {
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   // Per-level examples toggle: key = "sub_question_id::level"
   const [examplesOpen, setExamplesOpen] = useState<Record<string, boolean>>({});
+  const [previewOpen, setPreviewOpen] = useState(false);
   const containerRef = useMathJax([rubrics, editingLevels, examplesOpen, mainProblem, mainAnswer, subQuestionForStep4, preferredVersion]);
 
   const renderMainProblemSection = () => {
@@ -420,6 +422,24 @@ export const Rubrics = () => {
 
   const resolveRubricStepId = (rubric: RubricItem) =>
     findSubQuestion(rubric.sub_question_id)?.step_id ?? rubric.sub_question_id.split("-")[0];
+
+  /** PDF 내보내기용 데이터 — 화면에 보이는 문항/모범답안·라벨과 동일하게 맞춘다 */
+  const buildRubricExportItems = () =>
+    rubrics.map((rubric) => {
+      const subQ = findSubQuestion(rubric.sub_question_id);
+      const { question, answer } = subQ
+        ? getSubqDisplayQA(subQ, preferredVersion[rubric.sub_question_id])
+        : { question: rubric.question, answer: rubric.answer ?? "" };
+      const labelSource = subQ ?? rubric;
+      return {
+        sub_question_id: rubric.sub_question_id,
+        step_name: formatCotStepGroup(labelSource, locale),
+        sub_skill_name: formatCotSubSkill(labelSource, locale),
+        question,
+        answer,
+        levels: rubric.levels,
+      };
+    });
 
   const handleRegenerateSingle = async (id: string, feedback?: string | null) => {
     const gd = subQuestionForStep4 as any;
@@ -829,6 +849,15 @@ export const Rubrics = () => {
           <div className={styles.pageFooterActions}>
             <button
               type="button"
+              className={`${styles.btn} ${styles.btnGhost} ${styles.btnStacked}`}
+              onClick={() => setPreviewOpen(true)}
+              disabled={!rubrics.length}
+            >
+              <span className={styles.btnStackedLabel}>{t("exportRubric.openButton")}</span>
+              <span className={styles.btnStackedHint}>{t("exportRubric.openButtonHint")}</span>
+            </button>
+            <button
+              type="button"
               className={`${styles.btn} ${styles.btnSecondary} ${styles.btnStacked}`}
               onClick={handleFinalizeRubrics}
             >
@@ -838,6 +867,19 @@ export const Rubrics = () => {
           </div>
         </div>
       </footer>
+
+      <RubricPreviewModal
+        open={previewOpen}
+        rubrics={buildRubricExportItems()}
+        meta={{
+          problemId: currentProblemId,
+          mainProblem,
+          mainAnswer,
+          grade: (subQuestionForStep4 as { grade?: string } | null)?.grade ?? (currentCotData as { grade?: string } | null)?.grade,
+          subjectArea: (subQuestionForStep4 as { subject_area?: string } | null)?.subject_area,
+        }}
+        onClose={() => setPreviewOpen(false)}
+      />
     </div>
   );
 };
