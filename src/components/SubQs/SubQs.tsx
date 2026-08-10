@@ -61,6 +61,19 @@ const normalizeSubQuestion = (subQ: SubQuestion): SubQuestion => {
 
 type SubqPanelVersion = "original" | "regenerated";
 
+/**
+ * 재생성 범위.
+ * - "both": 문항과 정답을 모두 다시 만든다
+ * - "answer": 문항은 그대로 두고 정답만 다시 만든다
+ *
+ * 서버는 failing_verifiers가 ["answer_validity"] 하나뿐일 때 "정답만 재생성, 문제는 원본 유지"로
+ * 프롬프트를 바꾸고 re_sub_question을 비워서 돌려준다 (app/api/sub_question/services.py).
+ */
+type RegenerateScope = "both" | "answer";
+
+const ALL_VERIFIERS = ["stage_elicitation", "context_alignment", "answer_validity", "prompt_validity"];
+const ANSWER_ONLY_VERIFIERS = ["answer_validity"];
+
 const panelStateKey = (subqId: string, version: SubqPanelVersion) => `${subqId}:${version}`;
 
 /** 연속된 step_id 기준으로 대단계(문제 이해 등) 섹션 묶음 */
@@ -938,7 +951,12 @@ export const SubQs = () => {
     }
   };
 
-  const handleFeedbackRegenerate = async (subqId: string, userFeedback: string, version: SubqPanelVersion) => {
+  const handleFeedbackRegenerate = async (
+    subqId: string,
+    userFeedback: string,
+    version: SubqPanelVersion,
+    scope: RegenerateScope = "both",
+  ) => {
     if (!currentCotData || !currentSubQuestionData) return;
 
     const regenKey = panelStateKey(subqId, version);
@@ -965,7 +983,7 @@ export const SubQs = () => {
       return;
     }
 
-    logUserEvent("feedback_submitted", { subqId, version, feedbackText: userFeedback });
+    logUserEvent("feedback_submitted", { subqId, version, scope, feedbackText: userFeedback });
 
     const subQuestions: SubQuestion[] = (currentSubQuestionData as any).guide_sub_questions || [];
     const targetSubQ = subQuestions.find((q: SubQuestion) => q.sub_question_id === subqId);
@@ -1015,23 +1033,30 @@ export const SubQs = () => {
         previous_sub_questions: subQuestions.filter((q: SubQuestion) => q.sub_question_id !== subqId),
         original_sub_question: feedbackTarget,
         verification_feedbacks: [`[사용자 피드백] ${userFeedback}`],
-        failing_verifiers: ["stage_elicitation", "context_alignment", "answer_validity", "prompt_validity"],
+        failing_verifiers: scope === "answer" ? ANSWER_ONLY_VERIFIERS : ALL_VERIFIERS,
         language: getAppLanguage(locale),
         ...getTextbookRagParams(),
       } as any, userId);
 
       const updated = (regenerateResponse as any).sub_question as SubQuestion;
+      // 서버는 새로 만든 내용을 re_* 에 담아 돌려주고, guide_* 에는 보낸 원본을 그대로 되돌려준다.
+      // 정답만 재생성한 경우 re_sub_question은 비어 온다 — 이때 문항은 절대 건드리지 않는다.
+      const newQuestion = (updated.re_sub_question ?? "").trim() || null;
+      const newAnswer = (updated.re_sub_answer ?? "").trim() || null;
+      const keepQuestion = scope === "answer" || !newQuestion;
       const merged: SubQuestion = normalizeSubQuestion(
         version === "regenerated"
           ? {
               ...targetSubQ,
-              re_sub_question: updated.re_sub_question ?? updated.guide_sub_question ?? targetSubQ.re_sub_question,
-              re_sub_answer: updated.re_sub_answer ?? updated.guide_sub_answer ?? targetSubQ.re_sub_answer,
+              re_sub_question: keepQuestion
+                ? targetSubQ.re_sub_question || targetSubQ.guide_sub_question
+                : newQuestion!,
+              re_sub_answer: newAnswer ?? targetSubQ.re_sub_answer,
             }
           : {
               ...targetSubQ,
-              guide_sub_question: updated.guide_sub_question ?? targetSubQ.guide_sub_question,
-              guide_sub_answer: updated.guide_sub_answer ?? targetSubQ.guide_sub_answer,
+              guide_sub_question: keepQuestion ? targetSubQ.guide_sub_question : newQuestion!,
+              guide_sub_answer: newAnswer ?? targetSubQ.guide_sub_answer,
             },
       );
 
@@ -1045,6 +1070,7 @@ export const SubQs = () => {
       logUserEvent("regenerated_output", {
         subqId,
         version,
+        scope,
         re_sub_question: merged.re_sub_question ?? null,
         re_sub_answer: merged.re_sub_answer ?? null,
         guide_sub_question: merged.guide_sub_question,
@@ -1288,29 +1314,45 @@ export const SubQs = () => {
                   />
                 </label>
                 <div className={styles.feedbackActions}>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
-                    disabled={panelRegenerating}
-                    onClick={() => {
+                  {(() => {
+                    const runRegenerate = (scope: RegenerateScope) => {
                       const feedbackText =
                         (document.querySelector(
                           `textarea[data-subq-id="${subQ.sub_question_id}"][data-type="${version}-feedback"]`,
                         ) as HTMLTextAreaElement)?.value || "";
                       if (feedbackText.trim()) {
-                        handleFeedbackRegenerate(subQ.sub_question_id, feedbackText, panelVersion);
+                        handleFeedbackRegenerate(subQ.sub_question_id, feedbackText, panelVersion, scope);
                       }
-                    }}
-                  >
-                    {panelRegenerating ? (
+                    };
+                    if (panelRegenerating) {
+                      return (
+                        <button type="button" className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`} disabled>
+                          <span className={styles.spinnerInline} aria-hidden />
+                          {t("common.processing")}
+                        </button>
+                      );
+                    }
+                    return (
                       <>
-                        <span className={styles.spinnerInline} aria-hidden />
-                        {t("common.processing")}
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnSecondary} ${styles.btnCompact}`}
+                          onClick={() => runRegenerate("answer")}
+                          title={t("subq.regenerateAnswerOnlyHint")}
+                        >
+                          {t("subq.regenerateAnswerOnly")}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+                          onClick={() => runRegenerate("both")}
+                          title={t("subq.regenerateBothHint")}
+                        >
+                          {t("subq.regenerateBoth")}
+                        </button>
                       </>
-                    ) : (
-                      t("common.regenerate")
-                    )}
-                  </button>
+                    );
+                  })()}
                 </div>
               </div>
             );

@@ -10,6 +10,30 @@ import { api } from "../../services/api";
 import { fetchHistoryListForUser, loadResult, loadResultForUser } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
 import { compressImageDataUrl } from "../../utils/imageCompression";
+
+/**
+ * 학생 한 명·한 문제당 올릴 수 있는 손글씨 이미지 장수.
+ * 서버 app/api/handwritten/services.py의 MAX_SLOTS와 반드시 같아야 한다.
+ */
+const MAX_HANDWRITTEN_SLOTS = 8;
+
+/** 어떤 형태로 들어오든 길이 MAX_HANDWRITTEN_SLOTS의 슬롯 배열로 맞춘다 */
+function normalizeSlots(list: (string | null)[] | undefined | null): (string | null)[] {
+  const out: (string | null)[] = Array.from({ length: MAX_HANDWRITTEN_SLOTS }, () => null);
+  (list ?? []).slice(0, MAX_HANDWRITTEN_SLOTS).forEach((value, i) => {
+    out[i] = value || null;
+  });
+  return out;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
+    reader.readAsDataURL(file);
+  });
+}
 import { getDemoSourceUserId, isDemoUserId } from "../../demo/demoAccount";
 import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
 import { buildDemoWorkflowPack, getDemoWorkspaceSnapshot, type DemoSubQuestionData } from "../../demo/demoWorkspace";
@@ -533,7 +557,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // 학생별 · 문제별 단계 수준 요약 (여러 문제 진단 결과를 표로 보여주기 위함)
   const [studentProblemSummaries, setStudentProblemSummaries] = useState<Record<string, Record<string, ProblemStepSummary>>>({});
   /** 해당 학생·문제별 업로드한 손글씨 이미지 (data URL). [이미지1, 이미지2] */
-  const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, [string | null, string | null]>>>({});
+  // 학생·문제별 손글씨 이미지 슬롯. 길이 MAX_HANDWRITTEN_SLOTS의 배열이며 빈 슬롯은 null.
+  // (서버 저장 경로가 slot_{n} 이므로 인덱스 = 슬롯번호-1 로 그대로 대응된다)
+  const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, (string | null)[]>>>({});
+  const [pdfUploading, setPdfUploading] = useState(false);
   const [previewHandwrittenImage, setPreviewHandwrittenImage] = useState<{
     src: string;
     slot: number;
@@ -783,15 +810,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
         );
         if (cancelled) return;
         setHandwrittenUploads((prev) => {
-          const serverSlots: [string | null, string | null] = [res.slot1 ?? null, res.slot2 ?? null];
+          const serverSlots = normalizeSlots(res);
           const existing = prev[currentStudentId]?.[problemIdForDiagnosis];
           // 서버가 비어 있는데 방금 업로드한 로컬 미리보기만 있으면 유지(레이스 방지)
-          if (
-            !serverSlots[0] &&
-            !serverSlots[1] &&
-            existing &&
-            (existing[0] || existing[1])
-          ) {
+          if (!serverSlots.some(Boolean) && existing?.some(Boolean)) {
             return prev;
           }
           return {
@@ -938,91 +960,126 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
   const currentProblemKey = problemIdForDiagnosis ?? "__current__";
 
-  const handleHandwrittenUpload = async (slot: 1 | 2, file: File | null) => {
+  /** 슬롯 하나를 이미지로 교체하거나(file) 비운다(null). slot은 1부터. */
+  const handleHandwrittenUpload = async (slot: number, file: File | null) => {
     if (!currentStudentId || !problemIdForDiagnosis) return;
+    if (slot < 1 || slot > MAX_HANDWRITTEN_SLOTS) return;
     const problemKey = problemIdForDiagnosis;
+    const index = slot - 1;
     if (file && !file.type.startsWith("image/")) {
       alert(t("diagnosis.imagesOnly"));
       return;
     }
-    if (!file) {
+
+    const writeSlot = (value: string | null) => {
       setHandwrittenUploads((prev) => {
         const byStudent = prev[currentStudentId] ?? {};
-        const current = byStudent[problemKey] ?? [null, null];
-        const next: [string | null, string | null] = slot === 1 ? [null, current[1]] : [current[0], null];
+        const next = normalizeSlots(byStudent[problemKey]);
+        next[index] = value;
         return { ...prev, [currentStudentId]: { ...byStudent, [problemKey]: next } };
       });
+    };
+
+    if (!file) {
+      writeSlot(null);
       if (isDemo) return;
       try {
-        await api.deleteHandwritten(
-          currentStudentId,
-          currentStudentName,
-          problemKey,
-          slot,
-          userId,
-        );
+        await api.deleteHandwritten(currentStudentId, currentStudentName, problemKey, slot, userId);
       } catch (err: any) {
         console.warn("손글씨 이미지 서버 삭제 실패:", err);
       }
       return;
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const rawDataUrl = reader.result as string;
-      let dataUrl: string;
-      try {
-        dataUrl = await compressImageDataUrl(rawDataUrl);
-      } catch (e) {
-        console.warn("이미지 압축 실패, 원본으로 전송:", e);
-        dataUrl = rawDataUrl;
+
+    const rawDataUrl = await readFileAsDataUrl(file);
+    let dataUrl: string;
+    try {
+      dataUrl = await compressImageDataUrl(rawDataUrl);
+    } catch (e) {
+      console.warn("이미지 압축 실패, 원본으로 전송:", e);
+      dataUrl = rawDataUrl;
+    }
+
+    const previous = normalizeSlots(handwrittenUploads[currentStudentId]?.[problemKey]);
+    writeSlot(dataUrl);
+    if (isDemo) return;
+    try {
+      await api.uploadHandwritten(currentStudentId, currentStudentName, problemKey, slot, dataUrl, userId);
+      // Firebase에 확정 저장된 본을 다시 읽어 다른 브라우저와 동일 소스 유지
+      const res = await api.getHandwritten(currentStudentId, currentStudentName, problemKey, userId);
+      setHandwrittenUploads((prev) => ({
+        ...prev,
+        [currentStudentId]: {
+          ...(prev[currentStudentId] ?? {}),
+          [problemKey]: normalizeSlots(res),
+        },
+      }));
+    } catch (err: any) {
+      console.warn("손글씨 이미지 서버 저장 실패:", err);
+      setHandwrittenUploads((prev) => ({
+        ...prev,
+        [currentStudentId]: { ...(prev[currentStudentId] ?? {}), [problemKey]: previous },
+      }));
+      alert(err?.message ?? t("diagnosis.imageSaveFail"));
+    }
+  };
+
+  /** 여러 장을 한 번에 골랐을 때 빈 슬롯부터 순서대로 채운다. */
+  const handleAddHandwrittenImages = async (files: File[]) => {
+    if (!currentStudentId || !problemIdForDiagnosis || files.length === 0) return;
+    const current = normalizeSlots(handwrittenUploads[currentStudentId]?.[problemIdForDiagnosis]);
+    const freeSlots: number[] = [];
+    current.forEach((value, i) => {
+      if (!value) freeSlots.push(i + 1);
+    });
+    if (freeSlots.length === 0) {
+      alert(t("diagnosis.slotsFull", { max: MAX_HANDWRITTEN_SLOTS }));
+      return;
+    }
+    if (files.length > freeSlots.length) {
+      alert(t("diagnosis.slotsPartial", { max: MAX_HANDWRITTEN_SLOTS, n: freeSlots.length }));
+    }
+    // 슬롯 충돌을 피하려고 순차 처리 (동시 업로드 시 서버 재조회 결과가 서로를 덮어쓸 수 있음)
+    for (let i = 0; i < Math.min(files.length, freeSlots.length); i++) {
+      await handleHandwrittenUpload(freeSlots[i], files[i]);
+    }
+  };
+
+  /** PDF 답안지 — 서버가 페이지별 이미지로 쪼개 슬롯 1번부터 채운다 (기존 이미지는 교체) */
+  const handleHandwrittenPdfUpload = async (file: File) => {
+    if (!currentStudentId || !problemIdForDiagnosis) return;
+    if (isDemo) {
+      alert(t("diagnosis.pdfDemoNote"));
+      return;
+    }
+    const problemKey = problemIdForDiagnosis;
+    const hasExisting = normalizeSlots(handwrittenUploads[currentStudentId]?.[problemKey]).some(Boolean);
+    if (hasExisting && !window.confirm(t("diagnosis.pdfReplaceConfirm"))) return;
+
+    setPdfUploading(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const result = await api.uploadHandwrittenPdf(
+        currentStudentId,
+        currentStudentName,
+        problemKey,
+        dataUrl,
+        userId,
+      );
+      const res = await api.getHandwritten(currentStudentId, currentStudentName, problemKey, userId);
+      setHandwrittenUploads((prev) => ({
+        ...prev,
+        [currentStudentId]: { ...(prev[currentStudentId] ?? {}), [problemKey]: normalizeSlots(res) },
+      }));
+      if (result.skippedPages > 0) {
+        alert(t("diagnosis.pdfTruncated", { max: MAX_HANDWRITTEN_SLOTS, n: result.skippedPages }));
       }
-      const previousSlotsRef: { current: [string | null, string | null] } = {
-        current: [null, null],
-      };
-      setHandwrittenUploads((prev) => {
-        const byStudent = prev[currentStudentId] ?? {};
-        const current = byStudent[problemKey] ?? [null, null];
-        previousSlotsRef.current = current;
-        const next: [string | null, string | null] = slot === 1 ? [dataUrl, current[1]] : [current[0], dataUrl];
-        return { ...prev, [currentStudentId]: { ...byStudent, [problemKey]: next } };
-      });
-      if (isDemo) return;
-      try {
-        await api.uploadHandwritten(
-          currentStudentId,
-          currentStudentName,
-          problemKey,
-          slot,
-          dataUrl,
-          userId,
-        );
-        // Firebase에 확정 저장된 본을 다시 읽어 다른 브라우저와 동일 소스 유지
-        const res = await api.getHandwritten(
-          currentStudentId,
-          currentStudentName,
-          problemKey,
-          userId,
-        );
-        setHandwrittenUploads((prev) => ({
-          ...prev,
-          [currentStudentId]: {
-            ...(prev[currentStudentId] ?? {}),
-            [problemKey]: [res.slot1 ?? null, res.slot2 ?? null],
-          },
-        }));
-      } catch (err: any) {
-        console.warn("손글씨 이미지 서버 저장 실패:", err);
-        setHandwrittenUploads((prev) => ({
-          ...prev,
-          [currentStudentId]: {
-            ...(prev[currentStudentId] ?? {}),
-            [problemKey]: previousSlotsRef.current,
-          },
-        }));
-        alert(err?.message ?? t("diagnosis.imageSaveFail"));
-      }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.warn("PDF 업로드 실패:", err);
+      alert(err?.message ?? t("diagnosis.pdfUploadFail"));
+    } finally {
+      setPdfUploading(false);
+    }
   };
 
   /** 업로드된 풀이 이미지를 Vision으로 읽어 하위문항별 답안 칸에 채움 (이후 수정 가능) */
@@ -1032,7 +1089,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       return;
     }
     if (!currentStudentId || !currentProblemKey) return;
-    const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
+    const urls = normalizeSlots(handwrittenUploads[currentStudentId]?.[currentProblemKey]);
     const images = urls.filter((u): u is string => !!u?.trim());
     if (images.length === 0) {
       alert(t("diagnosis.recognizeNeedImage"));
@@ -2071,25 +2128,54 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                       </header>
 
                       {currentStudentId && currentProblemKey && (() => {
-                        const urls = handwrittenUploads[currentStudentId]?.[currentProblemKey] ?? [null, null];
-                        const hasAnyImage = !!(urls[0] || urls[1]);
+                        const urls = normalizeSlots(handwrittenUploads[currentStudentId]?.[currentProblemKey]);
+                        const filled = urls.filter(Boolean).length;
+                        const hasAnyImage = filled > 0;
+                        const isFull = filled >= MAX_HANDWRITTEN_SLOTS;
                         return (
                           <section className={styles.handwritingCard}>
                             <div className={styles.handwritingCardHead}>
-                              <h4 className={styles.handwritingCardTitle}>{t("diagnosis.handwrittenTitle")}</h4>
+                              <h4 className={styles.handwritingCardTitle}>
+                                {t("diagnosis.handwrittenTitle")}
+                                {hasAnyImage && (
+                                  <span className={styles.handwritingCount}>
+                                    {filled} / {MAX_HANDWRITTEN_SLOTS}
+                                  </span>
+                                )}
+                              </h4>
                               <div className={styles.handwritingCardActions}>
-                                <label className={styles.handwritingUploadBtn}>
-                                  {hasAnyImage ? t("diagnosis.replace") : t("diagnosis.uploadHandwriting")}
+                                <label
+                                  className={`${styles.handwritingUploadBtn} ${isFull || pdfUploading ? styles.handwritingBtnDisabled : ""}`}
+                                >
+                                  {hasAnyImage ? t("diagnosis.addImages") : t("diagnosis.uploadHandwriting")}
                                   <input
                                     type="file"
                                     accept="image/*"
                                     multiple
+                                    disabled={isFull || pdfUploading}
                                     className={styles.handwritingFileInput}
                                     onChange={(e) => {
-                                      const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
-                                      if (files[0]) handleHandwrittenUpload(1, files[0]);
-                                      if (files[1]) handleHandwrittenUpload(2, files[1]);
+                                      const files = Array.from(e.target.files ?? []).filter((f) =>
+                                        f.type.startsWith("image/"),
+                                      );
                                       e.target.value = "";
+                                      void handleAddHandwrittenImages(files);
+                                    }}
+                                  />
+                                </label>
+                                <label
+                                  className={`${styles.handwritingUploadBtn} ${pdfUploading ? styles.handwritingBtnDisabled : ""}`}
+                                >
+                                  {pdfUploading ? t("common.loading") : t("diagnosis.uploadPdf")}
+                                  <input
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    disabled={pdfUploading}
+                                    className={styles.handwritingFileInput}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0] ?? null;
+                                      e.target.value = "";
+                                      if (file) void handleHandwrittenPdfUpload(file);
                                     }}
                                   />
                                 </label>
@@ -2109,9 +2195,9 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
 
                             {hasAnyImage ? (
                               <div className={styles.handwritingImages}>
-                                {([1, 2] as const).map((slot) => {
-                                  const dataUrl = urls[slot - 1];
+                                {urls.map((dataUrl, index) => {
                                   if (!dataUrl) return null;
+                                  const slot = index + 1;
                                   return (
                                     <figure key={slot} className={styles.handwritingFigure}>
                                       <button
@@ -2126,6 +2212,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                           className={styles.handwritingImage}
                                         />
                                       </button>
+                                      <figcaption className={styles.handwritingCaption}>{slot}</figcaption>
                                       <button
                                         type="button"
                                         className={styles.handwritingRemoveBtn}
