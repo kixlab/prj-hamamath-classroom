@@ -8,6 +8,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, resolveProblemLanguage } from "../../i18n/translations";
 import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
+import { isDownstreamStale, resolveMainProblem } from "../../utils/problemSync";
 import { demoDelay, DEMO_RUBRIC_LOADING_MS, DEMO_REGENERATE_MS } from "../../demo/demoDelay";
 import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
 import { buildRandomAnswersFromRubrics } from "../../utils/randomStudentAnswers";
@@ -168,6 +169,7 @@ export const Rubrics = () => {
     currentSubQuestionData,
     currentRubrics,
     setCurrentRubrics,
+    setCurrentStep,
     currentProblemId,
     finalizedSubQuestionForRubric,
     preferredVersion = {},
@@ -176,9 +178,14 @@ export const Rubrics = () => {
   } = useApp();
   /** 3단계에서 넘긴 확정 JSON이 있으면 사용, 없으면 기존 subQuestion */
   const subQuestionForStep4 = finalizedSubQuestionForRubric ?? currentSubQuestionData;
-  const subQuestionGd = subQuestionForStep4 as { main_problem?: string; main_answer?: string } | null;
-  const mainProblem = (subQuestionGd?.main_problem ?? (currentCotData as { problem?: string } | null)?.problem ?? "").trim();
-  const mainAnswer = (subQuestionGd?.main_answer ?? (currentCotData as { answer?: string } | null)?.answer ?? "").trim();
+  // 1단계에서 문제를 고쳤을 수 있으므로 항상 최신 CoT를 우선한다.
+  // (하위문항 스냅샷의 main_problem은 '생성 당시의 문제'라 stale 판정용으로만 쓴다)
+  const { problem: mainProblem, answer: mainAnswer, grade: mainGrade } = resolveMainProblem(
+    currentCotData as never,
+    subQuestionForStep4 as never,
+  );
+  /** 하위문항·루브릭이 만들어진 뒤에 본문제가 수정됐는가 */
+  const problemChanged = isDownstreamStale(currentCotData as never, subQuestionForStep4 as never);
   const rubrics = (currentRubrics ?? []) as RubricItem[];
   const hasSubQuestionSubs = !!(subQuestionForStep4 as any)?.guide_sub_questions?.length;
   const shouldAutoGenerate = rubrics.length === 0 && hasSubQuestionSubs;
@@ -265,8 +272,8 @@ export const Rubrics = () => {
         return;
       }
       const rubricLanguage = resolveProblemLanguage(
-        gd.main_problem,
-        gd.main_answer,
+        mainProblem,
+        mainAnswer,
         ...gd.guide_sub_questions.flatMap((sq: any) => [
           sq.re_sub_question,
           sq.guide_sub_question,
@@ -274,10 +281,11 @@ export const Rubrics = () => {
           sq.guide_sub_answer,
         ]),
       );
+      // 1단계에서 수정된 문제가 있으면 그 최신 내용으로 루브릭을 만든다
       const response = await api.generateRubricPipeline({
-        main_problem: gd.main_problem,
-        main_answer: gd.main_answer,
-        grade: gd.grade,
+        main_problem: mainProblem,
+        main_answer: mainAnswer,
+        grade: mainGrade || gd.grade,
         subject_area: gd.subject_area,
         sub_questions: gd.guide_sub_questions,
         variant: "with_error_types",
@@ -310,7 +318,7 @@ export const Rubrics = () => {
       setGenerating(false);
       setGeneratingMessage("");
     }
-  }, [subQuestionForStep4, locale, setCurrentRubrics, t, isDemoMode, currentProblemId]);
+  }, [subQuestionForStep4, locale, setCurrentRubrics, t, isDemoMode, currentProblemId, mainProblem, mainAnswer, mainGrade]);
 
   useEffect(() => {
     autoGenerateStartedRef.current = false;
@@ -457,17 +465,17 @@ export const Rubrics = () => {
       }
 
       const response = await api.regenerateRubricSingle({
-        main_problem: gd.main_problem,
-        main_answer: gd.main_answer,
-        grade: gd.grade,
+        main_problem: mainProblem,
+        main_answer: mainAnswer,
+        grade: mainGrade || gd.grade,
         subject_area: gd.subject_area,
         sub_question: subQuestion,
         current_rubric: buildCurrentRubric(rubricItem),
         feedback: feedback || null,
         variant: "with_error_types",
         language: resolveProblemLanguage(
-          gd.main_problem,
-          gd.main_answer,
+          mainProblem,
+          mainAnswer,
           subQuestion.re_sub_question,
           subQuestion.guide_sub_question,
           subQuestion.re_sub_answer,
@@ -583,7 +591,20 @@ export const Rubrics = () => {
   return (
     <div className={styles.rubricContainer} ref={containerRef}>
       {renderMainProblemSection()}
-      {showRegenerateAllBanner && (
+      {problemChanged && (
+        <div className={`${styles.noticeBanner} ${styles.noticeBannerWarning}`}>
+          <p className={styles.noticeBannerText}>{t("sync.rubricStale")}</p>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+            onClick={() => setCurrentStep(3)}
+            disabled={generating}
+          >
+            {t("sync.goToSubq")}
+          </button>
+        </div>
+      )}
+      {showRegenerateAllBanner && !problemChanged && (
         <div className={styles.noticeBanner}>
           <p className={styles.noticeBannerText}>{t("rubric.regenerateAllHint")}</p>
           <button

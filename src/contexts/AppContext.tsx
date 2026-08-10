@@ -22,6 +22,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const isDemoMode = isDemoUserId(userId);
   const [currentProblemId, setCurrentProblemId] = useState<string | null>(null);
   const [currentCotData, setCurrentCotData] = useState<CoTData | null>(null);
+  const [cotBeforeRegenerate, setCotBeforeRegenerate] = useState<CoTData | null>(null);
   const [currentSubQData, setCurrentSubQData] = useState<any | null>(null);
   const [currentSubQuestionData, setCurrentSubQuestionData] = useState<SubQuestionData | null>(null);
   const [lastSubQuestionDataBeforeVerifyFix, setLastSubQuestionDataBeforeVerifyFix] = useState<SubQuestionData | null>(null);
@@ -62,6 +63,7 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
   const reset = useCallback(() => {
     setCurrentProblemId(null);
     setCurrentCotData(null);
+    setCotBeforeRegenerate(null);
     setCurrentSubQData(null);
     setCurrentSubQuestionData(null);
     setLastSubQuestionDataBeforeVerifyFix(null);
@@ -83,6 +85,8 @@ export const AppProvider = ({ children, userId }: AppProviderProps) => {
     setCurrentProblemId,
     currentCotData,
     setCurrentCotData,
+    cotBeforeRegenerate,
+    setCotBeforeRegenerate,
     currentSubQData,
     setCurrentSubQData,
     currentSubQuestionData,

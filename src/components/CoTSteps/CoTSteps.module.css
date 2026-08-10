@@ -351,3 +351,94 @@
 .generateButton:active {
   transform: scale(0.98);
 }
+
+/* 1단계에서 문제가 수정돼 풀이과정이 낡았을 때 / 재생성 직후 되돌리기 안내 */
+.staleBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff8e6;
+  border: 1px solid #eab308;
+}
+
+.staleBannerText {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #7a5c00;
+  line-height: 1.45;
+}
+
+.staleBannerBtn,
+.staleBannerBtnGhost {
+  min-height: 34px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.staleBannerBtn {
+  background: #004191;
+  color: #fff;
+}
+.staleBannerBtn:hover:not(:disabled) {
+  background: #00306e;
+}
+.staleBannerBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.staleBannerBtnGhost {
+  background: #fff;
+  border-color: #d5deec;
+  color: #5b6472;
+}
+.staleBannerBtnGhost:hover {
+  background: #f2f5fa;
+}
+
+.staleBannerError {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fdecec;
+  border: 1px solid #e88;
+  color: #a33;
+  font-size: 0.8125rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .staleBanner {
+    background: #2c2410;
+    border-color: #8a6d0b;
+  }
+  .staleBannerText {
+    color: #f0d98a;
+  }
+  .staleBannerBtn {
+    background: #2563eb;
+  }
+  .staleBannerBtnGhost {
+    background: #232c39;
+    border-color: #333d4c;
+    color: #b9c3d4;
+  }
+}
+
+@media (max-width: 640px) {
+  .staleBanner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
