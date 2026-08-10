@@ -720,12 +720,12 @@ export const api = {
     return response.json();
   },
 
-  /** 손글씨 이미지 업로드 (해당 학생·문제, slot 1 또는 2). image는 data URL 또는 base64 문자열. */
+  /** 손글씨 이미지 업로드 (해당 학생·문제, slot 1..MAX_HANDWRITTEN_SLOTS). image는 data URL 또는 base64 문자열. */
   async uploadHandwritten(
     studentId: string,
     studentName: string,
     problemId: string,
-    slot: 1 | 2,
+    slot: number,
     imageDataUrl: string,
     userId?: string | null
   ): Promise<{ status: string; slot: number }> {
@@ -755,13 +755,17 @@ export const api = {
     return response.json();
   },
 
-  /** 손글씨 이미지 조회 (해당 학생·문제, slot1/slot2 base64 data URL). 404면 없음으로 반환 */
+  /**
+   * 손글씨 이미지 조회 (해당 학생·문제). 슬롯 순서대로의 data URL 배열을 반환한다.
+   * 서버가 아직 배열(slots)을 안 주는 구버전이면 slot1/slot2에서 복원한다.
+   * 404면 빈 배열.
+   */
   async getHandwritten(
     studentId: string,
     studentName: string,
     problemId: string,
     userId?: string | null
-  ): Promise<{ slot1: string | null; slot2: string | null }> {
+  ): Promise<(string | null)[]> {
     const params = new URLSearchParams({
       student_id: studentId,
       student_name: studentName,
@@ -770,11 +774,61 @@ export const api = {
     const response = await fetch(getApiUrl(`/api/v1/handwritten?${params}`), {
       headers: getHistoryHeadersWithFallback(userId),
     });
-    if (response.status === 404) return { slot1: null, slot2: null };
+    if (response.status === 404) return [];
     if (!response.ok) {
       throw new Error("이미지 조회에 실패했습니다.");
     }
-    return response.json();
+    const data = (await response.json()) as {
+      slots?: (string | null)[];
+      slot1?: string | null;
+      slot2?: string | null;
+    };
+    if (Array.isArray(data.slots)) return data.slots;
+    return [data.slot1 ?? null, data.slot2 ?? null];
+  },
+
+  /**
+   * PDF 답안지 업로드 — 서버가 페이지별 이미지로 쪼개 슬롯에 채운다.
+   * 슬롯 수를 넘는 페이지는 저장되지 않고 skippedPages로 알려 준다.
+   */
+  async uploadHandwrittenPdf(
+    studentId: string,
+    studentName: string,
+    problemId: string,
+    pdfDataUrl: string,
+    userId?: string | null
+  ): Promise<{ savedSlots: number[]; pageCount: number; skippedPages: number }> {
+    const response = await fetch(getApiUrl("/api/v1/handwritten/upload-pdf"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify({
+        student_id: studentId,
+        student_name: studentName,
+        problem_id: problemId,
+        pdf: pdfDataUrl,
+        start_slot: 1,
+      }),
+    });
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error("PDF가 너무 커서 서버에서 거부되었습니다. 페이지 수를 줄이거나 해상도를 낮춰 주세요.");
+      }
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "PDF 업로드에 실패했습니다.");
+    }
+    const data = (await response.json()) as {
+      saved_slots?: number[];
+      page_count?: number;
+      skipped_pages?: number;
+    };
+    return {
+      savedSlots: data.saved_slots ?? [],
+      pageCount: data.page_count ?? 0,
+      skippedPages: data.skipped_pages ?? 0,
+    };
   },
 
   /** 손글씨 이미지 삭제 (해당 학생·문제, slot 1 또는 2) */
@@ -782,7 +836,7 @@ export const api = {
     studentId: string,
     studentName: string,
     problemId: string,
-    slot: 1 | 2,
+    slot: number,
     userId?: string | null
   ): Promise<{ status: string; deleted: boolean }> {
     const params = new URLSearchParams({
