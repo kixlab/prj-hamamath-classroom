@@ -8,6 +8,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
 import { formatAnswer, formatSolution } from "../../utils/formatting";
 import { resolveSemester } from "../../utils/textbook";
+import { markCotFresh, rememberCotSource } from "../../utils/problemSync";
 import { MathHtml } from "../MathHtml";
 import { demoDelay, DEMO_COT_LOADING_MS } from "../../demo/demoDelay";
 import { buildDemoCotFromProblemInput, loadDemoSavedWorkflow } from "../../demo/demoWorkspace";
@@ -181,6 +182,8 @@ interface LatexPanelProps {
   required?: boolean;
   fieldClassName?: string;
   formatHtml?: (text: string) => string;
+  /** 편집을 마칠 때(저장 버튼·포커스 아웃) 호출 — 수정 내용을 2·3·4단계로 반영한다 */
+  onCommit?: () => void;
 }
 
 // 문제·모범답안·정답 패널: 헤더 우측에 [편집/저장] 버튼, 본문은 (미리보기 ↔ 편집) 전환
@@ -196,6 +199,7 @@ function LatexPanel({
   required = false,
   fieldClassName,
   formatHtml = formatAnswer,
+  onCommit,
 }: LatexPanelProps) {
   const { t } = useLocale();
   // 내용이 있으면 미리보기로 시작(편집은 버튼으로), 비어 있으면 바로 입력 가능하게 편집으로 시작
@@ -224,7 +228,10 @@ function LatexPanel({
     onChange: (e: ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => onChange(e.target.value),
     // 내용이 있을 때만 미리보기로 전환 (빈 필드는 계속 입력 가능하게)
     onBlur: () => {
-      if (value && value.trim()) setEditing(false);
+      if (value && value.trim()) {
+        setEditing(false);
+        onCommit?.();
+      }
     },
     className: `${fieldClassName ?? ""} tex2jax_ignore`.trim(),
   };
@@ -240,7 +247,10 @@ function LatexPanel({
       type="button"
       className={`${styles.editBtn} ${styles.editBtnPrimary}`}
       onMouseDown={(e) => e.preventDefault()} // 버튼 클릭 시 필드 blur 방지
-      onClick={() => setEditing(!editing)}
+      onClick={() => {
+        setEditing(!editing);
+        if (editing) onCommit?.(); // 편집 → 미리보기 = 저장
+      }}
     >
       {editing ? t("common.save") : t("common.edit")}
     </button>
@@ -598,6 +608,47 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     }));
   };
 
+  /**
+   * 편집한 문제 내용을 8단계 풀이 재생성 없이 곧바로 2·3·4단계에 반영한다.
+   * (오타 수정만으로 CoT 전체를 다시 만들지 않도록 — 낡아진 단계는 각 화면의 배너가 안내)
+   * 아직 풀이를 만들기 전이라면 반영할 대상이 없으므로 그대로 두고, 제출 시 처리된다.
+   */
+  const commitProblemEdits = () => {
+    const cot = currentCotData as CoTData | null;
+    if (!cot || !currentProblemId) return;
+
+    // 폼이 CoT에서 채워진 것과 같은 방식으로 되돌려 비교한다.
+    // (cot.answer가 비고 main_answer에서 파생된 경우 등에서 '바뀐 것으로' 오판하지 않도록)
+    const asForm = formDataFromCot(cot);
+    const unchanged =
+      (asForm.problem ?? "") === formData.problem &&
+      (asForm.answer ?? "") === formData.answer &&
+      (asForm.solution ?? "") === formData.solution &&
+      (asForm.grade ?? "") === formData.grade &&
+      (asForm.semester ?? "") === formData.semester &&
+      (asForm.imageData ?? null) === (formData.imageData ?? null);
+    if (unchanged) return;
+
+    const updated: CoTData = {
+      ...cot,
+      // 기존 풀이과정이 '수정 전 문제'로 만들어졌음을 기록 (이미 있으면 최초 기록을 유지)
+      ...rememberCotSource(cot),
+      problem: formData.problem,
+      answer: formData.answer.trim(),
+      main_solution: formData.solution || null,
+      grade: formData.grade,
+      semester: formData.semester.trim() || undefined,
+      image_data: formData.imageData ?? null,
+    };
+    setCurrentCotData(updated);
+    saveResult(currentProblemId, updated, undefined, undefined, undefined, undefined, userId);
+    logUserEvent("problem_edited_without_regenerate", {
+      problem_id: currentProblemId,
+      before: { problem: cot.problem ?? "", answer: cot.answer ?? "" },
+      after: { problem: updated.problem ?? "", answer: updated.answer ?? "" },
+    });
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isDemoMode) {
@@ -619,13 +670,18 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
             imageData: formData.imageData,
             problemId,
           });
+        // 실계정 경로와 동일한 규칙: 같은 문제를 다시 제출하면 하위 단계를 유지한다
+        const keepDownstream = !!currentProblemId && problemId === currentProblemId;
         setCurrentProblemId(problemId);
-        setPreferredVersion?.(mirrored?.preferredVersion ?? {});
-        setCurrentSubQuestionData(null as any);
-        setFinalizedSubQuestionForRubric(null);
-        setCurrentRubrics(null);
-        setCurrentCotData(cotData);
-        onSubmit?.(cotData);
+        if (!keepDownstream) {
+          setPreferredVersion?.(mirrored?.preferredVersion ?? {});
+          setCurrentSubQuestionData(null as any);
+          setFinalizedSubQuestionForRubric(null);
+          setCurrentRubrics(null);
+        }
+        const freshDemoCot = markCotFresh(cotData);
+        setCurrentCotData(freshDemoCot);
+        onSubmit?.(freshDemoCot);
       } finally {
         setLoading(false);
       }
@@ -678,6 +734,8 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           ? { auxiliary_material_ids: selectedAuxiliaryMaterialIds }
           : {}),
       };
+      // 방금 이 문제로 만든 풀이과정이므로 stale 기준점을 현재 문제로 잡는다
+      const freshCotData = markCotFresh(cotDataWithExtras);
 
       const problemId = await allocateProblemId(selectedProblem, customProblemId, userId, false);
 
@@ -704,11 +762,22 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
           step_content: s.step_content,
         })),
       });
+      // 같은 문제를 고쳐 다시 제출한 것이면 이미 만든 하위문항·루브릭을 유지한다
+      // (오타 수정만으로 작업물이 날아가지 않도록). 3·4단계가 stale 배너로 재생성을 안내한다.
+      // 다른 문제로 바뀐 경우에는 이전 문제의 하위 단계가 새어 들어오지 않게 모두 비운다.
+      const keepDownstream = !!currentProblemId && problemId === currentProblemId;
       setCurrentProblemId(problemId);
-      setCurrentSubQuestionData(null as any);
-      setCurrentCotData(cotDataWithExtras);
-      saveResult(problemId, cotDataWithExtras, null, null, null, null, userId);
-      onSubmit?.(cotDataWithExtras);
+      setCurrentCotData(freshCotData);
+      if (keepDownstream) {
+        saveResult(problemId, freshCotData, undefined, undefined, undefined, undefined, userId);
+      } else {
+        setCurrentSubQuestionData(null as any);
+        setFinalizedSubQuestionForRubric(null);
+        setCurrentRubrics(null);
+        setPreferredVersion?.({});
+        saveResult(problemId, freshCotData, null, null, null, null, userId);
+      }
+      onSubmit?.(freshCotData);
     } catch (err: any) {
       setError(err.message || t("common.errorGeneric"));
     } finally {
@@ -1015,6 +1084,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               id="problem"
               value={formData.problem}
               onChange={(problem) => setFormData((prev) => ({ ...prev, problem }))}
+              onCommit={commitProblemEdits}
               placeholder={t("problemInput.problemPlaceholder")}
               multiline
               required
@@ -1028,6 +1098,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               id="solution"
               value={formData.solution}
               onChange={(solution) => setFormData((prev) => ({ ...prev, solution }))}
+              onCommit={commitProblemEdits}
               placeholder={t("problemInput.solutionPlaceholder")}
               multiline
               fieldClassName={`${styles.textarea} ${styles.textareaFill}`}
@@ -1041,6 +1112,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
               id="answer"
               value={formData.answer}
               onChange={(answer) => setFormData((prev) => ({ ...prev, answer }))}
+              onCommit={commitProblemEdits}
               placeholder={t("problemInput.answerPlaceholder")}
               required
               fieldClassName={styles.input}

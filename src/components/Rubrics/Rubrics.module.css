@@ -486,12 +486,34 @@
   border: 1px solid var(--color-border);
 }
 
+/* 1단계에서 문제가 수정돼 루브릭이 낡았을 때 — 일반 안내보다 눈에 띄게 */
+.noticeBannerWarning {
+  background: #fff8e6;
+  border-color: #eab308;
+}
+
+.noticeBannerWarning .noticeBannerText {
+  color: #7a5c00;
+  font-weight: 600;
+}
+
 .noticeBannerText {
   flex: 1;
   min-width: 200px;
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
   line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  .noticeBannerWarning {
+    background: #2c2410;
+    border-color: #8a6d0b;
+  }
+
+  .noticeBannerWarning .noticeBannerText {
+    color: #f0d98a;
+  }
 }
 
 .pageFooter {

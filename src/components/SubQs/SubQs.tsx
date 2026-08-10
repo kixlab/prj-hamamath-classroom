@@ -17,6 +17,7 @@ import { resolveSemester } from "../../utils/textbook";
 import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, formatSubSkillDescription, getAppLanguage, toVerifierLanguage } from "../../i18n/translations";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
+import { isDownstreamStale } from "../../utils/problemSync";
 import { demoDelay, DEMO_REGENERATE_MS, DEMO_SUBQ_STEP_MS } from "../../demo/demoDelay";
 import { loadMirroredTestResult, resolveDemoSubQuestionData } from "../../demo/demoMirror";
 import styles from "./SubQs.module.css";
@@ -102,7 +103,11 @@ export const SubQs = () => {
     pendingSubqAutoStart,
     setPendingSubqAutoStart,
     selectedAuxiliaryMaterialIds,
+    setCurrentRubrics,
   } = useApp();
+
+  /** 1단계에서 문제가 수정돼, 지금 하위문항이 '수정 전 문제'로 만들어진 상태인가 */
+  const problemChanged = isDownstreamStale(currentCotData as never, currentSubQuestionData as never);
 
   useEffect(() => {
     if (!currentProblemId) return;
@@ -759,6 +764,30 @@ export const SubQs = () => {
     void generateNextStepB();
   };
 
+  /**
+   * 1단계에서 문제를 고친 뒤, 새 문제 기준으로 하위문항을 처음부터 다시 만든다.
+   * generateNextStepB는 기존 목록에 이어 붙이므로(=8개가 차 있으면 즉시 반환) 먼저 목록을 비운다.
+   * 비운 상태가 반영된 뒤에 시작해야 하므로, 같은 틱에서 호출하지 않고 기존 자동 시작 훅에 넘긴다.
+   */
+  const handleRegenerateAfterProblemEdit = () => {
+    if (!window.confirm(t("sync.confirmRegenerateSubq"))) return;
+    const cot = currentCotData as any;
+    (setCurrentSubQuestionData as any)((prev: any) => ({
+      ...(prev ?? {}),
+      main_problem: cot?.problem,
+      main_answer: cot?.answer,
+      main_solution: cot?.main_solution ?? null,
+      grade: cot?.grade,
+      guide_sub_questions: [],
+    }));
+    // 하위문항이 통째로 바뀌므로 그 위에 얹힌 루브릭·버전 선택도 함께 무효화
+    setFinalizedSubQuestionForRubric(null);
+    setCurrentRubrics(null);
+    setPreferredVersion?.({});
+    subqAutoStartConsumedRef.current = false;
+    setPendingSubqAutoStart(true);
+  };
+
   useEffect(() => {
     subqAutoStartConsumedRef.current = false;
   }, [currentProblemId]);
@@ -1043,7 +1072,8 @@ export const SubQs = () => {
     }
   };
 
-  if (!currentSubQuestionData || !(currentSubQuestionData as any).guide_sub_questions) {
+  // 목록이 비어 있는 경우(최초 진입, 그리고 문제 수정 후 재생성으로 비운 직후)도 같은 화면을 쓴다
+  if (!currentSubQuestionData || !(currentSubQuestionData as any).guide_sub_questions?.length) {
     return (
       <div className={styles.subQuestionContainer}>
         {(loading || isGeneratingSteps) && (
@@ -1135,6 +1165,20 @@ export const SubQs = () => {
         </div>
       )}
       {error && <div className={styles.error}>{error}</div>}
+
+      {problemChanged && (
+        <div className={styles.staleBanner}>
+          <p className={styles.staleBannerText}>{t("sync.subqStale")}</p>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+            onClick={handleRegenerateAfterProblemEdit}
+            disabled={footerBusy}
+          >
+            {t("sync.regenerateSubq")}
+          </button>
+        </div>
+      )}
 
       <div className={styles.subQuestionList}>
         {groupSubQuestionsByStep(visibleSubQuestions).map((sectionSubs, sectionIndex) => {

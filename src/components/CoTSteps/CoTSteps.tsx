@@ -8,6 +8,10 @@ import { logUserEvent } from '../../services/eventLogger';
 import { saveResult } from '../../hooks/useStorage';
 import { useMathJax } from '../../hooks/useMathJax';
 import { api } from '../../services/api';
+import { isCotStale, markCotFresh } from '../../utils/problemSync';
+import { getAppLanguage } from '../../i18n/translations';
+import { demoDelay, DEMO_COT_LOADING_MS } from '../../demo/demoDelay';
+import { buildDemoCotFromProblemInput } from '../../demo/demoWorkspace';
 import type { CoTData, CoTStep } from '../../types';
 import styles from './CoTSteps.module.css';
 
@@ -20,9 +24,26 @@ function chunkSteps<T>(items: T[], size: number): T[][] {
 }
 
 export const CoTSteps = () => {
-  const { userId, currentCotData, setCurrentCotData, setCurrentStep, currentProblemId, currentSubQuestionData, setPendingSubqAutoStart, setFinalizedSubQuestionForRubric } = useApp();
+  const {
+    userId,
+    currentCotData,
+    setCurrentCotData,
+    cotBeforeRegenerate,
+    setCotBeforeRegenerate,
+    setCurrentStep,
+    currentProblemId,
+    currentSubQuestionData,
+    setPendingSubqAutoStart,
+    setFinalizedSubQuestionForRubric,
+    isDemoMode,
+    selectedAuxiliaryMaterialIds,
+  } = useApp();
   const { t, locale } = useLocale();
   const containerRef = useMathJax([currentCotData?.steps]);
+  /** 1단계에서 문제를 고친 뒤라 지금 풀이과정이 '수정 전 문제' 기준인가 */
+  const cotStale = isCotStale(currentCotData);
+  const [regeneratingAll, setRegeneratingAll] = useState(false);
+  const [regenerateAllError, setRegenerateAllError] = useState<string | null>(null);
 
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>('');
@@ -152,6 +173,80 @@ export const CoTSteps = () => {
     } finally {
       setRegeneratingStepId(null);
     }
+  };
+
+  /**
+   * 1단계에서 문제를 고친 뒤, 새 문제 기준으로 8단계 풀이과정을 통째로 다시 만든다.
+   * 되돌릴 수 있도록 직전 CoT를 cotBeforeRegenerate에 보관한다.
+   */
+  const handleRegenerateAllSteps = async () => {
+    const cot = currentCotData as CoTData | null;
+    if (!cot || !currentProblemId || regeneratingAll) return;
+    if (!window.confirm(t('sync.confirmRegenerateCot'))) return;
+
+    setRegeneratingAll(true);
+    setRegenerateAllError(null);
+    try {
+      let next: CoTData;
+      if (isDemoMode) {
+        await demoDelay(DEMO_COT_LOADING_MS);
+        next = buildDemoCotFromProblemInput({
+          problem: cot.problem ?? '',
+          answer: cot.answer ?? '',
+          solution: cot.main_solution ?? '',
+          grade: cot.grade ?? '',
+          semester: cot.semester,
+          imageData: cot.image_data ?? null,
+          problemId: currentProblemId,
+        });
+      } else {
+        const result = (await api.createCoT(
+          {
+            main_problem: cot.problem ?? '',
+            main_answer: cot.answer ?? '',
+            main_solution: cot.main_solution ?? null,
+            grade: cot.grade ?? '',
+            ...(cot.semester ? { semester: cot.semester } : {}),
+            use_textbook_rag: true,
+            ...(selectedAuxiliaryMaterialIds.length
+              ? { auxiliary_material_ids: selectedAuxiliaryMaterialIds }
+              : {}),
+            image_data: cot.image_data ?? null,
+            language: getAppLanguage(locale),
+          },
+          userId,
+        )) as CoTData;
+        // 문제·이미지 등 폼에서 온 값은 응답에 없을 수 있으므로 기존 값을 유지한 채 steps만 갈아끼운다
+        next = { ...cot, ...result, image_data: cot.image_data ?? null, main_solution: cot.main_solution ?? null };
+      }
+
+      const fresh = markCotFresh(next);
+      setCotBeforeRegenerate(cot);
+      setCurrentCotData(fresh);
+      saveResult(currentProblemId, fresh, undefined, undefined, undefined, undefined, userId);
+      setUndoContent({}); // 단계별 되돌리기 기준이 사라졌으므로 초기화
+      logUserEvent('cot_regenerated_after_problem_edit', {
+        problem_id: currentProblemId,
+        problem: fresh.problem,
+        stepsCount: fresh.steps?.length ?? 0,
+      });
+    } catch (e) {
+      setRegenerateAllError(e instanceof Error ? e.message : t('common.errorGeneric'));
+    } finally {
+      setRegeneratingAll(false);
+    }
+  };
+
+  /** 재생성 직전의 풀이과정으로 1회 되돌리기 */
+  const handleRevertRegenerateAll = () => {
+    const previous = cotBeforeRegenerate;
+    if (!previous || !currentProblemId) return;
+    if (!window.confirm(t('sync.confirmRevertCot'))) return;
+    setCurrentCotData(previous);
+    saveResult(currentProblemId, previous, undefined, undefined, undefined, undefined, userId);
+    setCotBeforeRegenerate(null);
+    setUndoContent({});
+    logUserEvent('cot_regenerate_after_problem_edit_undone', { problem_id: currentProblemId });
   };
 
   const handleUndoRegenerate = (subSkillId: string) => {
@@ -299,6 +394,28 @@ export const CoTSteps = () => {
 
   return (
     <div className={styles.cotPage}>
+      {cotStale && (
+        <div className={styles.staleBanner}>
+          <p className={styles.staleBannerText}>{t('sync.cotStale')}</p>
+          <button
+            type="button"
+            className={styles.staleBannerBtn}
+            onClick={handleRegenerateAllSteps}
+            disabled={regeneratingAll}
+          >
+            {regeneratingAll ? t('common.generating') : t('sync.regenerateCot')}
+          </button>
+        </div>
+      )}
+      {cotBeforeRegenerate && !cotStale && (
+        <div className={styles.staleBanner}>
+          <p className={styles.staleBannerText}>{t('sync.cotRegenerated')}</p>
+          <button type="button" className={styles.staleBannerBtnGhost} onClick={handleRevertRegenerateAll}>
+            {t('sync.revertCot')}
+          </button>
+        </div>
+      )}
+      {regenerateAllError && <div className={styles.staleBannerError}>{regenerateAllError}</div>}
       <div className={styles.cotSteps} ref={containerRef}>
         {stepRows.map((rowSteps, rowIndex) => {
           const sectionLabel = formatCotStepGroup(rowSteps[0], locale);

@@ -24,6 +24,13 @@ export interface CoTData {
   main_solution?: string | null;
   image_data?: string | null;
   subject_area?: string | null;
+  /**
+   * 아래 steps가 '어느 문제로' 만들어졌는지 기록.
+   * 1단계에서 문제만 고쳐 저장하면 problem/answer는 새 값이 되지만 steps는 그대로이므로,
+   * 이 값과 비교해 "풀이과정이 낡았음"을 판정한다 (utils/problemSync).
+   */
+  steps_source_problem?: string;
+  steps_source_answer?: string;
   steps: CoTStep[];
 }
 
@@ -55,6 +62,9 @@ export interface AppContextType {
   setCurrentProblemId: (id: string | null) => void;
   currentCotData: CoTData | null;
   setCurrentCotData: (data: CoTData | null) => void;
+  /** 풀이과정 전체 재생성 직전의 CoT — 1회 되돌리기용 (2단계 배너) */
+  cotBeforeRegenerate: CoTData | null;
+  setCotBeforeRegenerate: (data: CoTData | null) => void;
   currentSubQData: any | null;
   setCurrentSubQData: (data: any | null) => void;
   currentSubQuestionData: SubQuestionData | null;
