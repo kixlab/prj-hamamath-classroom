@@ -712,9 +712,18 @@ export const api = {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
+      // detail이 없는 응답(프록시 오류·핸들러 밖 예외 등)도 원인을 알 수 있게 상태코드와 본문 일부를 남긴다
+      const bodyText = await response.text().catch(() => "");
+      let detail = "";
+      try {
+        detail = (JSON.parse(bodyText) as { detail?: string }).detail || "";
+      } catch {
+        detail = bodyText.slice(0, 200).trim();
+      }
       throw new Error(
-        (err as { detail?: string }).detail || "손글씨 답안 인식에 실패했습니다."
+        detail
+          ? `${detail} (HTTP ${response.status})`
+          : `손글씨 답안 인식에 실패했습니다. (HTTP ${response.status})`
       );
     }
     return response.json();

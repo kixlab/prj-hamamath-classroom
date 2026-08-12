@@ -561,6 +561,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // (서버 저장 경로가 slot_{n} 이므로 인덱스 = 슬롯번호-1 로 그대로 대응된다)
   const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, (string | null)[]>>>({});
   const [pdfUploading, setPdfUploading] = useState(false);
+  // 서버에서 손글씨 이미지를 받아오는 중인지 (학생·문제 전환 시 잠깐 비어 보이는 구간을 알려 준다)
+  const [handwrittenLoading, setHandwrittenLoading] = useState(false);
   const [previewHandwrittenImage, setPreviewHandwrittenImage] = useState<{
     src: string;
     slot: number;
@@ -800,6 +802,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   useEffect(() => {
     if (isDemo || !problemIdForDiagnosis || !currentStudentId) return;
     let cancelled = false;
+    setHandwrittenLoading(true);
     (async () => {
       try {
         const res = await api.getHandwritten(
@@ -827,6 +830,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       } catch (err) {
         // 조회 실패 시 기존 미리보기를 지우지 않음 (새로고침·다른 기기에서만 서버 기준 복원)
         if (!cancelled) console.error("손글씨 이미지 불러오기 오류:", err);
+      } finally {
+        if (!cancelled) setHandwrittenLoading(false);
       }
     })();
     return () => {
@@ -2137,22 +2142,29 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             <div className={styles.handwritingCardHead}>
                               <h4 className={styles.handwritingCardTitle}>
                                 {t("diagnosis.handwrittenTitle")}
-                                {hasAnyImage && (
-                                  <span className={styles.handwritingCount}>
-                                    {filled} / {MAX_HANDWRITTEN_SLOTS}
+                                {handwrittenLoading ? (
+                                  <span className={styles.handwritingLoadingLabel}>
+                                    <span className={styles.handwritingSpinner} aria-hidden />
+                                    {t("diagnosis.handwritingLoading")}
                                   </span>
+                                ) : (
+                                  hasAnyImage && (
+                                    <span className={styles.handwritingCount}>
+                                      {filled} / {MAX_HANDWRITTEN_SLOTS}
+                                    </span>
+                                  )
                                 )}
                               </h4>
                               <div className={styles.handwritingCardActions}>
                                 <label
-                                  className={`${styles.handwritingUploadBtn} ${isFull || pdfUploading ? styles.handwritingBtnDisabled : ""}`}
+                                  className={`${styles.handwritingUploadBtn} ${isFull || pdfUploading || handwrittenLoading ? styles.handwritingBtnDisabled : ""}`}
                                 >
                                   {hasAnyImage ? t("diagnosis.addImages") : t("diagnosis.uploadHandwriting")}
                                   <input
                                     type="file"
                                     accept="image/*"
                                     multiple
-                                    disabled={isFull || pdfUploading}
+                                    disabled={isFull || pdfUploading || handwrittenLoading}
                                     className={styles.handwritingFileInput}
                                     onChange={(e) => {
                                       const files = Array.from(e.target.files ?? []).filter((f) =>
@@ -2164,13 +2176,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   />
                                 </label>
                                 <label
-                                  className={`${styles.handwritingUploadBtn} ${pdfUploading ? styles.handwritingBtnDisabled : ""}`}
+                                  className={`${styles.handwritingUploadBtn} ${pdfUploading || handwrittenLoading ? styles.handwritingBtnDisabled : ""}`}
                                 >
                                   {pdfUploading ? t("common.loading") : t("diagnosis.uploadPdf")}
                                   <input
                                     type="file"
                                     accept="application/pdf,.pdf"
-                                    disabled={pdfUploading}
+                                    disabled={pdfUploading || handwrittenLoading}
                                     className={styles.handwritingFileInput}
                                     onChange={(e) => {
                                       const file = e.target.files?.[0] ?? null;
@@ -2184,7 +2196,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                     type="button"
                                     className={styles.handwritingRecognizeBtn}
                                     onClick={handleRecognizeAnswersFromImages}
-                                    disabled={recognizingAnswers || diagnosisItems.length === 0}
+                                    disabled={recognizingAnswers || handwrittenLoading || diagnosisItems.length === 0}
                                     title={t("diagnosis.recognizeAnswers")}
                                   >
                                     {recognizingAnswers ? t("diagnosis.recognizingAnswers") : t("diagnosis.recognizeAnswers")}
@@ -2193,7 +2205,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               </div>
                             </div>
 
-                            {hasAnyImage ? (
+                            {handwrittenLoading && !hasAnyImage ? (
+                              <div className={styles.handwritingImages} aria-busy="true">
+                                {[0, 1].map((i) => (
+                                  <div key={i} className={styles.handwritingSkeleton} aria-hidden />
+                                ))}
+                              </div>
+                            ) : hasAnyImage ? (
                               <div className={styles.handwritingImages}>
                                 {urls.map((dataUrl, index) => {
                                   if (!dataUrl) return null;
