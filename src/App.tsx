@@ -168,8 +168,14 @@ const AppContent = ({ userId, onShowUserIdPage, onSwitchAccount }: AppContentPro
           onHistoryChanged={() => setHistoryRefreshToken((t) => t + 1)}
         />
         <div className={`${styles.container} ${styles.containerFixed}`}>
+          {/*
+            key에 currentProblemId를 넣지 않는다. 넣으면 문제를 바꿀 때마다 컴포넌트가
+            리마운트되어 선택 중이던 학생 등 내부 상태가 통째로 초기화된다
+            (다른 학생 아래의 문제를 눌러도 학생이 안 바뀌던 원인).
+            문제 변경은 problemIdForDiagnosis에 걸린 effect들이 이미 처리한다.
+          */}
           <StudentDiagnosis
-            key={`${userId}-${currentProblemId ?? "none"}-${historyRefreshToken}`}
+            key={`${userId}-${historyRefreshToken}`}
             userId={userId}
             historyRefreshToken={historyRefreshToken}
             onClose={() => setShowStudentDiagnosis(false)}

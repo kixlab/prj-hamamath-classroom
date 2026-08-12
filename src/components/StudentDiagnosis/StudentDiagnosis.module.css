@@ -2667,3 +2667,60 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* 손글씨 이미지 조회 중 표시 */
+.handwritingLoadingLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.handwritingSpinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: handwritingSpin 0.7s linear infinite;
+}
+
+@keyframes handwritingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.handwritingSkeleton {
+  flex: 0 1 210px;
+  height: 150px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-secondary) 25%,
+    var(--color-bg) 37%,
+    var(--color-bg-secondary) 63%
+  );
+  background-size: 400% 100%;
+  animation: handwritingShimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes handwritingShimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handwritingSpinner,
+  .handwritingSkeleton {
+    animation: none;
+  }
+}

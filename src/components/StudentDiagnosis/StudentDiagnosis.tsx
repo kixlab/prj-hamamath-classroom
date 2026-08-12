@@ -149,6 +149,12 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   }, []);
 
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  /**
+   * 사용자가 학생/문제를 직접 고른 적이 있는지.
+   * 워크스페이스 복원(getDiagnosisWorkspace)은 응답이 수 초 뒤에 오는데, 그 사이 사용자가
+   * 다른 학생을 눌렀다면 복원값으로 덮어써선 안 된다(클릭이 되돌아가는 것처럼 보임).
+   */
+  const userPickedSelectionRef = useRef(false);
   const [diagnosisCotData, setDiagnosisCotData] = useState<any | null>(null);
   const [apiRubrics, setApiRubrics] = useState<any[] | null>(null);
   const [apiGuideSubQuestions, setApiGuideSubQuestions] = useState<any[] | null>(null);
@@ -561,6 +567,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   // (서버 저장 경로가 slot_{n} 이므로 인덱스 = 슬롯번호-1 로 그대로 대응된다)
   const [handwrittenUploads, setHandwrittenUploads] = useState<Record<string, Record<string, (string | null)[]>>>({});
   const [pdfUploading, setPdfUploading] = useState(false);
+  // 서버에서 손글씨 이미지를 받아오는 중인지 (학생·문제 전환 시 잠깐 비어 보이는 구간을 알려 준다)
+  const [handwrittenLoading, setHandwrittenLoading] = useState(false);
   const [previewHandwrittenImage, setPreviewHandwrittenImage] = useState<{
     src: string;
     slot: number;
@@ -595,8 +603,11 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             ...(ws.student_problem_summaries as Record<string, Record<string, ProblemStepSummary>>),
           }));
         }
-        if (ws.current_student_id) setCurrentStudentId(ws.current_student_id);
-        if (ws.selected_problem_id) setSelectedProblemId(ws.selected_problem_id);
+        // 응답이 늦게 도착하는 동안 사용자가 이미 고른 게 있으면 그 선택을 유지한다
+        if (!userPickedSelectionRef.current) {
+          if (ws.current_student_id) setCurrentStudentId(ws.current_student_id);
+          if (ws.selected_problem_id) setSelectedProblemId(ws.selected_problem_id);
+        }
       } catch (err) {
         console.warn("저장된 학생 진단 상태를 불러오는 중 오류:", err);
       }
@@ -800,6 +811,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   useEffect(() => {
     if (isDemo || !problemIdForDiagnosis || !currentStudentId) return;
     let cancelled = false;
+    setHandwrittenLoading(true);
     (async () => {
       try {
         const res = await api.getHandwritten(
@@ -827,6 +839,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
       } catch (err) {
         // 조회 실패 시 기존 미리보기를 지우지 않음 (새로고침·다른 기기에서만 서버 기준 복원)
         if (!cancelled) console.error("손글씨 이미지 불러오기 오류:", err);
+      } finally {
+        if (!cancelled) setHandwrittenLoading(false);
       }
     })();
     return () => {
@@ -1653,8 +1667,19 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     }).sort((a, b) => a.problemId.localeCompare(b.problemId));
   };
 
-  /** 푼 문제 클릭 → 사이드바와 동일하게 해당 문제를 로드 */
-  const goToProblem = async (problemId: string) => {
+  /**
+   * 푼 문제 클릭 → 해당 문제를 로드.
+   * 문제는 학생 이름 아래에 나열되므로, **어느 학생 아래에서 눌렀는지**까지 반영해야 한다.
+   * (같은 문제라도 다른 학생 아래에서 누르면 그 학생의 풀이로 전환되어야 한다)
+   */
+  const goToProblem = async (problemId: string, studentId?: string) => {
+    userPickedSelectionRef.current = true;
+    // 누른 위치의 학생으로 먼저 전환한다. 문제가 같아도 학생은 바뀔 수 있으므로
+    // 아래 early return보다 앞에 있어야 한다.
+    if (studentId && studentId !== currentStudentId) {
+      setCurrentStudentId(studentId);
+    }
+    // 문제가 그대로면 다시 불러올 필요가 없다 (selectedProblemId는 별도 effect가 동기화)
     if (problemId === currentProblemId) return;
     try {
       const result = await loadResult(problemId);
@@ -2008,7 +2033,14 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               ▾
                             </span>
                           </button>
-                          <button type="button" className={styles.studentListRowSelect} onClick={() => setCurrentStudentId(s.id)}>
+                          <button
+                            type="button"
+                            className={styles.studentListRowSelect}
+                            onClick={() => {
+                              userPickedSelectionRef.current = true;
+                              setCurrentStudentId(s.id);
+                            }}
+                          >
                             <span className={styles.studentListRowName}>{s.name}</span>
                             {diagnosedCount > 0 && (
                               <span className={styles.studentListRowMeta}>
@@ -2055,13 +2087,14 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                       ) : (
                         <ul className={styles.solvedList}>
                           {solved.map(({ problemId, counts, graded }) => {
-                            const isViewing = problemId === currentProblemId;
+                            // 같은 문제라도 다른 학생 아래 행은 활성으로 보이면 안 된다
+                            const isViewing = problemId === currentProblemId && s.id === currentStudentId;
                             return (
                               <li key={problemId}>
                                 <button
                                   type="button"
                                   className={`${styles.solvedRow} ${isViewing ? styles.solvedRowActive : ""}`}
-                                  onClick={() => goToProblem(problemId)}
+                                  onClick={() => goToProblem(problemId, s.id)}
                                   title={problemId}
                                 >
                                   <span className={styles.solvedName}>{getProblemDisplayLabel(problemId)}</span>
@@ -2137,22 +2170,29 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                             <div className={styles.handwritingCardHead}>
                               <h4 className={styles.handwritingCardTitle}>
                                 {t("diagnosis.handwrittenTitle")}
-                                {hasAnyImage && (
-                                  <span className={styles.handwritingCount}>
-                                    {filled} / {MAX_HANDWRITTEN_SLOTS}
+                                {handwrittenLoading ? (
+                                  <span className={styles.handwritingLoadingLabel}>
+                                    <span className={styles.handwritingSpinner} aria-hidden />
+                                    {t("diagnosis.handwritingLoading")}
                                   </span>
+                                ) : (
+                                  hasAnyImage && (
+                                    <span className={styles.handwritingCount}>
+                                      {filled} / {MAX_HANDWRITTEN_SLOTS}
+                                    </span>
+                                  )
                                 )}
                               </h4>
                               <div className={styles.handwritingCardActions}>
                                 <label
-                                  className={`${styles.handwritingUploadBtn} ${isFull || pdfUploading ? styles.handwritingBtnDisabled : ""}`}
+                                  className={`${styles.handwritingUploadBtn} ${isFull || pdfUploading || handwrittenLoading ? styles.handwritingBtnDisabled : ""}`}
                                 >
                                   {hasAnyImage ? t("diagnosis.addImages") : t("diagnosis.uploadHandwriting")}
                                   <input
                                     type="file"
                                     accept="image/*"
                                     multiple
-                                    disabled={isFull || pdfUploading}
+                                    disabled={isFull || pdfUploading || handwrittenLoading}
                                     className={styles.handwritingFileInput}
                                     onChange={(e) => {
                                       const files = Array.from(e.target.files ?? []).filter((f) =>
@@ -2164,13 +2204,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                   />
                                 </label>
                                 <label
-                                  className={`${styles.handwritingUploadBtn} ${pdfUploading ? styles.handwritingBtnDisabled : ""}`}
+                                  className={`${styles.handwritingUploadBtn} ${pdfUploading || handwrittenLoading ? styles.handwritingBtnDisabled : ""}`}
                                 >
                                   {pdfUploading ? t("common.loading") : t("diagnosis.uploadPdf")}
                                   <input
                                     type="file"
                                     accept="application/pdf,.pdf"
-                                    disabled={pdfUploading}
+                                    disabled={pdfUploading || handwrittenLoading}
                                     className={styles.handwritingFileInput}
                                     onChange={(e) => {
                                       const file = e.target.files?.[0] ?? null;
@@ -2184,7 +2224,7 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                                     type="button"
                                     className={styles.handwritingRecognizeBtn}
                                     onClick={handleRecognizeAnswersFromImages}
-                                    disabled={recognizingAnswers || diagnosisItems.length === 0}
+                                    disabled={recognizingAnswers || handwrittenLoading || diagnosisItems.length === 0}
                                     title={t("diagnosis.recognizeAnswers")}
                                   >
                                     {recognizingAnswers ? t("diagnosis.recognizingAnswers") : t("diagnosis.recognizeAnswers")}
@@ -2193,7 +2233,13 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                               </div>
                             </div>
 
-                            {hasAnyImage ? (
+                            {handwrittenLoading && !hasAnyImage ? (
+                              <div className={styles.handwritingImages} aria-busy="true">
+                                {[0, 1].map((i) => (
+                                  <div key={i} className={styles.handwritingSkeleton} aria-hidden />
+                                ))}
+                              </div>
+                            ) : hasAnyImage ? (
                               <div className={styles.handwritingImages}>
                                 {urls.map((dataUrl, index) => {
                                   if (!dataUrl) return null;
