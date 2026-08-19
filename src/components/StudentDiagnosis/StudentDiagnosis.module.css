@@ -283,6 +283,35 @@
   box-sizing: border-box;
 }
 
+/* 학생 작업 영역 서브탭 (진단 / 설문지) */
+.workAreaTabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px;
+}
+
+.workAreaTab {
+  padding: 8px 18px;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.workAreaTab:hover {
+  color: var(--color-text);
+}
+
+.workAreaTabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
 /* 진단 중인 문제 표시 (선택은 사이드바에서만 — 여기서는 읽기 전용) */
 .currentProblemBar {
   display: flex;

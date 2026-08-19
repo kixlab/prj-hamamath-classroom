@@ -46,6 +46,7 @@ import {
 } from "../../demo/demoDiagnosis";
 import { getProblemDisplayLabel } from "../../utils/problemIdAlias";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
+import { SurveyPanel } from "../Survey/SurveyPanel";
 
 interface StudentDiagnosisProps {
   userId: string;
@@ -149,6 +150,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
   }, []);
 
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  /** 학생 작업 영역 서브탭 — 진단 / 설문지 */
+  const [workTab, setWorkTab] = useState<"diagnosis" | "survey">("diagnosis");
   /**
    * 사용자가 학생/문제를 직접 고른 적이 있는지.
    * 워크스페이스 복원(getDiagnosisWorkspace)은 응답이 수 초 뒤에 오는데, 그 사이 사용자가
@@ -2125,6 +2128,38 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
             </aside>
 
             <section className={styles.studentWorkArea}>
+            <div className={styles.workAreaTabs} role="tablist" aria-label={t("diagnosis.title")}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={workTab === "diagnosis"}
+                className={`${styles.workAreaTab} ${workTab === "diagnosis" ? styles.workAreaTabActive : ""}`}
+                onClick={() => setWorkTab("diagnosis")}
+              >
+                {t("survey.diagnosisTab")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={workTab === "survey"}
+                className={`${styles.workAreaTab} ${workTab === "survey" ? styles.workAreaTabActive : ""}`}
+                onClick={() => setWorkTab("survey")}
+              >
+                {t("survey.tab")}
+              </button>
+            </div>
+            {workTab === "survey" ? (
+              <SurveyPanel
+                userId={userId}
+                isDemo={isDemo}
+                students={students}
+                currentStudentId={currentStudentId}
+                currentStudentName={currentStudentName}
+                problemId={problemIdForDiagnosis}
+                problemLabel={problemIdForDiagnosis ? getProblemDisplayLabel(problemIdForDiagnosis) : null}
+              />
+            ) : (
+            <>
             <div className={styles.contentSingle}>
               <section className={styles.rightColumn}>
                 <div className={styles.studentPanel}>
@@ -2493,6 +2528,8 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
                 </div>
               </section>
             </div>
+            </>
+            )}
 
             </section>
               </>

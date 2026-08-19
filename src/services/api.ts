@@ -1298,4 +1298,233 @@ export const api = {
       throw new Error((errorData as { detail?: string }).detail || "참고 자료 삭제에 실패했습니다.");
     }
   },
+
+  // ── 학생 설문 (5점 리커트) ──────────────────────────────────────────────
+  // scope: OVERALL_SURVEY_SCOPE("__overall__") = 학생당 1회 설문, 그 외에는 problem_id별 설문
+
+  /** 해당 교사가 저장한 설문 응답 전체 목록 */
+  async listSurveyResponses(userId?: string | null): Promise<SurveyResponseItem[]> {
+    const response = await fetch(getApiUrl("/api/v1/survey/list"), {
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      throw new Error("설문 응답을 불러오지 못했습니다.");
+    }
+    const data = (await response.json()) as { items?: SurveyResponseItem[] };
+    return Array.isArray(data.items) ? data.items : [];
+  },
+
+  /** 설문 응답 1건 저장 (student_id + scope 당 1건, 덮어쓰기) */
+  async saveSurveyResponse(
+    payload: {
+      student_id: string;
+      student_name?: string | null;
+      scope: string;
+      /** 리커트 응답. 문제별 설문은 빈 객체 */
+      responses: Record<string, number | null>;
+      /** 주관식·느낀점 자유 서술 */
+      reflection?: string;
+    },
+    userId?: string | null,
+  ): Promise<{ status: string; updated_at: string }> {
+    const response = await fetch(getApiUrl("/api/v1/survey/save"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "설문 응답 저장에 실패했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 설문 응답 1건 삭제 */
+  async deleteSurveyResponse(studentId: string, scope: string, userId?: string | null): Promise<void> {
+    const params = new URLSearchParams({ student_id: studentId, scope });
+    const response = await fetch(getApiUrl(`/api/v1/survey?${params}`), {
+      method: "DELETE",
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "설문 응답 삭제에 실패했습니다.");
+    }
+  },
+
+  /**
+   * 스캔한 종이에서 응답을 Vision LLM으로 읽어 온다.
+   * mode "survey" = 리커트 1~5 + 주관식, "reflection" = 학습지 마지막 느낀점 페이지의 자유 서술만
+   */
+  async recognizeSurvey(
+    payload: {
+      images: string[];
+      mode?: "survey" | "reflection";
+      items: Array<{ id: string; question: string; item_number?: number }>;
+      open_question?: string;
+      language?: string;
+    },
+    userId?: string | null,
+  ): Promise<{ responses: Record<string, number | null>; reflection: string }> {
+    const response = await fetch(getApiUrl("/api/v1/survey/recognize"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      let detail = "";
+      try {
+        detail = (JSON.parse(bodyText) as { detail?: string }).detail || "";
+      } catch {
+        detail = bodyText.slice(0, 200).trim();
+      }
+      throw new Error(
+        detail ? `${detail} (HTTP ${response.status})` : `설문지 인식에 실패했습니다. (HTTP ${response.status})`,
+      );
+    }
+    const data = (await response.json()) as {
+      responses?: Record<string, number | null>;
+      reflection?: string;
+    };
+    return { responses: data.responses ?? {}, reflection: data.reflection ?? "" };
+  },
+
+  /** 설문지 스캔 이미지 업로드 (slot은 1부터) */
+  async uploadSurveyScan(
+    studentId: string,
+    studentName: string,
+    scope: string,
+    slot: number,
+    imageDataUrl: string,
+    userId?: string | null,
+  ): Promise<{ status: string; slot: number }> {
+    const response = await fetch(getApiUrl("/api/v1/survey/scan/upload"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify({
+        student_id: studentId,
+        student_name: studentName,
+        scope,
+        slot,
+        image: imageDataUrl,
+      }),
+    });
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error("이미지가 너무 커서 서버에서 거부되었습니다. 해상도를 낮춘 뒤 다시 시도해 주세요.");
+      }
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "설문지 업로드에 실패했습니다.");
+    }
+    return response.json();
+  },
+
+  /** 설문지 PDF 업로드 — 서버가 페이지별 이미지로 쪼개 슬롯에 채운다 */
+  async uploadSurveyScanPdf(
+    studentId: string,
+    studentName: string,
+    scope: string,
+    pdfDataUrl: string,
+    userId?: string | null,
+  ): Promise<{ savedSlots: number[]; pageCount: number; skippedPages: number }> {
+    const response = await fetch(getApiUrl("/api/v1/survey/scan/upload-pdf"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify({
+        student_id: studentId,
+        student_name: studentName,
+        scope,
+        pdf: pdfDataUrl,
+      }),
+    });
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error("PDF가 너무 커서 서버에서 거부되었습니다. 페이지 수를 줄이거나 해상도를 낮춰 주세요.");
+      }
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "PDF 업로드에 실패했습니다.");
+    }
+    const data = (await response.json()) as {
+      saved_slots?: number[];
+      page_count?: number;
+      skipped_pages?: number;
+    };
+    return {
+      savedSlots: data.saved_slots ?? [],
+      pageCount: data.page_count ?? 0,
+      skippedPages: data.skipped_pages ?? 0,
+    };
+  },
+
+  /** 설문지 스캔 이미지 조회 — 슬롯 순서의 data URL 배열 */
+  async getSurveyScans(
+    studentId: string,
+    studentName: string,
+    scope: string,
+    userId?: string | null,
+  ): Promise<(string | null)[]> {
+    const params = new URLSearchParams({
+      student_id: studentId,
+      student_name: studentName,
+      scope,
+    });
+    const response = await fetch(getApiUrl(`/api/v1/survey/scan?${params}`), {
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (response.status === 404) return [];
+    if (!response.ok) {
+      throw new Error("설문지 이미지를 불러오지 못했습니다.");
+    }
+    const data = (await response.json()) as { slots?: (string | null)[] };
+    return Array.isArray(data.slots) ? data.slots : [];
+  },
+
+  /** 설문지 스캔 이미지 삭제 */
+  async deleteSurveyScan(
+    studentId: string,
+    studentName: string,
+    scope: string,
+    slot: number,
+    userId?: string | null,
+  ): Promise<void> {
+    const params = new URLSearchParams({
+      student_id: studentId,
+      student_name: studentName,
+      scope,
+      slot: String(slot),
+    });
+    const response = await fetch(getApiUrl(`/api/v1/survey/scan?${params}`), {
+      method: "DELETE",
+      headers: getHistoryHeadersWithFallback(userId),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || "설문지 이미지 삭제에 실패했습니다.");
+    }
+  },
 };
+
+/** 서버에 저장된 설문 응답 1건 (student_id + scope 당 1건) */
+export interface SurveyResponseItem {
+  student_id: string;
+  student_name?: string | null;
+  /** "__overall__" 이면 학생당 1회 설문, 그 외에는 problem_id */
+  scope: string;
+  responses: Record<string, number | null>;
+  /** 주관식·느낀점 자유 서술 */
+  reflection?: string;
+  updated_at?: string;
+}
