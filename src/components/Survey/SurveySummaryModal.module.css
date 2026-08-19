@@ -1,0 +1,115 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 1100;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  max-height: 100%;
+  background: var(--color-bg);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.28);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.titleWrap {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.scopeChip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.closeBtn {
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.body {
+  padding: 18px 20px 22px;
+  overflow: auto;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+.summaryTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.summaryTable th,
+.summaryTable td {
+  border: 1px solid var(--color-border);
+  padding: 7px 10px;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.summaryTable thead th {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.summaryName {
+  text-align: left;
+}
+
+.summaryAverage {
+  font-weight: 600;
+}
+
+.summaryReflectionCol {
+  min-width: 180px;
+}
+
+.summaryReflection {
+  text-align: left;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
