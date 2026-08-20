@@ -36,13 +36,52 @@ function wrapInlineMathSegments(text: string): string {
   );
 }
 
+/**
+ * LLM이 여는/닫는 구분자를 다르게 내는 경우($$..$ 등)를 짝 맞춰 준다.
+ * 짝이 어긋나면 MathJax가 구간을 찾지 못해 raw LaTeX가 그대로 보인다.
+ * 짝이 이미 맞는 구간은 한 글자도 건드리지 않는다.
+ */
+function balanceMathDelimiters(text: string): string {
+  let out = "";
+  let i = 0;
+
+  while (i < text.length) {
+    // processEscapes로 살려두는 \$는 구분자가 아니다
+    if (text[i] !== "$" || text[i - 1] === "\\") {
+      out += text[i++];
+      continue;
+    }
+
+    const openLen = text.startsWith("$$", i) ? 2 : 1;
+    let close = i + openLen;
+    while (close < text.length && text[close] !== "$") close++;
+    if (close >= text.length) {
+      out += text.slice(i); // 닫는 짝이 없으면 손대지 않는다
+      break;
+    }
+
+    // $a$$b$처럼 인라인 수식이 붙어 있으면 앞의 $$는 닫는 짝 하나 + 여는 짝 하나다.
+    // 뒤에 남은 $가 없을 때만 $$ 전체를 (잘못 쓴) 닫는 짝으로 본다.
+    const closeLen =
+      text.startsWith("$$", close) && (openLen === 2 || !text.includes("$", close + 2)) ? 2 : 1;
+    const body = text.slice(i + openLen, close);
+    // 줄바꿈이 있으면 인라인($..$)으로는 조판되지 않으므로 디스플레이로 맞춘다
+    const len = openLen === closeLen ? openLen : body.includes("\n") ? 2 : 1;
+    const fence = "$".repeat(len);
+    out += fence + body + fence;
+    i = close + closeLen;
+  }
+
+  return out;
+}
+
 function normalizeMathDelimiters(text: string): string {
   let s = text.trim();
   // LLM이 자주 내는 $...$$ 형태를 $...$로 정리
   if (s.startsWith("$") && !s.startsWith("$$") && s.endsWith("$$")) {
     s = s.slice(0, -1);
   }
-  return s;
+  return balanceMathDelimiters(s);
 }
 
 /** 수식 구간($$..$$, \[..\], $..$, \(..\)). 캡처 그룹이 정확히 하나여야 split 결과의 홀수 인덱스가 수식이 된다. */
@@ -201,6 +240,55 @@ export const formatQuestion = (question: string | null | undefined): string => {
 };
 
 /**
+ * 문항은 마크다운을 돌리지 않는다 — `___` 빈칸이 <hr>/강조로 먹히기 때문.
+ * 대신 GFM 표 블록(헤더행 + |---| 구분행)만 골라내 그 부분만 marked로 렌더한다.
+ */
+const isTableRow = (line: string) => /^\s*\|.*\|\s*$/.test(line);
+const isTableDelimiter = (line: string) => /^\s*\|[\s:|-]*\|\s*$/.test(line) && line.includes("-");
+
+type QuestionSegment = { table: boolean; text: string };
+
+function splitTableSegments(text: string): QuestionSegment[] {
+  const lines = text.split("\n");
+  const segments: QuestionSegment[] = [];
+  let buffer: string[] = [];
+  const flushText = () => {
+    if (buffer.length) segments.push({ table: false, text: buffer.join("\n") });
+    buffer = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    if (isTableRow(lines[i]) && isTableDelimiter(lines[i + 1] ?? "")) {
+      flushText();
+      let end = i + 2;
+      while (end < lines.length && isTableRow(lines[end])) end++;
+      segments.push({ table: true, text: lines.slice(i, end).join("\n") });
+      i = end - 1;
+    } else {
+      buffer.push(lines[i]);
+    }
+  }
+  flushText();
+  return segments;
+}
+
+/** 문항 표는 PDF 내보내기(스타일시트 없음)에서도 같이 쓰이므로 인라인 스타일로 붙인다 */
+const QUESTION_TABLE_STYLE = "border-collapse: collapse; margin: 0.4em 0; font-size: 0.95em;";
+const QUESTION_CELL_STYLE = "border: 1px solid var(--color-border, #dee2e6); padding: 4px 8px;";
+
+function renderTableBlock(block: string): string {
+  return renderMarkdownPreservingMath(block)
+    // .questionContent가 white-space: pre-wrap이라 태그 사이 줄바꿈이 빈 줄로 보인다
+    .replace(/>\s*\n\s*</g, "><")
+    .replace(/<table>/g, `<table style="${QUESTION_TABLE_STYLE}">`)
+    .replace(/<(th|td)((?:\s[^>]*)?)>/g, (_whole, tag: string, attrs: string) => {
+      const align = /align="(\w+)"/.exec(attrs)?.[1] ?? "left";
+      return `<${tag}${attrs} style="${QUESTION_CELL_STYLE} text-align: ${align}; white-space: normal;">`;
+    })
+    .trim();
+}
+
+/**
  * formatQuestion + 줄바꿈을 <br>로 (dangerouslySetInnerHTML용).
  * 수식 구간 안의 줄바꿈은 그대로 둔다 — $$..$$ 사이에 <br>이 끼면 MathJax가
  * 수식 구간을 찾지 못해 array 같은 여러 줄 수식이 조판되지 않는다.
@@ -208,9 +296,15 @@ export const formatQuestion = (question: string | null | undefined): string => {
 export const formatQuestionHtml = (question: string | null | undefined): string => {
   const formatted = formatQuestion(question);
   if (!formatted) return "";
-  return formatted
-    .split(MATH_SEGMENT_RE)
-    .map((part, i) => (i % 2 === 1 ? part : part.replace(/\n/g, "<br>")))
+  return splitTableSegments(formatted)
+    .map((segment) =>
+      segment.table
+        ? renderTableBlock(segment.text)
+        : segment.text
+            .split(MATH_SEGMENT_RE)
+            .map((part, i) => (i % 2 === 1 ? part : part.replace(/\n/g, "<br>")))
+            .join(""),
+    )
     .join("");
 };
 
