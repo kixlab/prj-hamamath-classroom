@@ -698,6 +698,16 @@
   border-style: dashed;
 }
 
+/*
+ * 인라인 수식($..$)은 MathJax가 줄바꿈하지 않아, 긴 식이 오면 칸을 넘어 옆 칸을 덮는다.
+ * (index.css의 overflow 규칙은 디스플레이 수식에만 적용된다)
+ * 넓은 표도 마찬가지라, 내용 칸이 자기 안에서 가로 스크롤되게 한다.
+ */
+.questionContent,
+.answerContent {
+  overflow-x: auto;
+}
+
 .questionContent {
   color: #212529;
   line-height: 1.7;
