@@ -8,7 +8,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { formatCotStepGroup, formatCotSubSkill, resolveProblemLanguage } from "../../i18n/translations";
 import { formatAnswer, formatQuestion, splitQuestionAndAnswer } from "../../utils/formatting";
 import { frameworkStepSectionStyle, resolveFrameworkStepId } from "../../utils/frameworkStepColors";
-import { isDownstreamStale, resolveMainProblem } from "../../utils/problemSync";
+import { isDownstreamStale, normalizeForCompare, resolveMainProblem } from "../../utils/problemSync";
 import { demoDelay, DEMO_RUBRIC_LOADING_MS, DEMO_REGENERATE_MS } from "../../demo/demoDelay";
 import { loadMirroredTestResult, resolveDemoRubrics } from "../../demo/demoMirror";
 import { buildRandomAnswersFromRubrics } from "../../utils/randomStudentAnswers";
@@ -158,6 +158,25 @@ function mapApiResponseToRubrics(apiResponse: any, subQuestionData: any): Rubric
       level_analysis: sr.level_analysis,
       raw_response: sr,
     };
+  });
+}
+
+/**
+ * 루브릭을 만든 뒤 3단계에서 문항이 바뀌었는지.
+ * 각 루브릭 항목은 생성 당시의 문항·정답 텍스트를 들고 있으므로(mapApiResponseToRubrics)
+ * 지금 문항과 같은 방식으로 뽑은 텍스트와 비교한다.
+ */
+function isRubricStaleForSubQuestions(subQuestionData: any, rubrics: RubricItem[]): boolean {
+  const subQuestions = (subQuestionData?.guide_sub_questions ?? []) as any[];
+  if (!rubrics.length || !subQuestions.length) return false;
+  return subQuestions.some((sq) => {
+    const rubric = rubrics.find((r) => r.sub_question_id === sq.sub_question_id);
+    if (!rubric) return false;
+    const { question, answer } = getSubqDisplayQA(sq);
+    return (
+      normalizeForCompare(question) !== normalizeForCompare(rubric.question) ||
+      normalizeForCompare(answer) !== normalizeForCompare(rubric.answer)
+    );
   });
 }
 
@@ -500,7 +519,15 @@ export const Rubrics = () => {
           };
         });
 
-      setCurrentRubrics(rubrics.map((r) => (r.sub_question_id === id ? { ...r, levels: newLevels } : r)));
+      // 재생성은 현재 문항으로 요청하므로 카드에 남은 옛 문항·정답도 같이 갱신한다
+      const refreshed = getSubqDisplayQA(subQuestion);
+      setCurrentRubrics(
+        rubrics.map((r) =>
+          r.sub_question_id === id
+            ? { ...r, question: refreshed.question, answer: refreshed.answer, levels: newLevels }
+            : r,
+        ),
+      );
       try {
         logUserEvent("rubric_regenerated", {
           sub_question_id: id,
@@ -586,6 +613,7 @@ export const Rubrics = () => {
     );
   }
 
+  const subQuestionsChanged = !problemChanged && isRubricStaleForSubQuestions(subQuestionForStep4, rubrics);
   const showRegenerateAllBanner = hasSubQuestionSubs;
 
   return (
@@ -604,7 +632,20 @@ export const Rubrics = () => {
           </button>
         </div>
       )}
-      {showRegenerateAllBanner && !problemChanged && (
+      {subQuestionsChanged && (
+        <div className={`${styles.noticeBanner} ${styles.noticeBannerWarning}`}>
+          <p className={styles.noticeBannerText}>{t("sync.rubricSubqStale")}</p>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary} ${styles.btnCompact}`}
+            onClick={handleRegenerateAllRubrics}
+            disabled={generating}
+          >
+            {t("rubric.regenerateAll")}
+          </button>
+        </div>
+      )}
+      {showRegenerateAllBanner && !problemChanged && !subQuestionsChanged && (
         <div className={styles.noticeBanner}>
           <p className={styles.noticeBannerText}>{t("rubric.regenerateAllHint")}</p>
           <button

@@ -9,9 +9,11 @@
  */
 
 /** 비교용 정규화 — 공백 차이만으로 stale 판정이 뜨지 않게 한다 */
-function normalize(text: string | null | undefined): string {
+export function normalizeForCompare(text: string | null | undefined): string {
   return (text ?? "").replace(/\s+/g, " ").trim();
 }
+
+const normalize = normalizeForCompare;
 
 interface CotLike {
   problem?: string;

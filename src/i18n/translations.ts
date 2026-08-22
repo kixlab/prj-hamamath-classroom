@@ -120,6 +120,7 @@ const ko = {
 
   "sync.subqStale": "1단계에서 문제가 수정되었습니다. 아래 하위문항은 수정 전 문제로 만들어진 것이라 새 문제와 맞지 않을 수 있습니다.",
   "sync.rubricStale": "1단계에서 문제가 수정되었습니다. 이 루브릭은 수정 전 문제 기준이라 새 문제와 맞지 않을 수 있습니다. 하위문항부터 다시 만든 뒤 루브릭을 생성하는 것을 권장합니다.",
+  "sync.rubricSubqStale": "3단계에서 문항이 수정되었습니다. 아래 루브릭은 수정 전 문항으로 만들어진 것이라 지금 문항과 맞지 않을 수 있습니다.",
   "sync.regenerateSubq": "새 문제로 다시 생성",
   "sync.goToSubq": "하위문항 다시 만들기",
   "sync.cotStale": "1단계에서 문제가 수정되었습니다. 아래 8단계 풀이과정은 수정 전 문제로 만들어진 것이라 새 문제와 맞지 않을 수 있습니다.",
@@ -633,6 +634,7 @@ const en: Record<TranslationKey, string> = {
 
   "sync.subqStale": "The problem was edited in step 1. These sub-questions were built from the earlier version and may no longer match.",
   "sync.rubricStale": "The problem was edited in step 1. This rubric is based on the earlier version and may no longer match. Regenerate the sub-questions first, then the rubric.",
+  "sync.rubricSubqStale": "The sub-questions were edited in step 3. This rubric was built from the earlier version and may no longer match.",
   "sync.regenerateSubq": "Regenerate for the new problem",
   "sync.goToSubq": "Rebuild sub-questions",
   "sync.cotStale": "The problem was edited in step 1. This 8-step solution was built from the earlier version and may no longer match.",
