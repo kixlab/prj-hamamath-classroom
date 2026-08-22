@@ -310,6 +310,34 @@
   height: 16px;
 }
 
+/* 이미지에서 문제 발문 추출 — 업로드/삭제와 다른 성격이라 아래 줄에 따로 둔다 */
+.extractBtn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s, transform 0.1s, opacity 0.15s;
+}
+
+.extractBtn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.extractBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.extractBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .removeImageBtn {
   padding: 10px 14px;
   font-size: 0.8125rem;
