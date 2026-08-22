@@ -689,6 +689,41 @@ export const api = {
     return response.json();
   },
 
+  /**
+   * 문제 이미지에서 발문 텍스트 추출 (Vision).
+   * image는 data URL / base64 / 업로드된 이미지 URL 모두 가능.
+   * 읽을 발문이 없으면 problem이 빈 문자열로 온다.
+   */
+  async extractProblemTextFromImage(
+    image: string,
+    language: string,
+    userId?: string | null,
+  ): Promise<{ problem: string }> {
+    const response = await fetch(getApiUrl("/api/v1/problem-images/extract-text"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHistoryHeadersWithFallback(userId),
+      },
+      body: JSON.stringify({ image, language }),
+    });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      let detail = "";
+      try {
+        detail = (JSON.parse(bodyText) as { detail?: string }).detail || "";
+      } catch {
+        detail = bodyText.slice(0, 200).trim();
+      }
+      throw new Error(
+        detail
+          ? `${detail} (HTTP ${response.status})`
+          : `이미지에서 문제를 읽지 못했습니다. (HTTP ${response.status})`,
+      );
+    }
+    return response.json();
+  },
+
   /** 손글씨 이미지에서 하위문항별 답안 인식 (Vision). 결과는 편집 가능하도록 프론트에서 입력칸에 채움 */
   async recognizeHandwrittenAnswers(
     payload: {

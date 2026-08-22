@@ -344,6 +344,7 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
   const [auxError, setAuxError] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [extractingProblem, setExtractingProblem] = useState(false);
   /** 참고 자료 입력 방식: 기존 라이브러리에서 선택 vs 새 파일 직접 업로드 */
   const [auxMode, setAuxMode] = useState<"select" | "upload">("select");
 
@@ -568,6 +569,35 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedExampleFile]);
 
+  /**
+   * 문제 이미지에서 발문을 읽어 문제 입력칸을 채운다.
+   * 업로드 직후에는 문제 칸이 비어 있을 때만 자동 실행하고,
+   * 이미 입력한 내용이 있으면 버튼으로만(확인을 거쳐) 덮어쓴다.
+   */
+  const runExtractProblemText = async (source: string, options: { confirmOverwrite?: boolean } = {}) => {
+    const image = (source || "").trim();
+    if (!image || extractingProblem) return;
+    if (options.confirmOverwrite && formData.problem.trim() && !window.confirm(t("problemInput.confirmReplaceProblem"))) {
+      return;
+    }
+
+    setImageError(null);
+    setExtractingProblem(true);
+    try {
+      const { problem } = await api.extractProblemTextFromImage(image, locale === "en" ? "en" : "ko", userId);
+      const text = (problem || "").trim();
+      if (!text) {
+        setImageError(t("problemInput.noTextInImage"));
+        return;
+      }
+      setFormData((prev) => ({ ...prev, problem: text }));
+    } catch (err: any) {
+      setImageError(err?.message || t("problemInput.extractError"));
+    } finally {
+      setExtractingProblem(false);
+    }
+  };
+
   const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -582,6 +612,9 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
 
     // 데모 계정은 서버 저장 없이 base64만 사용
     if (isDemoMode) return;
+
+    // 문제 칸이 비어 있을 때만 이미지에서 발문을 읽어 채운다 (업로드 완료를 기다리지 않음)
+    if (!formData.problem.trim()) void runExtractProblemText(previewUrl);
 
     setImageUploading(true);
     setImageError(null);
@@ -1072,6 +1105,17 @@ export const ProblemInput = ({ onSubmit }: ProblemInputProps) => {
                   {t("problemInput.removeImage")}
                 </button>
               </div>
+              <button
+                type="button"
+                className={styles.extractBtn}
+                onClick={() =>
+                  runExtractProblemText(formData.imageData || formData.imagePreview || "", { confirmOverwrite: true })
+                }
+                disabled={!formData.imagePreview || extractingProblem}
+                title={t("problemInput.extractFromImageHint")}
+              >
+                {extractingProblem ? t("problemInput.extracting") : t("problemInput.extractFromImage")}
+              </button>
               {imageError && <p className={styles.auxError}>{imageError}</p>}
             </InputPanel>
           </div>
