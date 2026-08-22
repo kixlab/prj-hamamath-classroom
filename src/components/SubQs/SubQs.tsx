@@ -218,14 +218,14 @@ export const SubQs = () => {
   ]);
 
   // 최종 문항/정답 계산 (원본 + 재생성 + 편집/피드백 결과 반영)
-  const getFinalQA = (subQ: SubQuestion) => {
+  const getFinalQA = (subQ: SubQuestion, preferredOverride?: "original" | "regenerated") => {
     const original = splitQuestionAndAnswer(subQ.guide_sub_question, subQ.guide_sub_answer || subQ.sub_answer);
     const regenerated = splitQuestionAndAnswer(subQ.re_sub_question, subQ.re_sub_answer);
     const originalQ = original.question;
     const originalA = original.answer;
     const reQ = regenerated.question;
     const reA = regenerated.answer;
-    const preferred = preferredVersion[subQ.sub_question_id];
+    const preferred = preferredOverride ?? preferredVersion[subQ.sub_question_id];
 
     let finalQuestion: string;
     let finalAnswer: string;
@@ -292,6 +292,9 @@ export const SubQs = () => {
 
   const handleGoToRubric = () => {
     setCurrentStep(4);
+    // 이 버튼은 화면 맨 아래 푸터에 있다 — 그 스크롤 위치를 들고 넘어가면 루브릭 중간부터 보인다.
+    // 패널이 교체된 뒤에 올려야 해서 다음 프레임에서 실행한다.
+    requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   };
 
   // 각 단계의 verifier + 재생성 처리. 보강된 문항(enriched)을 반환해 호출자가 이어서 사용할 수 있게 함.
@@ -830,6 +833,36 @@ export const SubQs = () => {
     setPendingSubqAutoStart,
   ]);
 
+  /**
+   * 확정 후의 변경(편집·버전 전환)을 확정본에도 반영한다.
+   * PDF 미리보기·Word 내보내기·루브릭은 finalizedSubQuestionForRubric을 우선해서 읽으므로
+   * (exportSubQuestionData 참고) 여기서 갱신하지 않으면 확정 시점의 문항이 그대로 나간다.
+   */
+  const syncFinalizedSubQuestion = (
+    subqId: string,
+    updatedSubQ: SubQuestion,
+    preferredOverride?: "original" | "regenerated",
+  ) => {
+    const finalized = finalizedSubQuestionForRubric as any;
+    if (!finalized?.guide_sub_questions) return;
+    const { finalQuestion, finalAnswer } = getFinalQA(updatedSubQ, preferredOverride);
+    setFinalizedSubQuestionForRubric({
+      ...finalized,
+      guide_sub_questions: (finalized.guide_sub_questions as SubQuestion[]).map((q) =>
+        q.sub_question_id === subqId
+          ? { ...updatedSubQ, guide_sub_question: finalQuestion, guide_sub_answer: finalAnswer }
+          : q,
+      ),
+    });
+  };
+
+  /** 편집 저장 시점의 하위문항(편집 내용 반영본) — 확정본 동기화에 쓴다 */
+  const buildEditedSubQuestion = (subqId: string, patch: Partial<SubQuestion>): SubQuestion | null => {
+    const list = ((currentSubQuestionData as any)?.guide_sub_questions ?? []) as SubQuestion[];
+    const target = list.find((q) => q.sub_question_id === subqId);
+    return target ? { ...target, ...patch } : null;
+  };
+
   // 원본 편집 저장: guide_sub_question / guide_sub_answer 업데이트
   const handleSaveOriginalEdit = (subqId: string) => {
     const questionEl = document.querySelector(`textarea[data-subq-id="${subqId}"][data-type="original-question"]`) as HTMLTextAreaElement;
@@ -856,6 +889,12 @@ export const SubQs = () => {
         guide_sub_questions: updated,
       };
     });
+
+    const editedSubQ = buildEditedSubQuestion(subqId, {
+      guide_sub_question: newQuestion,
+      guide_sub_answer: newAnswer,
+    });
+    if (editedSubQ) syncFinalizedSubQuestion(subqId, editedSubQ);
 
     setEditingOriginalStates((prev) => ({
       ...prev,
@@ -890,6 +929,12 @@ export const SubQs = () => {
       };
     });
 
+    const editedSubQ = buildEditedSubQuestion(subqId, {
+      re_sub_question: newQuestion,
+      re_sub_answer: newAnswer,
+    });
+    if (editedSubQ) syncFinalizedSubQuestion(subqId, editedSubQ);
+
     setEditingRegeneratedStates((prev) => ({
       ...prev,
       [subqId]: false,
@@ -913,6 +958,8 @@ export const SubQs = () => {
 
   const selectSubqVersion = (subqId: string, version: "original" | "regenerated") => {
     setPreferredVersion?.({ ...preferredVersion, [subqId]: version });
+    const target = buildEditedSubQuestion(subqId, {});
+    if (target) syncFinalizedSubQuestion(subqId, target, version);
     logUserEvent("version_selected", { subqId, version });
   };
 
@@ -1066,6 +1113,8 @@ export const SubQs = () => {
         ...currentSubQuestionData,
         guide_sub_questions: updatedSubQuestions,
       });
+      // 확정 후 재생성한 경우에도 확정본이 최신 문항을 갖도록 (편집 저장과 동일)
+      syncFinalizedSubQuestion(subqId, merged);
 
       logUserEvent("regenerated_output", {
         subqId,
