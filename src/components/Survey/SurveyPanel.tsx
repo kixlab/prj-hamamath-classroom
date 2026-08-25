@@ -4,6 +4,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { getAppLanguage } from "../../i18n/translations";
 import { api } from "../../services/api";
 import { compressImageDataUrl } from "../../utils/imageCompression";
+import { MAX_PDF_FILE_BYTES, formatMb } from "../../utils/uploadLimits";
 import {
   MAX_SURVEY_SLOTS,
   OVERALL_SURVEY_SCOPE,
@@ -204,6 +205,10 @@ export const SurveyPanel = ({
     if (!currentStudentId) return;
     if (isDemo) {
       showNotice(t("survey.demoReadOnly"));
+      return;
+    }
+    if (file.size > MAX_PDF_FILE_BYTES) {
+      alert(t("survey.pdfTooLarge", { size: formatMb(file.size), max: formatMb(MAX_PDF_FILE_BYTES) }));
       return;
     }
     if (hasScan && !window.confirm(t("survey.pdfReplaceConfirm"))) return;
