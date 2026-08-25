@@ -10,6 +10,7 @@ import { api } from "../../services/api";
 import { fetchHistoryListForUser, loadResult, loadResultForUser } from "../../hooks/useStorage";
 import { exportDiagnosisReportPdf } from "../../utils/exportDiagnosisReportPdf";
 import { compressImageDataUrl } from "../../utils/imageCompression";
+import { MAX_PDF_FILE_BYTES, formatMb } from "../../utils/uploadLimits";
 
 /**
  * 학생 한 명·한 문제당 올릴 수 있는 손글씨 이미지 장수.
@@ -1067,6 +1068,10 @@ export const StudentDiagnosis = ({ userId, historyRefreshToken, onClose }: Stude
     if (!currentStudentId || !problemIdForDiagnosis) return;
     if (isDemo) {
       alert(t("diagnosis.pdfDemoNote"));
+      return;
+    }
+    if (file.size > MAX_PDF_FILE_BYTES) {
+      alert(t("diagnosis.pdfTooLarge", { size: formatMb(file.size), max: formatMb(MAX_PDF_FILE_BYTES) }));
       return;
     }
     const problemKey = problemIdForDiagnosis;
